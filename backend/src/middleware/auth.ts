@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
+import type { Request as ExpressRequest, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { config } from '../config/env.js';
 
@@ -8,7 +8,7 @@ export interface AuthenticatedUserPayload {
   role: string;
 }
 
-export interface AuthenticatedRequest extends Request {
+export interface AuthenticatedRequest extends ExpressRequest {
   user?: AuthenticatedUserPayload;
 }
 

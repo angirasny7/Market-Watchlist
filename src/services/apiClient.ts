@@ -5,9 +5,16 @@
  * and unified response parsing with network error resilience.
  */
 
-const API_BASE_URL =
-  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) ||
-  'http://localhost:5000/api';
+function resolveApiBaseUrl(): string {
+  const envUrl = typeof import.meta !== 'undefined' ? import.meta.env?.VITE_API_URL : undefined;
+  if (!envUrl) {
+    return 'http://localhost:5000/api';
+  }
+  const clean = envUrl.trim().replace(/\/$/, '');
+  return clean.endsWith('/api') ? clean : `${clean}/api`;
+}
+
+const API_BASE_URL = resolveApiBaseUrl();
 
 const TOKEN_STORAGE_KEY = 'smw_auth_token';
 
