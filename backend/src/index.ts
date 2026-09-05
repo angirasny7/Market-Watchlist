@@ -14,12 +14,20 @@ const app = express();
   return this.toString();
 };
 
-// Middleware
+// CORS configuration supporting single origin, comma-separated list, or wildcard
+const corsOrigin = config.corsOrigin;
+const allowedOrigins = corsOrigin === '*'
+  ? '*'
+  : corsOrigin.includes(',')
+  ? corsOrigin.split(',').map((o) => o.trim())
+  : corsOrigin;
+
 app.use(
   cors({
-    origin: '*', // Allow frontend Vite client
+    origin: allowedOrigins,
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: allowedOrigins !== '*',
   })
 );
 
@@ -64,9 +72,9 @@ app.use(errorHandler);
 // Start server
 if (process.env.NODE_ENV !== 'test') {
   app.listen(config.port, () => {
-    console.log(`🚀 Smart Market Watchlist Backend running on port ${config.port}`);
-    console.log(`📡 Health check available at: http://localhost:${config.port}/api/health`);
-    console.log(`🔌 Provider status available at: http://localhost:${config.port}/api/providers/status`);
+    console.log(`🚀 Smart Market Watchlist Backend running on port ${config.port} [${config.nodeEnv}]`);
+    console.log(`📡 Health check available at: /api/health`);
+    console.log(`🔌 Provider status available at: /api/providers/status`);
 
     // Initialize real-time synchronization scheduler
     startScheduler();

@@ -10,7 +10,7 @@ import {
 import { useMarketStore } from '../../store/useMarketStore';
 
 export const HighlightsHeader: React.FC = () => {
-  const { indices, sectorPerformance, macroAlerts, marketStatus, toggleMarketStatus } =
+  const { indices, sectorPerformance, macroAlerts, marketStatus } =
     useMarketStore();
 
   const positiveIndices = indices.filter((idx) => idx.isPositive).length;
@@ -37,10 +37,9 @@ export const HighlightsHeader: React.FC = () => {
 
         {/* Live Controls */}
         <div className="flex items-center gap-2.5 flex-wrap">
-          <button
-            onClick={toggleMarketStatus}
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface border border-border hover:border-slate-600 text-xs font-medium text-slate-300 transition-colors"
-            title="Click to toggle simulated market session"
+          <div
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface border border-border text-xs font-medium text-slate-300"
+            title="Market Session Status"
           >
             <span
               className={`w-2 h-2 rounded-full ${
@@ -50,7 +49,7 @@ export const HighlightsHeader: React.FC = () => {
               }`}
             />
             <span>Market {marketStatus === 'REGULAR_OPEN' ? 'OPEN' : marketStatus}</span>
-          </button>
+          </div>
 
           <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 text-xs font-mono">
             <RefreshCw className="w-3 h-3 text-cyan-400 animate-spin" style={{ animationDuration: '6s' }} />

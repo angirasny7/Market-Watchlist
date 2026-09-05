@@ -6,7 +6,6 @@ import {
   RefreshCw,
   Menu,
   ChevronDown,
-  Activity,
   LogOut,
 } from 'lucide-react';
 import { useMarketStore } from '../../store/useMarketStore';
@@ -24,8 +23,6 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileSidebar }) => {
   const {
     userState,
     marketStatus,
-    toggleMarketStatus,
-    simulateNewSession,
     isLiveMode,
     isLoading,
     refreshMarketData,
@@ -125,7 +122,7 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileSidebar }) => {
 
       {/* Right: Live Data Sync, Market Status, Device Sync & Refresh */}
       <div className="flex items-center gap-2 sm:gap-3">
-        {/* Live PostgreSQL vs Offline Indicator */}
+        {/* System Online Status Indicator */}
         <div
           className={cn(
             'hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-mono border',
@@ -133,7 +130,7 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileSidebar }) => {
               ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
               : 'bg-amber-500/10 text-amber-300 border-amber-500/30'
           )}
-          title={isLiveMode ? 'Connected to live PostgreSQL intelligence engine' : 'Running in offline cached mode'}
+          title={isLiveMode ? 'System services operational and synchronized' : 'Offline mode - displaying cached data'}
         >
           <span
             className={cn(
@@ -141,7 +138,7 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileSidebar }) => {
               isLiveMode ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
             )}
           />
-          <span>{isLiveMode ? 'Live PostgreSQL' : 'Offline Cache'}</span>
+          <span>{isLiveMode ? 'System Online' : 'Offline'}</span>
         </div>
 
         {/* Refresh Live Data Button */}
@@ -154,15 +151,14 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileSidebar }) => {
           <RefreshCw className={cn('w-3.5 h-3.5', isLoading && 'animate-spin text-indigo-400')} />
         </button>
 
-        {/* Market Status Pill */}
-        <button
-          onClick={toggleMarketStatus}
-          title="Click to toggle simulated market session status (Open/Closed)"
+        {/* Market Status Badge (Read-only) */}
+        <div
+          title="Market Session Status"
           className={cn(
-            'flex items-center gap-1.5 text-xs font-mono font-medium px-2.5 py-1 rounded-full border transition-all',
+            'flex items-center gap-1.5 text-xs font-mono font-medium px-2.5 py-1 rounded-full border',
             marketStatus === 'REGULAR_OPEN'
-              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
-              : 'bg-amber-500/10 text-amber-300 border-amber-500/30 hover:bg-amber-500/20'
+              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+              : 'bg-amber-500/10 text-amber-300 border-amber-500/30'
           )}
         >
           <span
@@ -175,7 +171,7 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileSidebar }) => {
           />
           <span className="hidden sm:inline">Market</span>
           <span>{marketStatus === 'REGULAR_OPEN' ? 'OPEN' : 'CLOSED'}</span>
-        </button>
+        </div>
 
         {/* Session Continuity Indicator Dropdown */}
         <div className="relative">
@@ -306,20 +302,6 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileSidebar }) => {
                       {events.length} Events
                     </div>
                   </div>
-                </div>
-
-                {/* Session Refresh / Visit Action */}
-                <div className="pt-0.5">
-                  <button
-                    onClick={() => {
-                      simulateNewSession();
-                      setIsDeviceMenuOpen(false);
-                    }}
-                    className="w-full flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg bg-surface-hover hover:bg-surface-active text-xs text-slate-300 hover:text-white transition-colors border border-border/60 font-medium"
-                  >
-                    <Activity className="w-3.5 h-3.5 text-indigo-400" />
-                    <span>Simulate Session Visit</span>
-                  </button>
                 </div>
               </div>
             </>
