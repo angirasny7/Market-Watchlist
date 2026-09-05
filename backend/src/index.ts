@@ -15,9 +15,22 @@ const app = express();
 };
 
 // Middleware
+const corsOriginEnv = process.env.CORS_ORIGIN || config.corsOrigin;
+const allowedOrigins = corsOriginEnv
+  ? corsOriginEnv.split(',').map((origin) => origin.trim()).filter(Boolean)
+  : ['http://localhost:3000', 'http://localhost:5173'];
+
 app.use(
   cors({
-    origin: '*', // Allow frontend Vite client
+    origin: (origin, callback) => {
+      // Allow requests with no origin (mobile apps, curl, server health checks)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+        return callback(null, true);
+      }
+      return callback(null, false);
+    },
+    credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   })
@@ -63,10 +76,11 @@ app.use(errorHandler);
 
 // Start server
 if (process.env.NODE_ENV !== 'test') {
-  app.listen(config.port, () => {
-    console.log(`🚀 Smart Market Watchlist Backend running on port ${config.port}`);
-    console.log(`📡 Health check available at: http://localhost:${config.port}/api/health`);
-    console.log(`🔌 Provider status available at: http://localhost:${config.port}/api/providers/status`);
+  const PORT = config.port;
+  app.listen(PORT, () => {
+    console.log(`🚀 Smart Market Watchlist Backend running on port ${PORT}`);
+    console.log(`📡 Health check available at: http://localhost:${PORT}/api/health`);
+    console.log(`🔌 Provider status available at: http://localhost:${PORT}/api/providers/status`);
 
     // Initialize real-time synchronization scheduler
     startScheduler();
