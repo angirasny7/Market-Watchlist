@@ -125,6 +125,23 @@ export function adaptBackendEventToMarketEvent(
     read: Boolean(backendEvent.read),
     acknowledged: Boolean(backendEvent.acknowledged),
     inWatchlist,
+    enrichment: backendEvent.enrichment || delta.enrichment ? {
+      summary: (backendEvent.enrichment || delta.enrichment).summary || 'Supporting evidence currently unavailable.',
+      confidenceScore: Number((backendEvent.enrichment || delta.enrichment).confidenceScore ?? 75),
+      possibleDrivers: Array.isArray((backendEvent.enrichment || delta.enrichment).possibleDrivers)
+        ? (backendEvent.enrichment || delta.enrichment).possibleDrivers
+        : [],
+      evidence: Array.isArray((backendEvent.enrichment || delta.enrichment).evidence)
+        ? (backendEvent.enrichment || delta.enrichment).evidence.map((ev: any) => ({
+            title: ev.title,
+            source: ev.source,
+            sourceType: ev.sourceType || 'NEWS',
+            url: ev.url,
+            publishedAt: ev.publishedAt,
+          }))
+        : [],
+      scoreBreakdown: (backendEvent.enrichment || delta.enrichment).scoreBreakdown,
+    } : undefined,
   };
 }
 
@@ -203,15 +220,23 @@ export function adaptBackendDigestToHistoricalDigest(
 
   // Benchmarks
   const closes = backendDigest.benchmarkCloses || {};
+  const niftyData = closes.nifty50 || closes.nifty;
+  const sensexData = closes.sensex;
+  const vixData = closes.indiaVix || closes.vix;
+
   const benchmarkIndices = {
-    nifty: {
-      close: closes.nifty50?.close ?? closes.nifty?.close ?? 24850.4,
-      changePercent: closes.nifty50?.pct ?? closes.nifty?.pct ?? 0.58,
-    },
-    sensex: {
-      close: closes.sensex?.close ?? 81320.1,
-      changePercent: closes.sensex?.pct ?? 0.57,
-    },
+    nifty: niftyData && niftyData.close !== undefined && niftyData.close !== null ? {
+      close: Number(niftyData.close),
+      changePercent: Number(niftyData.pct ?? niftyData.changePercent ?? 0),
+    } : null,
+    sensex: sensexData && sensexData.close !== undefined && sensexData.close !== null ? {
+      close: Number(sensexData.close),
+      changePercent: Number(sensexData.pct ?? sensexData.changePercent ?? 0),
+    } : null,
+    indiaVix: vixData && vixData.close !== undefined && vixData.close !== null ? {
+      close: Number(vixData.close),
+      changePercent: Number(vixData.pct ?? vixData.changePercent ?? 0),
+    } : null,
   };
 
   // Extract catalysts
@@ -235,16 +260,22 @@ export function adaptBackendDigestToHistoricalDigest(
     });
   }
 
-  // Forward performance
-  const fwdMap: Record<string, DigestForwardPerformance> = {};
+  // Forward performance - pass through real per-stock-symbol map
+  const fwdMap: Record<string, DigestForwardPerformance | null> = {};
   if (backendDigest.forwardPerformanceMap && typeof backendDigest.forwardPerformanceMap === 'object') {
-    const rawFwd = backendDigest.forwardPerformanceMap;
-    // Map general day1, day3, day5
-    fwdMap['MARKET_BENCHMARK'] = {
-      day1: rawFwd.day1 || '+0.4%',
-      day5: rawFwd.day5 || '+1.8%',
-      day30: rawFwd.day30 || '+5.4%',
-    };
+    for (const [symbol, perf] of Object.entries(backendDigest.forwardPerformanceMap)) {
+      if (perf && typeof perf === 'object') {
+        const p = perf as any;
+        fwdMap[symbol] = {
+          day1: p.day1 ?? null,
+          day5: p.day5 ?? null,
+          day30: p.day30 ?? null,
+          sampleSize: typeof p.sampleSize === 'number' ? p.sampleSize : undefined,
+        };
+      } else {
+        fwdMap[symbol] = null;
+      }
+    }
   }
 
   const hasWatchlistEvents =

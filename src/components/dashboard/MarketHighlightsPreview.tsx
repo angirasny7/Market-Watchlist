@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { TrendingUp, ArrowRight, Landmark, Layers, Zap } from 'lucide-react';
 import { useMarketStore } from '../../store/useMarketStore';
+import { SectionHeader } from '../common';
 
 export const MarketHighlightsPreview: React.FC = () => {
   const navigate = useNavigate();
@@ -15,34 +16,26 @@ export const MarketHighlightsPreview: React.FC = () => {
 
   return (
     <section className="space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-        <div>
-          <div className="flex items-center gap-2">
-            <div className="p-1 rounded-md bg-cyan-500/10 text-cyan-400">
-              <TrendingUp className="w-4 h-4" />
-            </div>
-            <h2 className="text-lg sm:text-xl font-bold text-slate-100 tracking-tight">
-              Market Highlights
-            </h2>
-          </div>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Macro-level shifts, policy decisions, and sector momentum independent of your watchlist
-          </p>
-        </div>
-
-        <button
-          onClick={() => navigate('/highlights')}
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-cyan-400 hover:text-cyan-300 transition-colors"
-        >
-          <span>View All Highlights</span>
-          <ArrowRight className="w-3.5 h-3.5" />
-        </button>
-      </div>
+      <SectionHeader
+        title="Market Highlights"
+        icon={<TrendingUp className="w-4 h-4 text-cyan-400" />}
+        iconColor="cyan"
+        description="Macro-level shifts, policy decisions, and sector momentum independent of your watchlist"
+        actions={
+          <button
+            onClick={() => navigate('/highlights')}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-cyan-400 hover:text-cyan-300 transition-colors"
+          >
+            <span>View All Highlights</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        }
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* 1. RBI Policy Update */}
         {rbiAlert && (
-          <div className="p-4 rounded-xl bg-surface border border-border hover:border-slate-700 transition-colors flex flex-col justify-between space-y-3">
+          <div className="p-5 rounded-[18px] bg-surface/85 backdrop-blur-md border border-border/80 hover:border-slate-700 transition-colors flex flex-col justify-between space-y-3">
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="inline-flex items-center gap-1.5 text-[11px] font-mono font-medium px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-300 border border-blue-500/20">

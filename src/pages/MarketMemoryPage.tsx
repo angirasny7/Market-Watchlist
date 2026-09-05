@@ -10,6 +10,7 @@ import {
 import { useMarketStore } from '../store/useMarketStore';
 import { ArchivedMarketEvent, DateRangePreset, MemoryTypeFilter } from '../types/memory';
 import { memoryService } from '../services/memoryService';
+import { PageContainer } from '../components/common';
 import { SearchX, RotateCcw, Database, ArrowRight, Loader2 } from 'lucide-react';
 
 export const MarketMemoryPage: React.FC = () => {
@@ -146,8 +147,8 @@ export const MarketMemoryPage: React.FC = () => {
   const totalArchived = memoryCounts?.archivedCount ?? archivedEvents.filter((e) => e.memoryType === 'ARCHIVED').length;
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6 pb-16 animate-fade-in">
-      {/* 1. Market Memory Header */}
+    <PageContainer>
+      {/* 1. Market Memory Header & 2. Standardized KPI Grid */}
       <MarketMemoryHeader
         totalCount={totalPreserved}
         savedCount={totalSaved}
@@ -156,29 +157,29 @@ export const MarketMemoryPage: React.FC = () => {
         lastAddedAt={latestMemoryTimestamp}
       />
 
-      {/* 2. Memory Type Tabs (All / Archived / Saved) */}
-      <div className="flex items-center gap-2 p-1 rounded-xl bg-surface border border-border w-fit">
-        {(['ALL', 'ARCHIVED', 'SAVED'] as const).map((type) => {
-          const label = type === 'ALL' ? 'All' : type === 'ARCHIVED' ? 'Archived' : 'Saved';
-          const isActive = selectedMemoryType === type;
-          return (
-            <button
-              key={type}
-              onClick={() => setSelectedMemoryType(type)}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
-                isActive
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-surface-hover'
-              }`}
-            >
-              <span>{label}</span>
-            </button>
-          );
-        })}
-      </div>
+      {/* 3. Standardized Controls: Memory Type Tabs & Multi-Factor Filter Bar */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-1.5 p-1 rounded-xl bg-surface/90 border border-border w-fit">
+          {(['ALL', 'ARCHIVED', 'SAVED'] as const).map((type) => {
+            const label = type === 'ALL' ? 'All Memories' : type === 'ARCHIVED' ? 'Archived Signals' : 'Saved For Later';
+            const isActive = selectedMemoryType === type;
+            return (
+              <button
+                key={type}
+                onClick={() => setSelectedMemoryType(type)}
+                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  isActive
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-surface-hover'
+                }`}
+              >
+                <span>{label}</span>
+              </button>
+            );
+          })}
+        </div>
 
-      {/* 3. Search & Multi-Factor Filter Bar */}
-      <MemorySearchBar
+        <MemorySearchBar
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         selectedMood={selectedMood}
@@ -197,6 +198,7 @@ export const MarketMemoryPage: React.FC = () => {
         onResetFilters={handleResetFilters}
         isFiltered={isFiltered}
       />
+      </div>
 
       {/* 4. Chronological Timeline, Loading State, or Empty States */}
       {isLoading ? (
@@ -255,7 +257,7 @@ export const MarketMemoryPage: React.FC = () => {
           )}
         </div>
       )}
-    </div>
+    </PageContainer>
   );
 };
 

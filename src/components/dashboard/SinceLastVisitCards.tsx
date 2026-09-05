@@ -1,8 +1,9 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, Award, DollarSign, TrendingUp, ChevronRight, Star } from 'lucide-react';
+import { AlertTriangle, Award, DollarSign, TrendingUp, ChevronRight, Star, Clock } from 'lucide-react';
 import { useMarketStore } from '../../store/useMarketStore';
 import { cn } from '../../lib/utils';
+import { SectionHeader, KpiGrid, KpiCard } from '../common';
 
 export const SinceLastVisitCards: React.FC = () => {
   const navigate = useNavigate();
@@ -10,7 +11,7 @@ export const SinceLastVisitCards: React.FC = () => {
 
   if (watchlist.length === 0) {
     return (
-      <section className="p-8 rounded-2xl bg-surface border border-border text-center space-y-3">
+      <section className="p-8 rounded-[20px] bg-surface/85 backdrop-blur-md border border-border/80 text-center space-y-3">
         <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center justify-center mx-auto">
           <Star className="w-6 h-6" />
         </div>
@@ -92,12 +93,10 @@ export const SinceLastVisitCards: React.FC = () => {
       count: attentionEvents.length,
       subtext: attentionSubtext,
       icon: AlertTriangle,
-      color: 'from-rose-500/10 to-amber-500/5',
-      borderColor: 'hover:border-rose-500/40',
-      iconColor: 'text-rose-400 bg-rose-500/10 border-rose-500/20',
       tag: isWatchlistSourced ? 'Watchlist Focus' : 'Urgent Action',
       tagColor: 'bg-rose-500/15 text-rose-300 border-rose-500/30',
       filter: 'critical' as const,
+      accent: 'rose' as const,
     },
     {
       id: 'earnings',
@@ -105,12 +104,10 @@ export const SinceLastVisitCards: React.FC = () => {
       count: earningsEvents.length,
       subtext: earningsSubtext,
       icon: Award,
-      color: 'from-purple-500/10 to-indigo-500/5',
-      borderColor: 'hover:border-purple-500/40',
-      iconColor: 'text-purple-400 bg-purple-500/10 border-purple-500/20',
       tag: 'Corporate Results',
       tagColor: 'bg-purple-500/15 text-purple-300 border-purple-500/30',
       filter: 'earnings' as const,
+      accent: 'purple' as const,
     },
     {
       id: 'dividends',
@@ -118,12 +115,10 @@ export const SinceLastVisitCards: React.FC = () => {
       count: dividendEvents.length,
       subtext: dividendSubtext,
       icon: DollarSign,
-      color: 'from-amber-500/10 to-yellow-500/5',
-      borderColor: 'hover:border-amber-500/40',
-      iconColor: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
       tag: 'Cash Payouts',
       tagColor: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
       filter: 'dividend' as const,
+      accent: 'amber' as const,
     },
     {
       id: 'movers',
@@ -131,12 +126,10 @@ export const SinceLastVisitCards: React.FC = () => {
       count: moverEvents.length,
       subtext: moverSubtext,
       icon: TrendingUp,
-      color: 'from-emerald-500/10 to-teal-500/5',
-      borderColor: 'hover:border-emerald-500/40',
-      iconColor: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
       tag: 'Breakouts & Surges',
       tagColor: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
       filter: '52w' as const,
+      accent: 'emerald' as const,
     },
   ];
 
@@ -149,48 +142,48 @@ export const SinceLastVisitCards: React.FC = () => {
   };
 
   return (
-    <section className="space-y-3">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-base sm:text-lg font-bold text-slate-100 tracking-tight flex items-center gap-2">
+    <section className="space-y-4">
+      <SectionHeader
+        title={
+          <span className="flex items-center gap-2">
             <span>Since Your Last Visit</span>
-            {isWatchlistSourced && (
-              <span className="inline-flex items-center gap-1 text-xs font-mono font-medium text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
-                <Star className="w-3 h-3 fill-amber-300" />
-                <span>Watchlist Prioritized</span>
-              </span>
-            )}
             <span className="text-xs font-mono font-normal text-slate-400">
               (Summary Delta)
             </span>
-          </h2>
-          <p className="text-xs text-slate-400">
-            Categorized overview of what developed across your portfolio while you were away
-          </p>
-        </div>
-      </div>
+          </span>
+        }
+        icon={<Clock className="w-4 h-4 text-indigo-400" />}
+        iconColor="indigo"
+        badge={
+          isWatchlistSourced ? (
+            <span className="inline-flex items-center gap-1 text-xs font-mono font-medium text-amber-300 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/20">
+              <Star className="w-3 h-3 fill-amber-300" />
+              <span>Watchlist Prioritized</span>
+            </span>
+          ) : undefined
+        }
+        description="Categorized overview of what developed across your portfolio while you were away"
+      />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <KpiGrid cols={4}>
         {cards.map((card) => {
           const Icon = card.icon;
           return (
-            <div
+            <KpiCard
               key={card.id}
-              onClick={() => handleCardClick(card.filter)}
-              className={cn(
-                'relative bg-surface p-5 rounded-xl border border-border transition-all duration-200 cursor-pointer group hover:bg-surface-hover shadow-sm',
-                card.borderColor
-              )}
-            >
-              <div className="flex items-start justify-between gap-2 mb-3">
-                <div
-                  className={cn(
-                    'p-2.5 rounded-xl border flex items-center justify-center transition-transform group-hover:scale-105',
-                    card.iconColor
-                  )}
-                >
-                  <Icon className="w-5 h-5" />
+              label={card.title}
+              value={card.count}
+              subtext={
+                <div className="flex items-center justify-between gap-1 text-[11px] text-slate-300 pt-1.5 border-t border-border/60 mt-1">
+                  <span className="truncate">{card.subtext}</span>
+                  <span className="text-slate-400 group-hover:text-indigo-400 transition-colors shrink-0 flex items-center">
+                    <ChevronRight className="w-3.5 h-3.5 transform group-hover:translate-x-0.5 transition-transform" />
+                  </span>
                 </div>
+              }
+              icon={<Icon className="w-4 h-4" />}
+              accent={card.accent}
+              badge={
                 <span
                   className={cn(
                     'text-[10px] font-mono font-medium px-2 py-0.5 rounded-full border',
@@ -199,30 +192,12 @@ export const SinceLastVisitCards: React.FC = () => {
                 >
                   {card.tag}
                 </span>
-              </div>
-
-              <div className="space-y-1">
-                <div className="text-xs font-medium text-slate-400">
-                  {card.title}
-                </div>
-                <div className="flex items-baseline justify-between">
-                  <span className="text-3xl font-extrabold font-sans text-slate-100 tabular-numbers tracking-tight">
-                    {card.count}
-                  </span>
-                  <span className="text-[11px] text-slate-400 flex items-center group-hover:text-indigo-400 transition-colors">
-                    <span>View items</span>
-                    <ChevronRight className="w-3.5 h-3.5 ml-0.5 transform group-hover:translate-x-0.5 transition-transform" />
-                  </span>
-                </div>
-              </div>
-
-              <div className="mt-3 pt-2.5 border-t border-border/60 text-[11px] text-slate-300 line-clamp-1">
-                {card.subtext}
-              </div>
-            </div>
+              }
+              onClick={() => handleCardClick(card.filter)}
+            />
           );
         })}
-      </div>
+      </KpiGrid>
     </section>
   );
 };

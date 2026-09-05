@@ -2,25 +2,24 @@ import React from 'react';
 import { TrendingUp, TrendingDown, Globe } from 'lucide-react';
 import { useMarketStore } from '../../store/useMarketStore';
 import { cn } from '../../lib/utils';
+import { SectionHeader } from '../common';
 
 export const QuickMarketOverview: React.FC = () => {
   const { indices } = useMarketStore();
 
   return (
-    <section className="space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="p-1 rounded-md bg-cyan-500/10 text-cyan-400">
-            <Globe className="w-4 h-4" />
-          </div>
-          <h2 className="text-base sm:text-lg font-bold text-slate-100 tracking-tight">
-            Quick Market Overview
-          </h2>
-        </div>
-        <span className="text-xs text-slate-400 font-mono">
-          Global Benchmark Indices
-        </span>
-      </div>
+    <section className="space-y-4">
+      <SectionHeader
+        title="Quick Market Overview"
+        icon={<Globe className="w-4 h-4 text-cyan-400" />}
+        iconColor="cyan"
+        description="Real-time performance across major international and domestic benchmark indices"
+        actions={
+          <span className="text-xs text-slate-400 font-mono">
+            Global Benchmark Indices
+          </span>
+        }
+      />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {indices.map((idx) => {
@@ -28,7 +27,7 @@ export const QuickMarketOverview: React.FC = () => {
           return (
             <div
               key={idx.symbol}
-              className="p-3.5 sm:p-4 rounded-xl bg-surface border border-border hover:border-slate-700 transition-colors space-y-2 group"
+              className="p-4 rounded-[18px] bg-surface/85 backdrop-blur-md border border-border/80 hover:border-slate-700 transition-colors space-y-2 group"
             >
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-200 tracking-tight">

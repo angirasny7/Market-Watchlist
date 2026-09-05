@@ -22,6 +22,11 @@ export class YahooFinanceProvider implements IMarketDataProvider {
     SUZLON: 'SUZLON.NS',
     ZOMATO: 'ETERNAL.NS',
     ETERNAL: 'ETERNAL.NS',
+    NIFTY50: '^NSEI',
+    NIFTY: '^NSEI',
+    SENSEX: '^BSESN',
+    INDIAVIX: '^INDIAVIX',
+    VIX: '^INDIAVIX',
   };
 
   // Known US stocks
@@ -40,6 +45,10 @@ export class YahooFinanceProvider implements IMarketDataProvider {
 
     if (this.symbolMap[upper]) {
       return this.symbolMap[upper];
+    }
+
+    if (upper.startsWith('^')) {
+      return upper;
     }
 
     if (upper.includes('.') || upper.includes('=')) {

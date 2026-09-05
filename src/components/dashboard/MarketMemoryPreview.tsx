@@ -4,6 +4,7 @@ import { History, ArrowRight, Bookmark, CheckCircle2, Calendar, Database } from 
 import { memoryService } from '../../services/memoryService';
 import { ArchivedMarketEvent } from '../../types/memory';
 import { useMarketStore } from '../../store/useMarketStore';
+import { SectionHeader } from '../common';
 
 export const MarketMemoryPreview: React.FC = () => {
   const navigate = useNavigate();
@@ -47,33 +48,25 @@ export const MarketMemoryPreview: React.FC = () => {
   return (
     <section className="space-y-4">
       {/* Section Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-        <div>
-          <div className="flex items-center gap-2">
-            <div className="p-1 rounded-md bg-indigo-500/10 text-indigo-400">
-              <History className="w-4 h-4" />
-            </div>
-            <h2 className="text-lg sm:text-xl font-bold text-slate-100 tracking-tight">
-              Market Memory (Personal Repository)
-            </h2>
-          </div>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Your personal archive of saved catalysts and reviewed events from your watchlist
-          </p>
-        </div>
-
-        <button
-          onClick={() => navigate('/memory')}
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-400 hover:text-indigo-300 transition-colors"
-        >
-          <span>Open Market Memory</span>
-          <ArrowRight className="w-3.5 h-3.5" />
-        </button>
-      </div>
+      <SectionHeader
+        title="Market Memory (Personal Repository)"
+        icon={<History className="w-4 h-4 text-indigo-400" />}
+        iconColor="indigo"
+        description="Your personal archive of saved catalysts and reviewed events from your watchlist"
+        actions={
+          <button
+            onClick={() => navigate('/memory')}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-400 hover:text-indigo-300 transition-colors"
+          >
+            <span>Open Market Memory</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        }
+      />
 
       {/* Cards or Personal Empty State */}
       {!isLoading && !hasMemories ? (
-        <div className="p-8 sm:p-10 rounded-2xl bg-surface border border-border text-center space-y-3">
+        <div className="p-8 sm:p-10 rounded-[20px] bg-surface/85 backdrop-blur-md border border-border/80 text-center space-y-3">
           <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center justify-center mx-auto">
             <Database className="w-5 h-5" />
           </div>

@@ -10,6 +10,7 @@ import {
 } from '../components/watchlist';
 import { useMarketStore } from '../store/useMarketStore';
 import { StockQuote } from '../types/stock';
+import { PageContainer } from '../components/common';
 import { Plus, RotateCcw, SearchX, LineChart } from 'lucide-react';
 
 export const WatchlistPage: React.FC = () => {
@@ -79,8 +80,8 @@ export const WatchlistPage: React.FC = () => {
     return result;
   }, [watchlist, stockSearchQuery, sortOption, getEventsByStock]);
 
-  return (
-    <div className="max-w-7xl mx-auto space-y-6 pb-16 animate-fade-in">
+    return (
+    <PageContainer>
       {/* 1. Watchlist Header with Metrics & Controls */}
       <WatchlistHeader
         searchQuery={stockSearchQuery}
@@ -181,7 +182,7 @@ export const WatchlistPage: React.FC = () => {
         stock={activeInsightStock}
         onClose={() => setActiveInsightStock(null)}
       />
-    </div>
+    </PageContainer>
   );
 };
 

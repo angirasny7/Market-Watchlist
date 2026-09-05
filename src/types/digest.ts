@@ -1,7 +1,8 @@
 export interface DigestForwardPerformance {
-  day1: string;   // e.g. "+1.8%"
-  day5: string;   // e.g. "+6.2%"
-  day30: string;  // e.g. "+14.5%"
+  day1?: string | null;   // e.g. "+1.8%"
+  day5?: string | null;   // e.g. "+6.2%"
+  day30?: string | null;  // e.g. "+14.5%"
+  sampleSize?: number;
 }
 
 export interface CatalystItem {
@@ -20,14 +21,15 @@ export interface HistoricalDigest {
   highPriorityCount: number;
   marketMood: 'EXTREME_GREED' | 'BULLISH' | 'NEUTRAL' | 'CHOPPY' | 'BEARISH';
   benchmarkIndices: {
-    nifty: { close: number; changePercent: number };
-    sensex: { close: number; changePercent: number };
+    nifty: { close: number; changePercent: number } | null;
+    sensex: { close: number; changePercent: number } | null;
+    indiaVix?: { close: number; changePercent: number } | null;
   };
   catalysts: CatalystItem[];
   eventIds: string[];               // Normalized references to MarketEvent[]
   insightIds: string[];             // Normalized references to Insight[]
   isAcknowledged: boolean;
-  forwardPerformanceMap?: Record<string, DigestForwardPerformance>; // Keyed by stockSymbol
+  forwardPerformanceMap?: Record<string, DigestForwardPerformance | null>; // Keyed by stockSymbol
   hasWatchlistEvents?: boolean;
   watchlistMatchedCount?: number;
 }

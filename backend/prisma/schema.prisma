@@ -1,15 +1,284 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-generator client {
-  provider = "prisma-client-js"
+model User {
+  id              String           @id @default(uuid())
+  email           String           @unique
+  passwordHash    String
+  name            String
+  role            UserRole         @default(USER)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  lastLoginAt     DateTime?
+  previousLoginAt DateTime?
+  digestReads     UserDigestRead[]
+  eventReads      UserEventRead[]
+  savedEvents     UserSavedEvent[]
+  userState       UserState?
+  watchlists      Watchlist[]
+
+  @@map("users")
 }
 
-// ---------------------------------------------------------
-// ENUMS
-// ---------------------------------------------------------
+model UserState {
+  id                       String    @id @default(uuid())
+  userId                   String    @unique
+  lastLoginAt              DateTime  @default(now())
+  lastActivityAt           DateTime  @default(now())
+  lastDigestViewedId       String?
+  lastDigestAcknowledgedId String?
+  updatedAt                DateTime  @updatedAt
+  currentDeviceName        String    @default("Laptop")
+  currentDeviceType        String    @default("DESKTOP")
+  lastLogoutAt             DateTime?
+  previousDeviceName       String?
+  previousDeviceType       String?
+  previousSessionAt        DateTime?
+  user                     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, lastActivityAt])
+  @@map("user_states")
+}
+
+model Watchlist {
+  id        String           @id @default(uuid())
+  userId    String
+  name      String           @default("Primary Watchlist")
+  isDefault Boolean          @default(true)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  stocks    WatchlistStock[]
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isDefault])
+  @@map("watchlists")
+}
+
+model WatchlistStock {
+  id          String    @id @default(uuid())
+  watchlistId String
+  stockSymbol String
+  isPinned    Boolean   @default(false)
+  addedAt     DateTime  @default(now())
+  stock       Stock     @relation(fields: [stockSymbol], references: [symbol])
+  watchlist   Watchlist @relation(fields: [watchlistId], references: [id], onDelete: Cascade)
+
+  @@unique([watchlistId, stockSymbol])
+  @@index([watchlistId])
+  @@index([stockSymbol])
+  @@map("watchlist_stocks")
+}
+
+model Stock {
+  symbol          String              @id
+  companyName     String
+  sector          String
+  exchange        String              @default("NSE")
+  currency        String              @default("₹")
+  currentPrice    Decimal             @db.Decimal(12, 2)
+  changeAmount    Decimal             @db.Decimal(12, 2)
+  changePercent   Decimal             @db.Decimal(8, 2)
+  volume          BigInt              @default(0)
+  avgVolume20D    BigInt              @default(0)
+  marketCap       String
+  peRatio         Decimal?            @db.Decimal(8, 2)
+  high52w         Decimal             @db.Decimal(12, 2)
+  low52w          Decimal             @db.Decimal(12, 2)
+  sparkline       Json?
+  tags            String[]            @default([])
+  updatedAt       DateTime            @updatedAt
+  events          Event[]
+  news            News[]
+  priceHistory    StockPriceHistory[]
+  watchlistStocks WatchlistStock[]
+
+  @@index([sector])
+  @@index([exchange])
+  @@map("stocks")
+}
+
+model StockPriceHistory {
+  id            String   @id @default(uuid())
+  stockSymbol   String
+  price         Decimal  @db.Decimal(12, 2)
+  changePercent Decimal  @db.Decimal(8, 2)
+  volume        BigInt
+  timestamp     DateTime @default(now())
+  stock         Stock    @relation(fields: [stockSymbol], references: [symbol], onDelete: Cascade)
+
+  @@index([stockSymbol, timestamp(sort: Desc)])
+  @@map("stock_price_history")
+}
+
+model News {
+  id          String        @id @default(uuid())
+  stockSymbol String
+  headline    String
+  summary     String
+  sourceName  String
+  sourceUrl   String
+  publishedAt DateTime
+  sentiment   NewsSentiment @default(NEUTRAL)
+  createdAt   DateTime      @default(now())
+  stock       Stock         @relation(fields: [stockSymbol], references: [symbol], onDelete: Cascade)
+
+  @@index([stockSymbol, publishedAt(sort: Desc)])
+  @@index([publishedAt(sort: Desc)])
+  @@map("news")
+}
+
+model Event {
+  id           String           @id @default(uuid())
+  stockSymbol  String
+  eventType    EventType
+  priority     Priority         @default(MEDIUM)
+  timestamp    DateTime         @default(now())
+  read         Boolean          @default(false)
+  acknowledged Boolean          @default(false)
+  metricsDelta Json
+  createdAt    DateTime         @default(now())
+  digestEvents DigestEvent[]
+  stock        Stock            @relation(fields: [stockSymbol], references: [symbol])
+  insights     Insight[]
+  userReads    UserEventRead[]
+  userSaves    UserSavedEvent[]
+
+  @@index([stockSymbol, timestamp(sort: Desc)])
+  @@index([priority, timestamp(sort: Desc)])
+  @@index([eventType])
+  @@map("events")
+}
+
+model Insight {
+  id                  String          @id @default(uuid())
+  relatedEventId      String
+  stockSymbol         String
+  headline            String
+  possibleExplanation String
+  whyItMatters        String
+  confidenceScore     Decimal         @db.Decimal(4, 3)
+  sources             Json
+  historicalPattern   String?
+  forwardProbability  String?
+  createdAt           DateTime        @default(now())
+  digestInsights      DigestInsight[]
+  event               Event           @relation(fields: [relatedEventId], references: [id], onDelete: Cascade)
+
+  @@index([relatedEventId])
+  @@index([stockSymbol])
+  @@index([confidenceScore(sort: Desc)])
+  @@map("insights")
+}
+
+model Digest {
+  id                    String           @id @default(uuid())
+  timestamp             DateTime         @default(now())
+  timeRange             String
+  headline              String
+  executiveSummary      String
+  marketMood            MarketMood       @default(NEUTRAL)
+  benchmarkCloses       Json
+  forwardPerformanceMap Json?
+  read                  Boolean          @default(false)
+  createdAt             DateTime         @default(now())
+  digestEvents          DigestEvent[]
+  digestInsights        DigestInsight[]
+  userReads             UserDigestRead[]
+
+  @@index([timestamp(sort: Desc)])
+  @@map("digests")
+}
+
+model DigestEvent {
+  id       String   @id @default(uuid())
+  digestId String
+  eventId  String
+  addedAt  DateTime @default(now())
+  digest   Digest   @relation(fields: [digestId], references: [id], onDelete: Cascade)
+  event    Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([digestId, eventId])
+  @@index([digestId])
+  @@index([eventId])
+  @@map("digest_events")
+}
+
+model DigestInsight {
+  id        String   @id @default(uuid())
+  digestId  String
+  insightId String
+  addedAt   DateTime @default(now())
+  digest    Digest   @relation(fields: [digestId], references: [id], onDelete: Cascade)
+  insight   Insight  @relation(fields: [insightId], references: [id], onDelete: Cascade)
+
+  @@unique([digestId, insightId])
+  @@index([digestId])
+  @@index([insightId])
+  @@map("digest_insights")
+}
+
+model SystemJobRun {
+  id               String    @id @default(uuid())
+  jobName          String
+  startedAt        DateTime  @default(now())
+  completedAt      DateTime?
+  status           JobStatus @default(RUNNING)
+  recordsProcessed Int       @default(0)
+  errorMessage     String?
+
+  @@index([jobName, startedAt(sort: Desc)])
+  @@index([status])
+  @@map("system_job_runs")
+}
+
+model UserEventRead {
+  id      String   @id @default(uuid())
+  userId  String
+  eventId String
+  readAt  DateTime @default(now())
+  event   Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, eventId])
+  @@index([userId])
+  @@index([eventId])
+  @@map("user_event_reads")
+}
+
+model UserDigestRead {
+  id       String   @id @default(uuid())
+  userId   String
+  digestId String
+  readAt   DateTime @default(now())
+  digest   Digest   @relation(fields: [digestId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, digestId])
+  @@index([userId])
+  @@index([digestId])
+  @@map("user_digest_reads")
+}
+
+model UserSavedEvent {
+  id      String   @id @default(uuid())
+  userId  String
+  eventId String
+  savedAt DateTime @default(now())
+  event   Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, eventId])
+  @@index([userId])
+  @@index([eventId])
+  @@index([userId, savedAt(sort: Desc)])
+  @@map("user_saved_events")
+}
 
 enum UserRole {
   USER
@@ -59,330 +328,8 @@ enum MarketMood {
   BEARISH
 }
 
-// ---------------------------------------------------------
-// USER & CURSOR STATE
-// ---------------------------------------------------------
-
-model User {
-  id           String       @id @default(uuid())
-  email        String       @unique
-  passwordHash String
-  name             String
-  role             UserRole     @default(USER)
-  lastLoginAt      DateTime?
-  previousLoginAt  DateTime?
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
-
-  watchlists   Watchlist[]
-  userState    UserState?
-  eventReads   UserEventRead[]
-  savedEvents  UserSavedEvent[]
-  digestReads  UserDigestRead[]
-
-  @@map("users")
-}
-
-model UserState {
-  id                       String    @id @default(uuid())
-  userId                   String    @unique
-  lastLoginAt              DateTime  @default(now())
-  lastLogoutAt             DateTime?
-  lastActivityAt           DateTime  @default(now())
-  previousSessionAt        DateTime?
-  currentDeviceType        String    @default("DESKTOP")
-  currentDeviceName        String    @default("Laptop")
-  previousDeviceType       String?
-  previousDeviceName       String?
-  lastDigestViewedId       String?
-  lastDigestAcknowledgedId String?
-  updatedAt                DateTime  @updatedAt
-
-  user                     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, lastActivityAt])
-  @@map("user_states")
-}
-
-// ---------------------------------------------------------
-// WATCHLIST LAYER
-// ---------------------------------------------------------
-
-model Watchlist {
-  id        String           @id @default(uuid())
-  userId    String
-  name      String           @default("Primary Watchlist")
-  isDefault Boolean          @default(true)
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
-
-  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  stocks    WatchlistStock[]
-
-  @@index([userId, isDefault])
-  @@map("watchlists")
-}
-
-model WatchlistStock {
-  id          String    @id @default(uuid())
-  watchlistId String
-  stockSymbol String
-  isPinned    Boolean   @default(false)
-  addedAt     DateTime  @default(now())
-
-  watchlist   Watchlist @relation(fields: [watchlistId], references: [id], onDelete: Cascade)
-  stock       Stock     @relation(fields: [stockSymbol], references: [symbol], onDelete: Restrict)
-
-  @@unique([watchlistId, stockSymbol])
-  @@index([watchlistId])
-  @@index([stockSymbol])
-  @@map("watchlist_stocks")
-}
-
-// ---------------------------------------------------------
-// CANONICAL STOCK & MARKET DATA LAYER
-// ---------------------------------------------------------
-
-model Stock {
-  symbol        String               @id
-  companyName   String
-  sector        String
-  exchange      String               @default("NSE")
-  currency      String               @default("₹")
-  currentPrice  Decimal              @db.Decimal(12, 2)
-  changeAmount  Decimal              @db.Decimal(12, 2)
-  changePercent Decimal              @db.Decimal(8, 2)
-  volume        BigInt               @default(0)
-  avgVolume20D  BigInt               @default(0)
-  marketCap     String
-  peRatio       Decimal?             @db.Decimal(8, 2)
-  high52w       Decimal              @db.Decimal(12, 2)
-  low52w        Decimal              @db.Decimal(12, 2)
-  sparkline     Json?
-  tags          String[]             @default([])
-  updatedAt     DateTime             @updatedAt
-
-  watchlistStocks WatchlistStock[]
-  events          Event[]
-  news            News[]
-  priceHistory    StockPriceHistory[]
-
-  @@index([sector])
-  @@index([exchange])
-  @@map("stocks")
-}
-
-model StockPriceHistory {
-  id            String   @id @default(uuid())
-  stockSymbol   String
-  price         Decimal  @db.Decimal(12, 2)
-  changePercent Decimal  @db.Decimal(8, 2)
-  volume        BigInt
-  timestamp     DateTime @default(now())
-
-  stock         Stock    @relation(fields: [stockSymbol], references: [symbol], onDelete: Cascade)
-
-  @@index([stockSymbol, timestamp(sort: Desc)])
-  @@map("stock_price_history")
-}
-
-// ---------------------------------------------------------
-// NEWS & CONTEXT ENRICHMENT
-// ---------------------------------------------------------
-
-model News {
-  id          String        @id @default(uuid())
-  stockSymbol String
-  headline    String
-  summary     String        @db.Text
-  sourceName  String
-  sourceUrl   String        @db.Text
-  publishedAt DateTime
-  sentiment   NewsSentiment @default(NEUTRAL)
-  createdAt   DateTime      @default(now())
-
-  stock       Stock         @relation(fields: [stockSymbol], references: [symbol], onDelete: Cascade)
-
-  @@index([stockSymbol, publishedAt(sort: Desc)])
-  @@index([publishedAt(sort: Desc)])
-  @@map("news")
-}
-
-// ---------------------------------------------------------
-// EVENTS & INSIGHTS (ANOMALY TO EXPLANATION)
-// ---------------------------------------------------------
-
-model Event {
-  id           String        @id @default(uuid())
-  stockSymbol  String
-  eventType    EventType
-  priority     Priority      @default(MEDIUM)
-  timestamp    DateTime      @default(now())
-  read         Boolean       @default(false)
-  acknowledged Boolean       @default(false)
-  metricsDelta Json
-  createdAt    DateTime      @default(now())
-
-  stock        Stock         @relation(fields: [stockSymbol], references: [symbol], onDelete: Restrict)
-  insights     Insight[]
-  digestEvents DigestEvent[]
-  userReads    UserEventRead[]
-  userSaves    UserSavedEvent[]
-
-  @@index([stockSymbol, timestamp(sort: Desc)])
-  @@index([priority, timestamp(sort: Desc)])
-  @@index([eventType])
-  @@map("events")
-}
-
-model Insight {
-  id                  String          @id @default(uuid())
-  relatedEventId      String
-  stockSymbol         String
-  headline            String
-  possibleExplanation String          @db.Text
-  whyItMatters        String          @db.Text
-  confidenceScore     Decimal         @db.Decimal(4, 3)
-  sources             Json
-  historicalPattern   String?         @db.Text
-  forwardProbability  String?
-  createdAt           DateTime        @default(now())
-
-  event               Event           @relation(fields: [relatedEventId], references: [id], onDelete: Cascade)
-  digestInsights      DigestInsight[]
-
-  @@index([relatedEventId])
-  @@index([stockSymbol])
-  @@index([confidenceScore(sort: Desc)])
-  @@map("insights")
-}
-
-// ---------------------------------------------------------
-// MARKET MEMORY & HISTORICAL DIGESTS
-// ---------------------------------------------------------
-
-model Digest {
-  id                    String          @id @default(uuid())
-  timestamp             DateTime        @default(now())
-  timeRange             String
-  headline              String
-  executiveSummary      String          @db.Text
-  marketMood            MarketMood      @default(NEUTRAL)
-  benchmarkCloses       Json
-  forwardPerformanceMap Json?
-  read                  Boolean         @default(false)
-  createdAt             DateTime        @default(now())
-
-  digestEvents          DigestEvent[]
-  digestInsights        DigestInsight[]
-  userReads             UserDigestRead[]
-
-  @@index([timestamp(sort: Desc)])
-  @@map("digests")
-}
-
-model DigestEvent {
-  id        String   @id @default(uuid())
-  digestId  String
-  eventId   String
-  addedAt   DateTime @default(now())
-
-  digest    Digest   @relation(fields: [digestId], references: [id], onDelete: Cascade)
-  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-
-  @@unique([digestId, eventId])
-  @@index([digestId])
-  @@index([eventId])
-  @@map("digest_events")
-}
-
-model DigestInsight {
-  id        String   @id @default(uuid())
-  digestId  String
-  insightId String
-  addedAt   DateTime @default(now())
-
-  digest    Digest   @relation(fields: [digestId], references: [id], onDelete: Cascade)
-  insight   Insight  @relation(fields: [insightId], references: [id], onDelete: Cascade)
-
-  @@unique([digestId, insightId])
-  @@index([digestId])
-  @@index([insightId])
-  @@map("digest_insights")
-}
-
-// ---------------------------------------------------------
-// SYSTEM OBSERVABILITY & BACKGROUND JOBS
-// ---------------------------------------------------------
-
 enum JobStatus {
   RUNNING
   SUCCESS
   FAILED
 }
-
-model SystemJobRun {
-  id               String    @id @default(uuid())
-  jobName          String
-  startedAt        DateTime  @default(now())
-  completedAt      DateTime?
-  status           JobStatus @default(RUNNING)
-  recordsProcessed Int       @default(0)
-  errorMessage     String?   @db.Text
-
-  @@index([jobName, startedAt(sort: Desc)])
-  @@index([status])
-  @@map("system_job_runs")
-}
-
-// ---------------------------------------------------------
-// MULTI-USER ISOLATED READ & ENGAGEMENT TRACKING
-// ---------------------------------------------------------
-
-model UserEventRead {
-  id        String   @id @default(uuid())
-  userId    String
-  eventId   String
-  readAt    DateTime @default(now())
-
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, eventId])
-  @@index([userId])
-  @@index([eventId])
-  @@map("user_event_reads")
-}
-
-model UserDigestRead {
-  id        String   @id @default(uuid())
-  userId    String
-  digestId  String
-  readAt    DateTime @default(now())
-
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  digest    Digest   @relation(fields: [digestId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, digestId])
-  @@index([userId])
-  @@index([digestId])
-  @@map("user_digest_reads")
-}
-
-model UserSavedEvent {
-  id        String   @id @default(uuid())
-  userId    String
-  eventId   String
-  savedAt   DateTime @default(now())
-
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, eventId])
-  @@index([userId])
-  @@index([eventId])
-  @@index([userId, savedAt(sort: Desc)])
-  @@map("user_saved_events")
-}
-
-

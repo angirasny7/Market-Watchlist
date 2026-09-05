@@ -574,14 +574,52 @@ export const useMarketStore = create<MarketState>((set, get) => ({
       .filter((i): i is Insight => Boolean(i));
   },
 
-  // 5. Top Insights (Strictly scoped to user watchlist stocks)
+  // 5. Top Insights (Strictly scoped to user watchlist stocks, 1 per stock symbol)
   getTopInsights: (limit: number = 3) => {
-    const { insights, watchlist } = get();
+    const { insights, watchlist, events } = get();
     if (watchlist.length === 0) return [];
-    return Object.values(insights)
-      .filter((i) => i.inWatchlist)
-      .sort((a, b) => b.confidenceScore - a.confidenceScore)
-      .slice(0, limit);
+
+    const priorityWeights: Record<string, number> = {
+      CRITICAL: 4,
+      HIGH: 3,
+      MEDIUM: 2,
+      LOW: 1,
+    };
+
+    const candidateInsights = Object.values(insights).filter((i) => i.inWatchlist);
+
+    // Sort by: Event Priority -> Attention Score -> Confidence Score -> Recency
+    const sorted = [...candidateInsights].sort((a, b) => {
+      const eventA = events.find((e) => e.id === a.relatedEventId);
+      const eventB = events.find((e) => e.id === b.relatedEventId);
+
+      const pA = eventA ? priorityWeights[eventA.priority] || 1 : 1;
+      const pB = eventB ? priorityWeights[eventB.priority] || 1 : 1;
+      if (pB !== pA) return pB - pA;
+
+      const scoreA = eventA?.scoring?.finalScore ?? 0;
+      const scoreB = eventB?.scoring?.finalScore ?? 0;
+      if (scoreB !== scoreA) return scoreB - scoreA;
+
+      const confA = a.confidenceScore ?? 0;
+      const confB = b.confidenceScore ?? 0;
+      if (confB !== confA) return confB - confA;
+
+      return new Date(b.generatedAt || 0).getTime() - new Date(a.generatedAt || 0).getTime();
+    });
+
+    // Limit to ONE insight per stock symbol
+    const seenSymbols = new Set<string>();
+    const uniquePerSymbol: Insight[] = [];
+    for (const ins of sorted) {
+      if (!seenSymbols.has(ins.stockSymbol)) {
+        seenSymbols.add(ins.stockSymbol);
+        uniquePerSymbol.push(ins);
+      }
+      if (uniquePerSymbol.length >= limit) break;
+    }
+
+    return uniquePerSymbol;
   },
 
   // 6. Critical Events (Strictly scoped to user watchlist critical events)

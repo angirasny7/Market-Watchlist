@@ -8,7 +8,7 @@ interface DigestPerformanceCardProps {
   companyName: string;
   eventTypeFormatted: string;
   eventDate: string;
-  performance?: DigestForwardPerformance;
+  performance?: DigestForwardPerformance | null;
   className?: string;
 }
 
@@ -20,16 +20,46 @@ export const DigestPerformanceCard: React.FC<DigestPerformanceCardProps> = ({
   performance,
   className,
 }) => {
-  // Default values if not specified
-  const perf = performance || {
-    day1: '+0.8%',
-    day5: '+3.2%',
-    day30: '+8.4%',
-  };
+  const hasAnyData = Boolean(
+    performance && (performance.day1 || performance.day5 || performance.day30)
+  );
 
-  const isPos1D = !perf.day1.startsWith('-');
-  const isPos7D = !perf.day5.startsWith('-'); // day5 represents 1-week/7D window
-  const isPos30D = !perf.day30.startsWith('-');
+  const renderMetric = (label: string, value?: string | null) => {
+    if (!value) {
+      return (
+        <div className="p-2.5 rounded-lg bg-surface-subtle border border-border/80 space-y-1">
+          <div className="text-[10px] font-mono text-slate-400 uppercase">
+            {label}
+          </div>
+          <div className="text-xs sm:text-sm font-mono text-slate-500 flex items-center justify-center">
+            Unavailable
+          </div>
+        </div>
+      );
+    }
+
+    const isPos = !value.startsWith('-');
+    return (
+      <div className="p-2.5 rounded-lg bg-surface-subtle border border-border/80 space-y-1">
+        <div className="text-[10px] font-mono text-slate-400 uppercase">
+          {label}
+        </div>
+        <div
+          className={cn(
+            'text-xs sm:text-sm font-bold font-mono flex items-center justify-center gap-0.5',
+            isPos ? 'text-emerald-400' : 'text-rose-400'
+          )}
+        >
+          {isPos ? (
+            <TrendingUp className="w-3 h-3" />
+          ) : (
+            <TrendingDown className="w-3 h-3" />
+          )}
+          <span>{value}</span>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div
@@ -60,72 +90,34 @@ export const DigestPerformanceCard: React.FC<DigestPerformanceCardProps> = ({
 
       {/* Forward Performance Metrics Grid */}
       <div>
-        <div className="text-[10px] font-mono uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1.5">
-          <LineChart className="w-3.5 h-3.5 text-emerald-400" />
-          <span>Realized Forward Performance (Outcome Post-Event)</span>
+        <div className="text-[10px] font-mono uppercase tracking-wider text-slate-400 mb-2 flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <LineChart className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Realized Forward Performance (Outcome Post-Event)</span>
+          </div>
+          {performance?.sampleSize !== undefined && (
+            <span className="text-[10px] text-slate-500 font-mono normal-case">
+              (Sample: {performance.sampleSize} {performance.sampleSize === 1 ? 'event' : 'events'})
+            </span>
+          )}
         </div>
 
-        <div className="grid grid-cols-3 gap-2 sm:gap-3 text-center">
-          {/* 1 Day Return */}
-          <div className="p-2.5 rounded-lg bg-surface-subtle border border-border/80 space-y-1">
-            <div className="text-[10px] font-mono text-slate-400 uppercase">
-              1-Day Return
-            </div>
-            <div
-              className={cn(
-                'text-xs sm:text-sm font-bold font-mono flex items-center justify-center gap-0.5',
-                isPos1D ? 'text-emerald-400' : 'text-rose-400'
-              )}
-            >
-              {isPos1D ? (
-                <TrendingUp className="w-3 h-3" />
-              ) : (
-                <TrendingDown className="w-3 h-3" />
-              )}
-              <span>{perf.day1}</span>
-            </div>
+        {!hasAnyData ? (
+          <div className="p-3.5 rounded-lg bg-surface-subtle border border-border/80 text-center">
+            <p className="text-xs font-mono text-slate-400">
+              Not enough historical forward data yet
+            </p>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              Requires past events with sufficient subsequent trading sessions to compute realized returns.
+            </p>
           </div>
-
-          {/* 7 Day Return (represented by day5 in dataset) */}
-          <div className="p-2.5 rounded-lg bg-surface-subtle border border-border/80 space-y-1">
-            <div className="text-[10px] font-mono text-slate-400 uppercase">
-              7-Day Return
-            </div>
-            <div
-              className={cn(
-                'text-xs sm:text-sm font-bold font-mono flex items-center justify-center gap-0.5',
-                isPos7D ? 'text-emerald-400' : 'text-rose-400'
-              )}
-            >
-              {isPos7D ? (
-                <TrendingUp className="w-3 h-3" />
-              ) : (
-                <TrendingDown className="w-3 h-3" />
-              )}
-              <span>{perf.day5}</span>
-            </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-2 sm:gap-3 text-center">
+            {renderMetric('1-Day Return', performance?.day1)}
+            {renderMetric('7-Day Return', performance?.day5)}
+            {renderMetric('30-Day Return', performance?.day30)}
           </div>
-
-          {/* 30 Day Return */}
-          <div className="p-2.5 rounded-lg bg-surface-subtle border border-border/80 space-y-1">
-            <div className="text-[10px] font-mono text-slate-400 uppercase">
-              30-Day Return
-            </div>
-            <div
-              className={cn(
-                'text-xs sm:text-sm font-bold font-mono flex items-center justify-center gap-0.5',
-                isPos30D ? 'text-emerald-400' : 'text-rose-400'
-              )}
-            >
-              {isPos30D ? (
-                <TrendingUp className="w-3 h-3" />
-              ) : (
-                <TrendingDown className="w-3 h-3" />
-              )}
-              <span>{perf.day30}</span>
-            </div>
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );

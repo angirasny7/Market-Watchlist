@@ -29,6 +29,9 @@ export const DigestDetailDrawer: React.FC<DigestDetailDrawerProps> = ({
   if (!digest) return null;
 
   const events = getDigestEvents(digest.id);
+  const performanceEntries = Object.entries(digest.forwardPerformanceMap || {}).filter(
+    ([_, p]) => p && (p.day1 || p.day5 || p.day30)
+  );
 
   return (
     <Drawer
@@ -76,22 +79,32 @@ export const DigestDetailDrawer: React.FC<DigestDetailDrawerProps> = ({
           <div className="grid grid-cols-2 gap-3 pt-2">
             <div className="p-3 rounded-xl bg-surface border border-border">
               <div className="text-[11px] font-mono text-slate-400">NIFTY 50 Close</div>
-              <div className="text-base sm:text-lg font-bold font-mono text-slate-100 flex items-baseline justify-between mt-0.5">
-                <span>{digest.benchmarkIndices.nifty.close.toLocaleString()}</span>
-                <span className="text-xs text-emerald-400">
-                  +{digest.benchmarkIndices.nifty.changePercent}%
-                </span>
-              </div>
+              {digest.benchmarkIndices.nifty ? (
+                <div className="text-base sm:text-lg font-bold font-mono text-slate-100 flex items-baseline justify-between mt-0.5">
+                  <span>{digest.benchmarkIndices.nifty.close.toLocaleString()}</span>
+                  <span className={`text-xs ${digest.benchmarkIndices.nifty.changePercent >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {digest.benchmarkIndices.nifty.changePercent >= 0 ? '+' : ''}
+                    {digest.benchmarkIndices.nifty.changePercent}%
+                  </span>
+                </div>
+              ) : (
+                <div className="text-xs text-slate-500 italic mt-1 font-mono">Unavailable</div>
+              )}
             </div>
 
             <div className="p-3 rounded-xl bg-surface border border-border">
               <div className="text-[11px] font-mono text-slate-400">SENSEX Close</div>
-              <div className="text-base sm:text-lg font-bold font-mono text-slate-100 flex items-baseline justify-between mt-0.5">
-                <span>{digest.benchmarkIndices.sensex.close.toLocaleString()}</span>
-                <span className="text-xs text-emerald-400">
-                  +{digest.benchmarkIndices.sensex.changePercent}%
-                </span>
-              </div>
+              {digest.benchmarkIndices.sensex ? (
+                <div className="text-base sm:text-lg font-bold font-mono text-slate-100 flex items-baseline justify-between mt-0.5">
+                  <span>{digest.benchmarkIndices.sensex.close.toLocaleString()}</span>
+                  <span className={`text-xs ${digest.benchmarkIndices.sensex.changePercent >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {digest.benchmarkIndices.sensex.changePercent >= 0 ? '+' : ''}
+                    {digest.benchmarkIndices.sensex.changePercent}%
+                  </span>
+                </div>
+              ) : (
+                <div className="text-xs text-slate-500 italic mt-1 font-mono">Unavailable</div>
+              )}
             </div>
           </div>
 
@@ -126,16 +139,29 @@ export const DigestDetailDrawer: React.FC<DigestDetailDrawerProps> = ({
           </div>
 
           <div className="space-y-2 text-xs text-slate-300 leading-relaxed bg-surface/80 p-3.5 rounded-xl border border-border">
-            <p>
-              <strong className="text-slate-100">Historical Empirical Observation:</strong> Stocks breaking out to a 52-week high backed by High-Confidence regulatory or sales order catalysts produced positive 30-day returns in <span className="text-emerald-400 font-bold font-mono">68%</span> of historical cycles with an average forward expansion of <span className="text-emerald-400 font-bold font-mono">+8.4%</span>.
-            </p>
-            <div className="flex items-center gap-3 pt-1 text-[11px] font-mono text-slate-400 border-t border-border/60">
-              <span>Sample Size: 142 Breakouts</span>
-              <span>•</span>
-              <span>Hit Rate: 68.3%</span>
-              <span>•</span>
-              <span className="text-indigo-300">High Conviction</span>
-            </div>
+            {performanceEntries.length > 0 ? (
+              <>
+                <p>
+                  <strong className="text-slate-100">Historical Empirical Observation:</strong> Realized post-event tracking is active for <span className="text-emerald-400 font-bold font-mono">{performanceEntries.length}</span> {performanceEntries.length === 1 ? 'catalyst' : 'catalysts'} in this digest. See detailed forward performance dossiers below for 1-day, 7-day, and 30-day realized returns.
+                </p>
+                <div className="flex items-center gap-3 pt-1 text-[11px] font-mono text-slate-400 border-t border-border/60">
+                  <span>Tracked Symbols: {performanceEntries.map(([s]) => s).join(', ')}</span>
+                  <span>•</span>
+                  <span className="text-indigo-300">Empirical Returns</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-slate-400">
+                  <strong className="text-slate-200">Historical Empirical Observation:</strong> Not enough historical forward data yet to establish empirical post-event tendencies for this session.
+                </p>
+                <div className="flex items-center gap-3 pt-1 text-[11px] font-mono text-slate-500 border-t border-border/60">
+                  <span>Status: Insufficient Historical Sample (&lt;5 events)</span>
+                  <span>•</span>
+                  <span className="text-slate-400">Awaiting Additional Market Cycles</span>
+                </div>
+              </>
+            )}
           </div>
         </div>
 

@@ -71,6 +71,11 @@ Populate the database with canonical master stocks, news, events, insights, dige
 npm run prisma:seed
 ```
 
+To seed historical events and price checkpoints for backtesting verification (demo-only backfilled data, not real market history):
+```bash
+npm run prisma:seed-historical-demo
+```
+
 ### Step 5: Start Development Server
 ```bash
 npm run dev

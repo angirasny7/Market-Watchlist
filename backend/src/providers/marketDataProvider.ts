@@ -121,6 +121,87 @@ export class SimulatedMarketDataProvider implements IMarketDataProvider {
 
   async getQuote(symbol: string): Promise<MarketQuote | null> {
     const sym = symbol.toUpperCase().trim();
+
+    // Dynamically derive benchmark index quotes from catalog stocks
+    if (sym === '^NSEI' || sym === 'NIFTY50' || sym === 'NIFTY') {
+      try {
+        const stocks = await prisma.stock.findMany({ select: { changePercent: true } });
+        const avgChange = stocks.length > 0
+          ? stocks.reduce((sum, s) => sum + Number(s.changePercent), 0) / stocks.length
+          : 0.58;
+        const baseClose = 24800.0;
+        const changeAmount = +(baseClose * (avgChange / 100)).toFixed(2);
+        const closePrice = +(baseClose + changeAmount).toFixed(2);
+        return {
+          symbol: sym,
+          companyName: 'NIFTY 50 Index',
+          price: closePrice,
+          changeAmount,
+          changePercent: +avgChange.toFixed(2),
+          volume: 250000000,
+          avgVolume20D: 240000000,
+          high52w: 25500.0,
+          low52w: 21000.0,
+          exchange: 'NSE',
+          currency: '₹',
+          timestamp: new Date(),
+        };
+      } catch {}
+    }
+
+    if (sym === '^BSESN' || sym === 'SENSEX') {
+      try {
+        const stocks = await prisma.stock.findMany({ select: { changePercent: true } });
+        const avgChange = stocks.length > 0
+          ? stocks.reduce((sum, s) => sum + Number(s.changePercent), 0) / stocks.length
+          : 0.57;
+        const baseClose = 81200.0;
+        const changeAmount = +(baseClose * (avgChange / 100)).toFixed(2);
+        const closePrice = +(baseClose + changeAmount).toFixed(2);
+        return {
+          symbol: sym,
+          companyName: 'BSE SENSEX Index',
+          price: closePrice,
+          changeAmount,
+          changePercent: +avgChange.toFixed(2),
+          volume: 150000000,
+          avgVolume20D: 140000000,
+          high52w: 83000.0,
+          low52w: 70000.0,
+          exchange: 'BSE',
+          currency: '₹',
+          timestamp: new Date(),
+        };
+      } catch {}
+    }
+
+    if (sym === '^INDIAVIX' || sym === 'INDIAVIX' || sym === 'VIX') {
+      try {
+        const stocks = await prisma.stock.findMany({ select: { changePercent: true } });
+        const avgChange = stocks.length > 0
+          ? stocks.reduce((sum, s) => sum + Number(s.changePercent), 0) / stocks.length
+          : 0;
+        const vixPct = +(-avgChange * 1.5).toFixed(2);
+        const baseVix = 12.8;
+        const changeAmount = +(baseVix * (vixPct / 100)).toFixed(2);
+        const liveVix = +(baseVix + changeAmount).toFixed(2);
+        return {
+          symbol: sym,
+          companyName: 'India VIX Volatility Index',
+          price: liveVix,
+          changeAmount,
+          changePercent: vixPct,
+          volume: 0,
+          avgVolume20D: 0,
+          high52w: 24.5,
+          low52w: 9.8,
+          exchange: 'NSE',
+          currency: '₹',
+          timestamp: new Date(),
+        };
+      } catch {}
+    }
+
     const quote = this.mockCatalog[sym];
     if (quote) {
       // Apply subtle realistic intraday variation (-0.2% to +0.2%)

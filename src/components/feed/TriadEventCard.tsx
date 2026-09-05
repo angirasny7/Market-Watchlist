@@ -9,6 +9,9 @@ import {
   BarChart3,
   ArrowUpRight,
   Sparkles,
+  FileText,
+  AlertCircle,
+  ShieldCheck,
 } from 'lucide-react';
 import { MarketEvent } from '../../types/event';
 import { Insight } from '../../types/insight';
@@ -30,6 +33,12 @@ export const TriadEventCard: React.FC<TriadEventCardProps> = ({
 
   const isAMZN = event.stockSymbol === 'AMZN';
   const currency = isAMZN ? '$' : '₹';
+
+  const enrichment = event.enrichment;
+  const hasEvidence = Boolean(enrichment && enrichment.evidence && enrichment.evidence.length > 0);
+  const confidenceScore = enrichment?.confidenceScore ?? (insight ? Math.round(insight.confidenceScore * 100) : Math.round(event.scoring.finalScore));
+  const primaryVerifyUrl = enrichment?.evidence?.[0]?.url || insight?.sourceUrl || 'https://www.nseindia.com';
+  const primaryVerifySource = enrichment?.evidence?.[0]?.source || insight?.sourceName || 'Regulatory Disclosure';
 
   return (
     <>
@@ -138,51 +147,136 @@ export const TriadEventCard: React.FC<TriadEventCardProps> = ({
             </div>
           </section>
 
-          {/* 2. POSSIBLE EXPLANATION SECTION (JOINED FROM INSIGHT) */}
-          {insight ? (
-            <section className="p-4 rounded-xl bg-indigo-950/20 border border-indigo-500/25 space-y-2.5">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-indigo-300">
-                  <Compass className="w-4 h-4 text-indigo-400" />
-                  <span>Possible Explanation</span>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <ConfidenceBadge
-                    level={insight.confidenceLevel}
-                    score={insight.confidenceScore}
-                  />
-                </div>
+          {/* 2. CONTEXT ENRICHMENT & POSSIBLE DRIVERS SECTION */}
+          <section className="p-4 rounded-xl bg-indigo-950/20 border border-indigo-500/25 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-indigo-300">
+                <Compass className="w-4 h-4 text-indigo-400" />
+                <span>Possible Drivers</span>
               </div>
 
+              {/* Confidence Score Badge */}
+              <div className="flex items-center gap-2">
+                <div
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-mono font-bold border ${
+                    confidenceScore >= 80
+                      ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                      : confidenceScore >= 60
+                      ? 'bg-indigo-500/10 text-indigo-300 border-indigo-500/30'
+                      : 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                  }`}
+                  title="Multi-factor confidence calculated across news, filings, volume, and price action"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Confidence: {confidenceScore}%</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Drivers Bullet List */}
+            {enrichment?.possibleDrivers && enrichment.possibleDrivers.length > 0 ? (
+              <div className="space-y-1.5">
+                <ul className="space-y-1.5 text-xs sm:text-sm text-slate-200">
+                  {enrichment.possibleDrivers.map((driver, idx) => (
+                    <li key={idx} className="flex items-start gap-2">
+                      <span className="text-indigo-400 font-bold leading-none mt-1">•</span>
+                      <span className="leading-relaxed">{driver}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : enrichment?.summary === 'Supporting evidence currently unavailable.' || !hasEvidence ? (
+              <div className="p-3 rounded-lg bg-surface-subtle/80 border border-border/80 text-xs text-slate-400 italic flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-slate-500 shrink-0" />
+                <span>Supporting evidence currently unavailable.</span>
+              </div>
+            ) : insight ? (
               <p className="text-xs sm:text-sm text-slate-200 leading-relaxed font-normal">
                 {insight.explanation}
               </p>
-
-              {/* Source Link & Verification Citation */}
-              <div className="pt-2 border-t border-indigo-500/15 flex items-center justify-between text-xs text-slate-400">
-                <span className="font-mono text-[11px]">
-                  Attributed Source:{' '}
-                  <span className="text-slate-200 font-medium">
-                    {insight.sourceName}
-                  </span>
-                </span>
-                <a
-                  href={insight.sourceUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-medium text-indigo-300 hover:text-indigo-200 flex items-center gap-1 text-[11px] font-mono"
-                >
-                  <span>Verify Source</span>
-                  <ExternalLink className="w-3 h-3 text-indigo-400" />
-                </a>
+            ) : (
+              <div className="p-3 rounded-lg bg-surface-subtle/80 border border-border/80 text-xs text-slate-400 italic flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-slate-500 shrink-0" />
+                <span>Supporting evidence currently unavailable.</span>
               </div>
-            </section>
-          ) : (
-            <section className="p-3.5 rounded-xl bg-surface-subtle border border-border text-xs text-slate-400">
-              <span>Context Enrichment Engine searching filings for catalyst verification...</span>
-            </section>
-          )}
+            )}
+
+            {/* Supporting Evidence List */}
+            {hasEvidence && enrichment?.evidence && (
+              <div className="space-y-2 pt-2.5 border-t border-indigo-500/20">
+                <div className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <FileText className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Supporting Evidence:</span>
+                  </span>
+                  <span className="text-[10px] text-slate-500 lowercase font-normal font-mono">
+                    {enrichment.evidence.length} verified {enrichment.evidence.length === 1 ? 'source' : 'sources'}
+                  </span>
+                </div>
+                <div className="space-y-1.5">
+                  {enrichment.evidence.map((ev, idx) => (
+                    <div
+                      key={idx}
+                      className="p-2.5 rounded-lg bg-surface/80 border border-border/70 hover:border-indigo-500/40 transition-colors flex items-start justify-between gap-3 text-xs"
+                    >
+                      <div className="space-y-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold uppercase ${
+                              ev.sourceType === 'FILING'
+                                ? 'bg-purple-500/10 text-purple-300 border border-purple-500/30'
+                                : ev.sourceType === 'ANNOUNCEMENT'
+                                ? 'bg-cyan-500/10 text-cyan-300 border border-cyan-500/30'
+                                : 'bg-blue-500/10 text-blue-300 border border-blue-500/30'
+                            }`}
+                          >
+                            {ev.sourceType}
+                          </span>
+                          <span className="font-semibold text-slate-200">{ev.source}</span>
+                          {ev.publishedAt && (
+                            <span className="text-slate-500 text-[11px] font-mono">
+                              • {new Date(ev.publishedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-slate-300 line-clamp-2 leading-relaxed font-normal">
+                          {ev.title}
+                        </p>
+                      </div>
+                      <a
+                        href={ev.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="shrink-0 p-1.5 rounded-md hover:bg-surface-hover text-indigo-400 hover:text-indigo-200 transition-colors"
+                        title={`Inspect original source at ${ev.source}`}
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Source Link & Verification Citation */}
+            <div className="pt-2.5 border-t border-indigo-500/15 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
+              <span className="font-mono text-[11px]">
+                Attributed Source:{' '}
+                <span className="text-slate-200 font-medium">
+                  {primaryVerifySource}
+                </span>
+              </span>
+              <a
+                href={primaryVerifyUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 hover:text-indigo-100 border border-indigo-500/40 text-xs font-mono font-medium transition-all shadow-sm"
+              >
+                <span>Verify Source</span>
+                <ExternalLink className="w-3.5 h-3.5 text-indigo-400" />
+              </a>
+            </div>
+          </section>
 
           {/* 3. WHY IT MATTERS SECTION */}
           {insight && (
@@ -305,8 +399,71 @@ export const TriadEventCard: React.FC<TriadEventCardProps> = ({
               </div>
             </div>
 
-            {/* Possible explanation if available */}
-            {insight && (
+            {/* Context Enrichment & Supporting Evidence in Modal */}
+            {enrichment && (
+              <div className="p-3.5 rounded-xl bg-indigo-950/20 border border-indigo-500/25 space-y-3">
+                <div className="flex items-center justify-between text-xs font-semibold text-indigo-300">
+                  <span className="flex items-center gap-1.5">
+                    <Compass className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Context Enrichment & Drivers</span>
+                  </span>
+                  <span className="font-mono text-[11px] px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-200 border border-indigo-500/30">
+                    Confidence: {confidenceScore}%
+                  </span>
+                </div>
+
+                {enrichment.possibleDrivers.length > 0 ? (
+                  <ul className="space-y-1 text-xs text-slate-200">
+                    {enrichment.possibleDrivers.map((driver, idx) => (
+                      <li key={idx} className="flex items-start gap-2">
+                        <span className="text-indigo-400 font-bold">•</span>
+                        <span>{driver}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-xs text-slate-400 italic">
+                    Supporting evidence currently unavailable.
+                  </p>
+                )}
+
+                {/* Evidence Items in Modal */}
+                {enrichment.evidence.length > 0 && (
+                  <div className="pt-2 border-t border-indigo-500/20 space-y-1.5">
+                    <div className="text-[11px] font-mono font-bold uppercase text-slate-400">
+                      Verified Supporting Evidence:
+                    </div>
+                    {enrichment.evidence.map((ev, idx) => (
+                      <div
+                        key={idx}
+                        className="p-2 rounded-lg bg-surface border border-border flex items-center justify-between gap-2 text-xs"
+                      >
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="px-1 py-0.2 rounded text-[9px] font-mono font-bold bg-indigo-500/20 text-indigo-300">
+                              {ev.sourceType}
+                            </span>
+                            <span className="font-medium text-slate-300">{ev.source}</span>
+                          </div>
+                          <p className="text-slate-200 truncate mt-0.5">{ev.title}</p>
+                        </div>
+                        <a
+                          href={ev.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="shrink-0 p-1 rounded hover:bg-surface-hover text-indigo-400 hover:text-indigo-200"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Possible explanation fallback if available and no enrichment */}
+            {!enrichment && insight && (
               <div className="p-3.5 rounded-xl bg-indigo-950/20 border border-indigo-500/20 space-y-1.5">
                 <div className="flex items-center justify-between text-xs font-semibold text-indigo-300">
                   <span>Causal Explanation</span>

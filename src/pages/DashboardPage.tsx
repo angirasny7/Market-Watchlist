@@ -8,10 +8,11 @@ import {
   MarketHighlightsPreview,
   MarketMemoryPreview,
 } from '../components/dashboard';
+import { PageContainer } from '../components/common';
 
 export const DashboardPage: React.FC = () => {
   return (
-    <div className="space-y-8 pb-12 animate-fade-in max-w-7xl mx-auto">
+    <PageContainer>
       {/* Section 1: Hero Welcome Banner */}
       <WelcomeBanner />
 
@@ -32,7 +33,7 @@ export const DashboardPage: React.FC = () => {
 
       {/* Section 7: Market Memory Preview */}
       <MarketMemoryPreview />
-    </div>
+    </PageContainer>
   );
 };
 

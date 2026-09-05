@@ -102,7 +102,7 @@ export class AuthService {
     const token = jwt.sign(
       { userId: user.id, email: user.email, role: user.role },
       config.jwtSecret,
-      { expiresIn: '7d' }
+      { expiresIn: config.jwtExpiresIn as jwt.SignOptions['expiresIn'] }
     );
 
     return {
@@ -209,7 +209,7 @@ export class AuthService {
     const token = jwt.sign(
       { userId: user.id, email: user.email, role: user.role },
       config.jwtSecret,
-      { expiresIn: '7d' }
+      { expiresIn: config.jwtExpiresIn as jwt.SignOptions['expiresIn'] }
     );
 
     const onboarded = await isUserOnboarded(user.id);

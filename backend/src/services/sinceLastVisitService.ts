@@ -132,7 +132,7 @@ export class SinceLastVisitService {
         },
       },
       orderBy: { confidenceScore: 'desc' },
-      take: 8,
+      take: 20,
     });
 
     if (rawInsights.length === 0) {
@@ -146,16 +146,54 @@ export class SinceLastVisitService {
           },
         },
         orderBy: { confidenceScore: 'desc' },
-        take: 5,
+        take: 20,
       });
     }
 
-    const newInsights = rawInsights
+    const priorityWeights: Record<string, number> = {
+      CRITICAL: 4,
+      HIGH: 3,
+      MEDIUM: 2,
+      LOW: 1,
+    };
+
+    // Sort candidates by:
+    // 1. Event Priority (CRITICAL > HIGH > MEDIUM > LOW)
+    // 2. Event Attention Score (higher is better)
+    // 3. Insight Confidence Score (higher is better)
+    // 4. Recency (newer is better)
+    const sortedInsights = [...rawInsights].sort((a, b) => {
+      const pA = a.event?.priority ? (priorityWeights[a.event.priority] || 1) : 1;
+      const pB = b.event?.priority ? (priorityWeights[b.event.priority] || 1) : 1;
+      if (pB !== pA) return pB - pA;
+
+      const scoreA = Number((a.event?.metricsDelta as any)?.attentionScore ?? 0);
+      const scoreB = Number((b.event?.metricsDelta as any)?.attentionScore ?? 0);
+      if (scoreB !== scoreA) return scoreB - scoreA;
+
+      const confA = Number(a.confidenceScore ?? 0);
+      const confB = Number(b.confidenceScore ?? 0);
+      if (confB !== confA) return confB - confA;
+
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+
+    // Limit to strictly ONE insight per stock symbol
+    const seenSymbols = new Set<string>();
+    const uniqueInsights: typeof rawInsights = [];
+    for (const ins of sortedInsights) {
+      if (!seenSymbols.has(ins.stockSymbol)) {
+        seenSymbols.add(ins.stockSymbol);
+        uniqueInsights.push(ins);
+      }
+    }
+
+    const newInsights = uniqueInsights
       .map((ins) => ({
         ...ins,
         inWatchlist: true,
       }))
-      .sort((a, b) => Number(b.confidenceScore) - Number(a.confidenceScore));
+      .slice(0, 5);
 
     // 6. Fetch latest Market Memory Digest containing user's watchlist events
     const rawLatestDigest = await prisma.digest.findFirst({

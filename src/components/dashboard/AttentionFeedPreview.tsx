@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BellRing, ArrowRight, CheckCircle2, Clock } from 'lucide-react';
 import { useMarketStore } from '../../store/useMarketStore';
-import { PriorityBadge, EventTypeBadge, DeltaBadge } from '../common';
+import { PriorityBadge, EventTypeBadge, DeltaBadge, SectionHeader } from '../common';
 import { formatPrice } from '../../lib/utils';
 
 export const AttentionFeedPreview: React.FC = () => {
@@ -22,33 +22,25 @@ export const AttentionFeedPreview: React.FC = () => {
 
   return (
     <section className="space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-        <div>
-          <div className="flex items-center gap-2">
-            <div className="p-1 rounded-md bg-rose-500/10 text-rose-400">
-              <BellRing className="w-4 h-4" />
-            </div>
-            <h2 className="text-lg sm:text-xl font-bold text-slate-100 tracking-tight">
-              Attention Feed Preview
-            </h2>
-          </div>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Top market signals requiring your evaluation, ordered by Attention Score
-          </p>
-        </div>
-
-        <button
-          onClick={() => navigate('/feed')}
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-400 hover:text-indigo-300 transition-colors"
-        >
-          <span>View Full Feed</span>
-          <ArrowRight className="w-3.5 h-3.5" />
-        </button>
-      </div>
+      <SectionHeader
+        title="Attention Feed Preview"
+        icon={<BellRing className="w-4 h-4 text-rose-400" />}
+        iconColor="rose"
+        description="Top market signals requiring your evaluation, ordered by Attention Score"
+        actions={
+          <button
+            onClick={() => navigate('/feed')}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-400 hover:text-indigo-300 transition-colors"
+          >
+            <span>View Full Feed</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        }
+      />
 
       {/* Events List Container or Empty State */}
       {topEvents.length === 0 ? (
-        <div className="p-8 rounded-2xl bg-surface border border-border text-center space-y-2">
+        <div className="p-8 rounded-[20px] bg-surface/85 backdrop-blur-md border border-border/80 text-center space-y-2">
           <p className="text-sm font-semibold text-slate-300">No tracked stocks yet.</p>
           <p className="text-xs text-slate-400">Add stocks to your watchlist to monitor real-time attention signals.</p>
         </div>

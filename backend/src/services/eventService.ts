@@ -1,5 +1,6 @@
 import { Priority, EventType } from '@prisma/client';
 import { prisma } from '../config/prisma.js';
+import { contextEnrichmentService } from './contextEnrichmentService.js';
 
 export class EventService {
   /**
@@ -90,29 +91,39 @@ export class EventService {
       },
     });
 
-    const mapped = events.map((e) => {
-      const isRead = options?.userId ? readEventIds.has(e.id) : Boolean(e.read);
-      return {
-        ...e,
-        read: isRead,
-        inWatchlist: userWatchlistSymbols.has(e.stockSymbol),
-        stock: {
-          ...e.stock,
-          currentPrice: Number(e.stock.currentPrice),
-          changeAmount: Number(e.stock.changeAmount),
-          changePercent: Number(e.stock.changePercent),
-          volume: Number(e.stock.volume),
-          avgVolume20D: Number(e.stock.avgVolume20D),
-          peRatio: e.stock.peRatio ? Number(e.stock.peRatio) : null,
-          high52w: Number(e.stock.high52w),
-          low52w: Number(e.stock.low52w),
-        },
-        insights: e.insights.map((ins) => ({
-          ...ins,
-          confidenceScore: Number(ins.confidenceScore),
-        })),
-      };
-    });
+    const mapped = await Promise.all(
+      events.map(async (e) => {
+        const isRead = options?.userId ? readEventIds.has(e.id) : Boolean(e.read);
+        const delta = (e.metricsDelta as any) || {};
+
+        let enrichment = delta.enrichment;
+        if (!enrichment) {
+          enrichment = await contextEnrichmentService.enrichEvent(e, e.stock);
+        }
+
+        return {
+          ...e,
+          read: isRead,
+          inWatchlist: userWatchlistSymbols.has(e.stockSymbol),
+          enrichment,
+          stock: {
+            ...e.stock,
+            currentPrice: Number(e.stock.currentPrice),
+            changeAmount: Number(e.stock.changeAmount),
+            changePercent: Number(e.stock.changePercent),
+            volume: Number(e.stock.volume),
+            avgVolume20D: Number(e.stock.avgVolume20D),
+            peRatio: e.stock.peRatio ? Number(e.stock.peRatio) : null,
+            high52w: Number(e.stock.high52w),
+            low52w: Number(e.stock.low52w),
+          },
+          insights: e.insights.map((ins) => ({
+            ...ins,
+            confidenceScore: Number(ins.confidenceScore),
+          })),
+        };
+      })
+    );
 
     // Sort so watchlist events surface first while preserving chronological recency
     return mapped.sort((a, b) => {

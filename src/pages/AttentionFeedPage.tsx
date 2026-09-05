@@ -13,6 +13,8 @@ import {
 import { useMarketStore } from '../store/useMarketStore';
 import { CheckCircle2, RotateCcw, ShieldAlert, FilterX, ChevronDown, PlusCircle, Database } from 'lucide-react';
 
+import { PageContainer } from '../components/common';
+
 const PAGE_SIZE = 8;
 
 export const AttentionFeedPage: React.FC = () => {
@@ -149,11 +151,17 @@ export const AttentionFeedPage: React.FC = () => {
   }, [displayedEvents, getInsightsByEvent]);
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6 pb-16 animate-fade-in">
-      {/* 1. Feed Header */}
-      <FeedHeader />
+    <PageContainer>
+      {/* 1. Standardized Page Header */}
+      <FeedHeader onMarkAllRead={markAllEventsRead} unreadCount={unreadCount} />
 
-      {/* 2. Multi-Dimensional Filter Bar with Watchlist Scope */}
+      {/* 2. Standardized KPI Grid */}
+      <FeedMetricsSummary
+        visibleEvents={filteredEvents}
+        insights={insights}
+      />
+
+      {/* 3. Standardized Multi-Dimensional Filter Bar with Watchlist Scope */}
       <FeedFilterBar
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
@@ -171,16 +179,10 @@ export const AttentionFeedPage: React.FC = () => {
         isFiltered={isFiltered}
       />
 
-      {/* 3. Derived Summary Metrics Strip */}
-      <FeedMetricsSummary
-        visibleEvents={filteredEvents}
-        insights={insights}
-      />
-
       {/* 4. Confidence Distribution Visualizer */}
       <ConfidenceIndicator insights={visibleInsights} />
 
-      {/* 5. Triad Cards Stream */}
+      {/* 5. Main Content: Triad Cards Stream */}
       <div className="space-y-5">
         {displayedEvents.length > 0 ? (
           <>
@@ -312,7 +314,7 @@ export const AttentionFeedPage: React.FC = () => {
           </div>
         )}
       </div>
-    </div>
+    </PageContainer>
   );
 };
 

@@ -99,21 +99,31 @@ export const AppLayout: React.FC = () => {
             <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border/60">
               <div className="p-2.5 rounded-lg bg-surface border border-border/60">
                 <div className="text-[11px] text-slate-400">NIFTY 50 Close</div>
-                <div className="text-base font-bold font-mono text-slate-100 flex items-baseline justify-between">
-                  <span>{activeDigest.benchmarkIndices.nifty.close.toLocaleString()}</span>
-                  <span className="text-xs text-emerald-400">
-                    +{activeDigest.benchmarkIndices.nifty.changePercent}%
-                  </span>
-                </div>
+                {activeDigest.benchmarkIndices.nifty ? (
+                  <div className="text-base font-bold font-mono text-slate-100 flex items-baseline justify-between">
+                    <span>{activeDigest.benchmarkIndices.nifty.close.toLocaleString()}</span>
+                    <span className={`text-xs ${activeDigest.benchmarkIndices.nifty.changePercent >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {activeDigest.benchmarkIndices.nifty.changePercent >= 0 ? '+' : ''}
+                      {activeDigest.benchmarkIndices.nifty.changePercent}%
+                    </span>
+                  </div>
+                ) : (
+                  <div className="text-xs text-slate-500 italic mt-1">Unavailable</div>
+                )}
               </div>
               <div className="p-2.5 rounded-lg bg-surface border border-border/60">
                 <div className="text-[11px] text-slate-400">SENSEX Close</div>
-                <div className="text-base font-bold font-mono text-slate-100 flex items-baseline justify-between">
-                  <span>{activeDigest.benchmarkIndices.sensex.close.toLocaleString()}</span>
-                  <span className="text-xs text-emerald-400">
-                    +{activeDigest.benchmarkIndices.sensex.changePercent}%
-                  </span>
-                </div>
+                {activeDigest.benchmarkIndices.sensex ? (
+                  <div className="text-base font-bold font-mono text-slate-100 flex items-baseline justify-between">
+                    <span>{activeDigest.benchmarkIndices.sensex.close.toLocaleString()}</span>
+                    <span className={`text-xs ${activeDigest.benchmarkIndices.sensex.changePercent >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {activeDigest.benchmarkIndices.sensex.changePercent >= 0 ? '+' : ''}
+                      {activeDigest.benchmarkIndices.sensex.changePercent}%
+                    </span>
+                  </div>
+                ) : (
+                  <div className="text-xs text-slate-500 italic mt-1">Unavailable</div>
+                )}
               </div>
             </div>
           </div>
@@ -188,22 +198,28 @@ export const AppLayout: React.FC = () => {
                   )}
 
                   {/* Subsequent Forward Performance */}
-                  {forwardPerformance && (
+                  {forwardPerformance && (forwardPerformance.day1 || forwardPerformance.day5 || forwardPerformance.day30) ? (
                     <div className="pt-2 border-t border-border/50 flex items-center justify-between text-[11px] font-mono">
                       <span className="text-slate-400">Forward Realized Returns:</span>
                       <div className="flex items-center gap-3">
-                        <span>
-                          1D: <span className="text-emerald-400">{forwardPerformance.day1}</span>
-                        </span>
-                        <span>
-                          5D: <span className="text-emerald-400">{forwardPerformance.day5}</span>
-                        </span>
-                        <span>
-                          30D: <span className="text-emerald-400">{forwardPerformance.day30}</span>
-                        </span>
+                        {forwardPerformance.day1 ? (
+                          <span>
+                            1D: <span className={forwardPerformance.day1.startsWith('+') ? 'text-emerald-400' : 'text-rose-400'}>{forwardPerformance.day1}</span>
+                          </span>
+                        ) : null}
+                        {forwardPerformance.day5 ? (
+                          <span>
+                            5D: <span className={forwardPerformance.day5.startsWith('+') ? 'text-emerald-400' : 'text-rose-400'}>{forwardPerformance.day5}</span>
+                          </span>
+                        ) : null}
+                        {forwardPerformance.day30 ? (
+                          <span>
+                            30D: <span className={forwardPerformance.day30.startsWith('+') ? 'text-emerald-400' : 'text-rose-400'}>{forwardPerformance.day30}</span>
+                          </span>
+                        ) : null}
                       </div>
                     </div>
-                  )}
+                  ) : null}
                 </div>
               );
             })}

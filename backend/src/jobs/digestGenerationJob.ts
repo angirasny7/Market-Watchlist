@@ -1,5 +1,7 @@
 import { MarketMood } from '@prisma/client';
 import { prisma } from '../config/prisma.js';
+import { ProviderFactory } from '../providers/providerFactory.js';
+import { historicalPatternService } from '../services/historicalPatternService.js';
 
 export interface DigestGenerationResult {
   jobRunId: string;
@@ -94,11 +96,39 @@ export async function runDigestGenerationJob(options?: { force?: boolean }): Pro
     }
 
     // 4. Construct Benchmark Closes & Forward Performance Projections
-    const benchmarkCloses = {
-      nifty50: { close: 24850.4, change: 142.2, pct: 0.58 },
-      sensex: { close: 81320.1, change: 465.8, pct: 0.57 },
-      indiaVix: { close: 12.8, change: -0.4, pct: -3.03 },
+    let benchmarkCloses: Record<string, any> = {
+      nifty50: null,
+      sensex: null,
+      indiaVix: null,
     };
+
+    try {
+      const marketProvider = ProviderFactory.getMarketDataProvider();
+      const indexQuotes = await marketProvider.getBatchQuotes(['^NSEI', '^BSESN', '^INDIAVIX']);
+      const niftyQuote = indexQuotes.find((q) => q.symbol === '^NSEI' || q.symbol === 'NIFTY50' || q.symbol === 'NIFTY');
+      const sensexQuote = indexQuotes.find((q) => q.symbol === '^BSESN' || q.symbol === 'SENSEX');
+      const vixQuote = indexQuotes.find((q) => q.symbol === '^INDIAVIX' || q.symbol === 'INDIAVIX' || q.symbol === 'VIX');
+
+      benchmarkCloses = {
+        nifty50: niftyQuote ? {
+          close: Number(niftyQuote.price.toFixed(2)),
+          change: Number(niftyQuote.changeAmount.toFixed(2)),
+          pct: Number(niftyQuote.changePercent.toFixed(2)),
+        } : null,
+        sensex: sensexQuote ? {
+          close: Number(sensexQuote.price.toFixed(2)),
+          change: Number(sensexQuote.changeAmount.toFixed(2)),
+          pct: Number(sensexQuote.changePercent.toFixed(2)),
+        } : null,
+        indiaVix: vixQuote ? {
+          close: Number(vixQuote.price.toFixed(2)),
+          change: Number(vixQuote.changeAmount.toFixed(2)),
+          pct: Number(vixQuote.changePercent.toFixed(2)),
+        } : null,
+      };
+    } catch (err: any) {
+      console.warn(`[DigestGenerationJob] Failed to fetch live benchmark index quotes: ${err.message}`);
+    }
 
     const topMovingStock = unattachedEvents[0]?.stockSymbol || allStocks[0]?.symbol || 'NIFTY';
     const eventCount = unattachedEvents.length;
@@ -106,12 +136,16 @@ export async function runDigestGenerationJob(options?: { force?: boolean }): Pro
     const headline = `Market Dossier: ${topMovingStock} Catalysts, Volume Rotations, and Sector Trends`;
     const executiveSummary = `Comprehensive intelligence summary across ${eventCount} active watchlist developments. Overall market posture indicates a ${marketMood.toLowerCase().replace('_', ' ')} environment with average catalog variance of ${avgChange > 0 ? '+' : ''}${avgChange.toFixed(2)}%. Institutional positioning remained focused on high-conviction large caps with active liquidity concentration.`;
 
-    const forwardPerformanceMap = {
-      day1: avgChange > 0 ? '+0.4%' : '-0.2%',
-      day3: avgChange > 0 ? '+1.1%' : '-0.5%',
-      day5: avgChange > 0 ? '+1.8%' : '-0.9%',
-      confidence: '78% historical alignment',
-    };
+    // 4b. Construct real per-stock forward performance map
+    const forwardPerformanceMap: Record<string, any> = {};
+    const uniqueSymbols = Array.from(new Set(unattachedEvents.map((e) => e.stockSymbol)));
+
+    for (const symbol of uniqueSymbols) {
+      const stockEvents = unattachedEvents.filter((e) => e.stockSymbol === symbol);
+      const stockEventTypes = Array.from(new Set(stockEvents.map((e) => e.eventType)));
+      const perf = await historicalPatternService.getForwardPerformanceForStock(symbol, stockEventTypes, 5);
+      forwardPerformanceMap[symbol] = perf;
+    }
 
     // 5. Gather unique insights across these events
     const insightIdsToAttach: string[] = [];

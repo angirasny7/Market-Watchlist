@@ -7,7 +7,7 @@ import {
   LineChart,
   Star,
 } from 'lucide-react';
-import { HistoricalDigest } from '../../types/digest';
+import { HistoricalDigest, DigestForwardPerformance } from '../../types/digest';
 import { MarketMoodBadge } from './MarketMoodBadge';
 import { DeltaBadge } from '../common';
 import { useMarketStore } from '../../store/useMarketStore';
@@ -27,15 +27,16 @@ export const MemoryTimelineCard: React.FC<MemoryTimelineCardProps> = ({
   // Derive average 30D return across stocks in this digest
   const perfMap = digest.forwardPerformanceMap || {};
   const returnValues = Object.values(perfMap)
-    .map((p) => parseFloat(p.day30.replace('%', '')))
+    .filter((p): p is DigestForwardPerformance => Boolean(p && typeof p.day30 === 'string'))
+    .map((p) => parseFloat(p.day30!.replace('%', '')))
     .filter((v) => !isNaN(v));
 
-  const avg30DReturn =
-    returnValues.length > 0
-      ? returnValues.reduce((a, b) => a + b, 0) / returnValues.length
-      : 8.4;
+  const has30DData = returnValues.length > 0;
+  const avg30DReturn = has30DData
+    ? returnValues.reduce((a, b) => a + b, 0) / returnValues.length
+    : null;
 
-  const isAvgPositive = avg30DReturn >= 0;
+  const isAvgPositive = avg30DReturn !== null && avg30DReturn >= 0;
 
   return (
     <div className="relative pl-6 sm:pl-8 pb-8 group last:pb-2">
@@ -91,23 +92,37 @@ export const MemoryTimelineCard: React.FC<MemoryTimelineCardProps> = ({
           {/* Nifty */}
           <div className="flex items-center justify-between sm:justify-start sm:gap-2">
             <span className="text-slate-400">NIFTY 50:</span>
-            <span className="font-bold text-slate-200">
-              {digest.benchmarkIndices.nifty.close.toLocaleString()}
-            </span>
-            <span className="text-emerald-400 font-semibold">
-              +{digest.benchmarkIndices.nifty.changePercent}%
-            </span>
+            {digest.benchmarkIndices.nifty ? (
+              <>
+                <span className="font-bold text-slate-200">
+                  {digest.benchmarkIndices.nifty.close.toLocaleString()}
+                </span>
+                <span className={`font-semibold ${digest.benchmarkIndices.nifty.changePercent >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {digest.benchmarkIndices.nifty.changePercent >= 0 ? '+' : ''}
+                  {digest.benchmarkIndices.nifty.changePercent}%
+                </span>
+              </>
+            ) : (
+              <span className="text-slate-500 italic">Unavailable</span>
+            )}
           </div>
 
           {/* Sensex */}
           <div className="flex items-center justify-between sm:justify-start sm:gap-2">
             <span className="text-slate-400">SENSEX:</span>
-            <span className="font-bold text-slate-200">
-              {digest.benchmarkIndices.sensex.close.toLocaleString()}
-            </span>
-            <span className="text-emerald-400 font-semibold">
-              +{digest.benchmarkIndices.sensex.changePercent}%
-            </span>
+            {digest.benchmarkIndices.sensex ? (
+              <>
+                <span className="font-bold text-slate-200">
+                  {digest.benchmarkIndices.sensex.close.toLocaleString()}
+                </span>
+                <span className={`font-semibold ${digest.benchmarkIndices.sensex.changePercent >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {digest.benchmarkIndices.sensex.changePercent >= 0 ? '+' : ''}
+                  {digest.benchmarkIndices.sensex.changePercent}%
+                </span>
+              </>
+            ) : (
+              <span className="text-slate-500 italic">Unavailable</span>
+            )}
           </div>
 
           {/* Realized 30D Post-Event Return */}
@@ -116,14 +131,18 @@ export const MemoryTimelineCard: React.FC<MemoryTimelineCardProps> = ({
               <LineChart className="w-3 h-3 text-emerald-400" />
               <span>30D Realized Avg:</span>
             </span>
-            <span
-              className={`font-bold ${
-                isAvgPositive ? 'text-emerald-400' : 'text-rose-400'
-              }`}
-            >
-              {isAvgPositive ? '+' : ''}
-              {avg30DReturn.toFixed(1)}%
-            </span>
+            {has30DData && avg30DReturn !== null ? (
+              <span
+                className={`font-bold ${
+                  isAvgPositive ? 'text-emerald-400' : 'text-rose-400'
+                }`}
+              >
+                {isAvgPositive ? '+' : ''}
+                {avg30DReturn.toFixed(1)}%
+              </span>
+            ) : (
+              <span className="text-slate-500 italic">Not enough historical data yet</span>
+            )}
           </div>
         </div>
 

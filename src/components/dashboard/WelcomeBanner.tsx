@@ -60,7 +60,7 @@ export const WelcomeBanner: React.FC = () => {
   const totalInsightsCount = Object.keys(insights).length;
 
   return (
-    <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-surface via-surface-subtle to-surface border border-border p-6 sm:p-8 shadow-xl">
+    <div className="relative overflow-hidden rounded-[20px] bg-surface/85 backdrop-blur-md border border-border/80 p-6 sm:p-8 shadow-sm">
       {/* Subtle background ambient glows */}
       <div className="absolute top-0 right-0 -mr-16 -mt-16 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-0 left-1/3 -mb-16 w-72 h-72 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -85,7 +85,7 @@ export const WelcomeBanner: React.FC = () => {
             </div>
           </div>
 
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-slate-100 tracking-tight">
+          <h1 className="text-3xl sm:text-4xl lg:text-[44px] font-bold tracking-tight text-slate-100 leading-tight">
             {getGreeting()},{' '}
             <span className="bg-gradient-to-r from-emerald-400 to-indigo-400 bg-clip-text text-transparent">
               {authenticatedName}

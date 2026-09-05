@@ -1,6 +1,7 @@
 import { EventType } from '@prisma/client';
 import { prisma } from '../config/prisma.js';
 import { attentionScoringService } from '../services/attentionScoringService.js';
+import { contextEnrichmentService } from '../services/contextEnrichmentService.js';
 
 export interface ChangeDetectionResult {
   jobRunId: string;
@@ -151,7 +152,7 @@ export async function runChangeDetectionJob(): Promise<ChangeDetectionResult> {
           eventType: anomaly.eventType,
         });
 
-        await prisma.event.create({
+        const createdEvent = await prisma.event.create({
           data: {
             stockSymbol: stock.symbol,
             eventType: anomaly.eventType,
@@ -167,6 +168,18 @@ export async function runChangeDetectionJob(): Promise<ChangeDetectionResult> {
               volume,
               avgVolume20D,
               volumeRatio: avgVolume20D > 0 ? parseFloat((volume / avgVolume20D).toFixed(2)) : 1.0,
+            },
+          },
+        });
+
+        // Enrich with verified context & evidence
+        const enrichment = await contextEnrichmentService.enrichEvent(createdEvent, stock);
+        await prisma.event.update({
+          where: { id: createdEvent.id },
+          data: {
+            metricsDelta: {
+              ...(createdEvent.metricsDelta as any),
+              enrichment,
             },
           },
         });

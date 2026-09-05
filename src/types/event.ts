@@ -40,6 +40,33 @@ export interface EventMetrics {
   [key: string]: string | number | undefined;
 }
 
+export type EvidenceSourceType = 'NEWS' | 'FILING' | 'ANNOUNCEMENT';
+
+export interface EvidenceItem {
+  title: string;
+  source: string;
+  sourceType: EvidenceSourceType;
+  url: string;
+  publishedAt: string;
+}
+
+export interface EventEnrichment {
+  summary: string;
+  confidenceScore: number;
+  possibleDrivers: string[];
+  evidence: EvidenceItem[];
+  scoreBreakdown?: {
+    score: number;
+    factors: {
+      newsSupportScore: number;
+      filingsSupportScore: number;
+      volumeConfirmationScore: number;
+      priceMagnitudeScore: number;
+      multiSourceScore: number;
+    };
+  };
+}
+
 export interface MarketEvent {
   id: string;                      // e.g. 'evt_tata_52w'
   stockSymbol: string;             // FK to Stock: e.g. 'TATAMOTORS'
@@ -58,4 +85,5 @@ export interface MarketEvent {
   read: boolean;
   acknowledged: boolean;
   inWatchlist?: boolean;
+  enrichment?: EventEnrichment;
 }

@@ -10,6 +10,7 @@ import {
   HistoricalDossiersSection,
 } from '../components/highlights';
 import { DigestDetailDrawer } from '../components/memory/DigestDetailDrawer';
+import { PageContainer } from '../components/common';
 import { useMarketStore } from '../store/useMarketStore';
 import { HistoricalDigest } from '../types/digest';
 
@@ -18,7 +19,7 @@ export const MarketHighlightsPage: React.FC = () => {
   const [activeDigest, setActiveDigest] = useState<HistoricalDigest | null>(null);
 
   return (
-    <div className="space-y-8 pb-16 animate-fade-in max-w-7xl mx-auto">
+    <PageContainer>
       {/* 1. Header with Breadth Metrics, Policy Stance & Sync Indicator */}
       <HighlightsHeader />
 
@@ -51,7 +52,7 @@ export const MarketHighlightsPage: React.FC = () => {
         digest={activeDigest}
         onClose={() => setActiveDigest(null)}
       />
-    </div>
+    </PageContainer>
   );
 };
 

@@ -5,13 +5,15 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "prisma generate && tsc",
+    "build": "node scripts/generatePrisma.cjs && tsc",
     "start": "node dist/index.js",
-    "postinstall": "prisma generate",
-    "prisma:generate": "prisma generate",
+    "postinstall": "node scripts/generatePrisma.cjs",
+    "prisma:generate": "node scripts/generatePrisma.cjs --force",
+    "kill:backend": "node scripts/killBackend.cjs",
     "prisma:migrate": "prisma migrate dev",
     "prisma:push": "prisma db push",
-    "prisma:seed": "tsx prisma/seed.ts"
+    "prisma:seed": "tsx prisma/seed.ts",
+    "prisma:seed-historical-demo": "tsx prisma/seedHistoricalDemoData.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.4.1",
