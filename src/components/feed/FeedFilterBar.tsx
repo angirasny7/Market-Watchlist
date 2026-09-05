@@ -5,7 +5,7 @@ import { EventPriority, EventType } from '../../types/event';
 
 export type PriorityFilter = 'ALL' | EventPriority;
 export type CategoryFilter = 'ALL' | EventType;
-export type StatusFilter = 'ALL' | 'UNREAD' | 'READ';
+export type StatusFilter = 'ALL' | 'UNREAD';
 export type ScopeFilter = 'watchlist' | 'all';
 
 interface FeedFilterBarProps {
@@ -62,13 +62,12 @@ export const FeedFilterBar: React.FC<FeedFilterBarProps> = ({
   ];
 
   const statuses: { label: string; value: StatusFilter }[] = [
-    { label: 'All Status', value: 'ALL' },
-    { label: 'Unread Only', value: 'UNREAD' },
-    { label: 'Read Only', value: 'READ' },
+    { label: 'All', value: 'ALL' },
+    { label: 'Unread', value: 'UNREAD' },
   ];
 
   return (
-    <div className="sticky top-16 z-20 bg-background/95 backdrop-blur-md py-3 -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 border-b border-border shadow-sm space-y-3">
+    <div className="p-4 sm:p-5 rounded-2xl bg-surface border border-border shadow-sm space-y-3.5">
       {/* Top row: Scope Selector, Search input & Status toggle */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         {/* Scope Pill Toggle (Watchlist-Centric Prioritization) */}

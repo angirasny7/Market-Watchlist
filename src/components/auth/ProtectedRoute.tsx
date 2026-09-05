@@ -4,7 +4,8 @@ import { useAuthStore } from '../../store/useAuthStore';
 import { RefreshCw } from 'lucide-react';
 
 export const ProtectedRoute: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
-  const { isAuthenticated, isLoading, loadCurrentUser } = useAuthStore();
+  // 1. Call all hooks unconditionally at the top level
+  const { user, isAuthenticated, isLoading, loadCurrentUser } = useAuthStore();
   const location = useLocation();
 
   useEffect(() => {
@@ -14,6 +15,7 @@ export const ProtectedRoute: React.FC<{ children?: React.ReactNode }> = ({ child
     }
   }, [isLoading, loadCurrentUser]);
 
+  // 2. Loading check
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4 text-slate-100">
@@ -25,9 +27,22 @@ export const ProtectedRoute: React.FC<{ children?: React.ReactNode }> = ({ child
     );
   }
 
+  // 3. Authentication check
   if (!isAuthenticated) {
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
+  // 4. Onboarding checks
+  // If user has not completed onboarding, force navigation to /onboarding
+  if (user && user.isOnboarded === false && location.pathname !== '/onboarding' && location.pathname !== '/highlights') {
+    return <Navigate to="/onboarding" replace />;
+  }
+
+  // If user has completed onboarding, prevent re-entry to /onboarding
+  if (user && user.isOnboarded === true && location.pathname === '/onboarding') {
+    return <Navigate to="/" replace />;
+  }
+
+  // 5. Render children / Outlet
   return children ? <>{children}</> : <Outlet />;
 };

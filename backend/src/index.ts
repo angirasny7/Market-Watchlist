@@ -5,6 +5,7 @@ import apiRouter from './routes/index.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { activityTracker } from './middleware/activityTracker.js';
 import { startScheduler } from './jobs/scheduler.js';
+import { stockService } from './services/stockService.js';
 
 const app = express();
 
@@ -69,6 +70,11 @@ if (process.env.NODE_ENV !== 'test') {
 
     // Initialize real-time synchronization scheduler
     startScheduler();
+
+    // Verify and seed master stock catalog without resetting data
+    stockService.ensureMasterCatalogSeeded().catch((err) => {
+      console.error('[Startup] Failed to auto-seed master stock catalog:', err);
+    });
   });
 }
 

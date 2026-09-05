@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   FeedHeader,
   FeedFilterBar,
@@ -10,12 +11,14 @@ import {
   StatusFilter,
 } from '../components/feed';
 import { useMarketStore } from '../store/useMarketStore';
-import { CheckCircle2, RotateCcw, ShieldAlert, FilterX, ChevronDown } from 'lucide-react';
+import { CheckCircle2, RotateCcw, ShieldAlert, FilterX, ChevronDown, PlusCircle, Database } from 'lucide-react';
 
 const PAGE_SIZE = 8;
 
 export const AttentionFeedPage: React.FC = () => {
+  const navigate = useNavigate();
   const {
+    watchlist,
     events,
     insights,
     feedFilter: storeFeedFilter,
@@ -100,11 +103,8 @@ export const AttentionFeedPage: React.FC = () => {
           }
         }
 
-        // Status filter
+        // Status filter (Attention Feed only contains active actionable items)
         if (statusFilter === 'UNREAD' && e.read) {
-          return false;
-        }
-        if (statusFilter === 'READ' && !e.read) {
           return false;
         }
 
@@ -153,7 +153,7 @@ export const AttentionFeedPage: React.FC = () => {
       {/* 1. Feed Header */}
       <FeedHeader />
 
-      {/* 2. Sticky Multi-Dimensional Filter Bar with Watchlist Scope */}
+      {/* 2. Multi-Dimensional Filter Bar with Watchlist Scope */}
       <FeedFilterBar
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
@@ -215,7 +215,26 @@ export const AttentionFeedPage: React.FC = () => {
         ) : (
           /* 6. Intelligent Empty States */
           <div className="p-8 sm:p-12 rounded-2xl bg-surface border border-border text-center space-y-4">
-            {feedScope === 'watchlist' && !searchQuery ? (
+            {watchlist.length === 0 ? (
+              <div className="max-w-md mx-auto space-y-3">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center justify-center mx-auto">
+                  <ShieldAlert className="w-6 h-6" />
+                </div>
+                <h3 className="text-base sm:text-lg font-bold text-slate-100">
+                  No tracked stocks yet.
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
+                  Create your first watchlist to begin receiving critical alerts and market signals.
+                </p>
+                <button
+                  onClick={() => navigate('/onboarding')}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white transition-all shadow-lg shadow-indigo-500/20"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  <span>Create Watchlist</span>
+                </button>
+              </div>
+            ) : feedScope === 'watchlist' && !searchQuery ? (
               <div className="max-w-md mx-auto space-y-3">
                 <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center justify-center mx-auto">
                   <ShieldAlert className="w-6 h-6" />
@@ -233,22 +252,23 @@ export const AttentionFeedPage: React.FC = () => {
                   View All Market Signals
                 </button>
               </div>
-            ) : statusFilter === 'UNREAD' && !searchQuery ? (
+            ) : events.length === 0 || (!searchQuery && priorityFilter === 'ALL' && categoryFilter === 'ALL') ? (
               <div className="max-w-md mx-auto space-y-3">
                 <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center mx-auto">
                   <CheckCircle2 className="w-6 h-6" />
                 </div>
                 <h3 className="text-base sm:text-lg font-bold text-slate-100">
-                  You're All Caught Up
+                  You're all caught up.
                 </h3>
                 <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
-                  All market events have been marked as read. You have reviewed all recent corporate filings, earnings beats, and breakout alerts.
+                  No actionable signals require attention.
                 </p>
                 <button
-                  onClick={() => setStatusFilter('ALL')}
-                  className="px-4 py-2 rounded-lg bg-surface-hover hover:bg-surface-active text-xs font-semibold text-slate-200 transition-colors border border-border"
+                  onClick={() => navigate('/memory')}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white transition-all shadow-lg shadow-indigo-500/20"
                 >
-                  View All Historical Signals
+                  <Database className="w-4 h-4" />
+                  <span>Go to Market Memory</span>
                 </button>
               </div>
             ) : priorityFilter === 'CRITICAL' ? (

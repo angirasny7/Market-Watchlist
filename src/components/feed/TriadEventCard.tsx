@@ -6,7 +6,6 @@ import {
   ExternalLink,
   CheckCircle2,
   Bookmark,
-  BookmarkCheck,
   BarChart3,
   ArrowUpRight,
   Sparkles,
@@ -26,7 +25,7 @@ export const TriadEventCard: React.FC<TriadEventCardProps> = ({
   event,
   insight,
 }) => {
-  const { markEventRead, acknowledgeEvent } = useMarketStore();
+  const { markEventRead, saveEventForLater } = useMarketStore();
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
 
   const isAMZN = event.stockSymbol === 'AMZN';
@@ -35,11 +34,7 @@ export const TriadEventCard: React.FC<TriadEventCardProps> = ({
   return (
     <>
       <article
-        className={`rounded-2xl border bg-surface transition-all duration-200 overflow-hidden shadow-sm hover:shadow-md hover:border-slate-700 ${
-          !event.read
-            ? 'border-indigo-500/40 shadow-[0_0_20px_-5px_rgba(99,102,241,0.12)]'
-            : 'border-border'
-        }`}
+        className="rounded-2xl border bg-surface transition-all duration-200 overflow-hidden shadow-sm hover:shadow-md hover:border-slate-700 border-indigo-500/40 shadow-[0_0_20px_-5px_rgba(99,102,241,0.12)]"
       >
         {/* CARD HEADER */}
         <div className="p-4 sm:p-5 border-b border-border/80 bg-surface-subtle/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -206,34 +201,24 @@ export const TriadEventCard: React.FC<TriadEventCardProps> = ({
         {/* CARD FOOTER ACTIONS */}
         <div className="p-4 bg-surface-subtle/80 border-t border-border flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            {/* Mark Read Toggle */}
+            {/* Mark Read CTA */}
             <button
               onClick={() => markEventRead(event.id)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                event.read
-                  ? 'bg-surface text-slate-400 border-border hover:bg-surface-hover'
-                  : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
-              }`}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20"
+              title="Mark event as read and archive into Market Memory"
             >
               <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>{event.read ? 'Marked Read' : 'Mark as Read'}</span>
+              <span>Mark Read</span>
             </button>
 
-            {/* Save / Acknowledge Toggle */}
+            {/* Save For Later CTA */}
             <button
-              onClick={() => acknowledgeEvent(event.id)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                event.acknowledged
-                  ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30'
-                  : 'bg-surface hover:bg-surface-hover text-slate-400 hover:text-slate-200 border-border'
-              }`}
+              onClick={() => saveEventForLater(event.id)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors bg-indigo-500/10 text-indigo-300 border-indigo-500/30 hover:bg-indigo-500/20"
+              title="Save event for later review in Market Memory"
             >
-              {event.acknowledged ? (
-                <BookmarkCheck className="w-3.5 h-3.5 text-indigo-400" />
-              ) : (
-                <Bookmark className="w-3.5 h-3.5 text-slate-400" />
-              )}
-              <span>{event.acknowledged ? 'Saved' : 'Save for Later'}</span>
+              <Bookmark className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Save For Later</span>
             </button>
           </div>
 

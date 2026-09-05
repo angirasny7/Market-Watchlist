@@ -1,9 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Clock,
-  Laptop,
-  Smartphone,
-  Tablet,
   CheckCircle2,
   RefreshCw,
   Menu,
@@ -14,25 +12,43 @@ import {
 import { useMarketStore } from '../../store/useMarketStore';
 import { useAuthStore } from '../../store/useAuthStore';
 import { cn } from '../../lib/utils';
+import { formatLastActiveTimestamp, formatRelativeTime } from '../../lib/dateUtils';
+import { detectCurrentDevice, getDeviceEmoji } from '../../lib/deviceUtils';
 
 interface HeaderProps {
   onToggleMobileSidebar: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({ onToggleMobileSidebar }) => {
+  const navigate = useNavigate();
   const {
     userState,
     marketStatus,
     toggleMarketStatus,
-    simulateDeviceSwitch,
     simulateNewSession,
     isLiveMode,
     isLoading,
     refreshMarketData,
+    dashboardData,
+    watchlist,
+    events,
   } = useMarketStore();
   const { user, logout } = useAuthStore();
-
   const [isDeviceMenuOpen, setIsDeviceMenuOpen] = useState(false);
+
+  const previousLogin =
+    user?.previousLoginAt !== undefined
+      ? user?.previousLoginAt
+      : (dashboardData as any)?.previousLoginAt !== undefined
+      ? (dashboardData as any)?.previousLoginAt
+      : (dashboardData as any)?.previousSessionAt !== undefined
+      ? (dashboardData as any)?.previousSessionAt
+      : userState.previousSessionAt !== undefined
+      ? userState.previousSessionAt
+      : userState.previousLoginAt !== undefined
+      ? userState.previousLoginAt
+      : null;
+  const formattedPreviousLogin = formatLastActiveTimestamp(previousLogin);
 
   // Dynamic user greeting based on local time
   const getGreeting = () => {
@@ -42,18 +58,28 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileSidebar }) => {
     return 'Good Evening';
   };
 
-  const getDeviceIcon = (type: string) => {
-    switch (type) {
-      case 'MOBILE':
-        return Smartphone;
-      case 'TABLET':
-        return Tablet;
-      default:
-        return Laptop;
-    }
-  };
+  // Automatic browser User-Agent device detection
+  const detectedDevice = useMemo(() => {
+    return detectCurrentDevice();
+  }, []);
 
-  const CurrentDeviceIcon = getDeviceIcon(userState.currentDevice.deviceType);
+  // Compute previous session details
+  const previousSession = useMemo(() => {
+    if (!previousLogin) return null;
+
+    const prevDev = userState.previousDevice;
+    const devType = prevDev?.deviceType || 'Mobile';
+    const devName = prevDev?.deviceName || 'Mobile Phone';
+    const emoji = getDeviceEmoji(devType);
+
+    return {
+      deviceName: devName,
+      deviceType: devType,
+      emoji,
+      time: formatRelativeTime(previousLogin, false),
+      formattedTime: formattedPreviousLogin,
+    };
+  }, [previousLogin, userState.previousDevice, formattedPreviousLogin]);
 
   return (
     <header className="h-16 px-4 sm:px-6 bg-surface/90 backdrop-blur-md border-b border-border flex items-center justify-between sticky top-0 z-30">
@@ -75,12 +101,24 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileSidebar }) => {
               Pro Trader
             </span>
           </div>
-          <div className="flex items-center gap-1.5 text-xs text-slate-400">
-            <Clock className="w-3 h-3 text-slate-400" />
-            <span className="hidden md:inline text-slate-400">Since last visit:</span>
-            <span className="text-slate-300 font-mono text-[11px]">
-              {userState.lastSeenDisplay}
-            </span>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+            <div className="flex items-center gap-1.5">
+              <Clock className="w-3 h-3 text-slate-400" />
+              <span className="hidden sm:inline text-slate-400">
+                {previousLogin ? 'Last active:' : 'Session:'}
+              </span>
+              <span
+                className="text-slate-200 font-mono text-[11px] font-medium"
+                title={formattedPreviousLogin}
+              >
+                {previousLogin ? formatRelativeTime(previousLogin, false) : 'First Login Session'}
+              </span>
+            </div>
+            <span className="text-slate-600 hidden sm:inline">•</span>
+            <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-mono">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span>Status: Active Now</span>
+            </div>
           </div>
         </div>
       </div>
@@ -139,80 +177,148 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileSidebar }) => {
           <span>{marketStatus === 'REGULAR_OPEN' ? 'OPEN' : 'CLOSED'}</span>
         </button>
 
-        {/* Cross-Device Sync Indicator Dropdown */}
+        {/* Session Continuity Indicator Dropdown */}
         <div className="relative">
           <button
             onClick={() => setIsDeviceMenuOpen(!isDeviceMenuOpen)}
             className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-surface border border-border text-xs text-slate-300 hover:border-slate-600 transition-colors"
+            title="Session Continuity & Device Status"
           >
-            <CurrentDeviceIcon className="w-3.5 h-3.5 text-slate-400" />
-            <span className="hidden lg:inline text-slate-300">
-              {userState.currentDevice.deviceName.split(' ')[0]}
+            <span className="text-xs">{detectedDevice.emoji}</span>
+            <span className="hidden lg:inline text-slate-300 font-medium">
+              {detectedDevice.name}
             </span>
-            {userState.syncStatus === 'SYNCING' ? (
-              <RefreshCw className="w-3 h-3 text-amber-400 animate-spin" />
-            ) : (
-              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-            )}
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
             <ChevronDown className="w-3 h-3 text-slate-400" />
           </button>
 
-          {/* Device Switcher Menu */}
+          {/* Session Continuity Card */}
           {isDeviceMenuOpen && (
             <>
               <div
                 className="fixed inset-0 z-40"
                 onClick={() => setIsDeviceMenuOpen(false)}
               />
-              <div className="absolute right-0 mt-2 w-64 rounded-xl bg-surface border border-border shadow-2xl p-2 z-50 animate-fade-in">
-                <div className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400 border-b border-border/60 mb-1">
-                  Active Devices & Sync Cursors
+              <div className="absolute right-0 mt-2 w-72 rounded-2xl bg-surface/95 border border-border shadow-2xl backdrop-blur-xl p-3 z-50 animate-fade-in space-y-2.5">
+                {/* Header */}
+                <div className="flex items-center justify-between pb-1.5 border-b border-border/60">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-300">
+                      Session Continuity
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded-full font-medium">
+                    Live
+                  </span>
                 </div>
 
-                {userState.allDevices.map((dev) => {
-                  const DevIcon = getDeviceIcon(dev.deviceType);
-                  return (
-                    <button
-                      key={dev.deviceId}
-                      onClick={() => {
-                        simulateDeviceSwitch(dev.deviceId);
-                        setIsDeviceMenuOpen(false);
-                      }}
-                      className={cn(
-                        'w-full flex items-center justify-between p-2 rounded-lg text-left text-xs transition-colors',
-                        dev.isCurrentDevice
-                          ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30'
-                          : 'text-slate-300 hover:bg-surface-hover'
-                      )}
-                    >
+                {/* Current Device Section */}
+                <div className="p-2 rounded-xl bg-surface-subtle border border-border/70 space-y-1">
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                    Current Device
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">{detectedDevice.emoji}</span>
+                      <div>
+                        <div className="text-xs font-semibold text-slate-100 flex items-center gap-1.5">
+                          <span>{detectedDevice.name}</span>
+                          <span className="text-[9px] font-mono font-medium px-1.5 py-0.2 rounded bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
+                            Current
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-slate-400">
+                          This Browser Session
+                        </div>
+                      </div>
+                    </div>
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  </div>
+                </div>
+
+                {/* Last Session / Fallback Section */}
+                <div className="p-2 rounded-xl bg-surface-subtle border border-border/70 space-y-1">
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                    {previousSession ? 'Last Session' : 'Session Status'}
+                  </div>
+                  {previousSession ? (
+                    <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <DevIcon className="w-4 h-4 text-slate-400" />
+                        <span className="text-base">{previousSession.emoji}</span>
                         <div>
-                          <div className="font-medium">{dev.deviceName}</div>
-                          <div className="text-[10px] text-slate-400">
-                            {dev.lastActive}
+                          <div className="text-xs font-semibold text-slate-200">
+                            {previousSession.deviceName}
+                          </div>
+                          <div className="text-[10px] text-slate-400 font-mono">
+                            {previousSession.time}
                           </div>
                         </div>
                       </div>
-                      {dev.isCurrentDevice && (
-                        <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">
-                          Current
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
+                      <span className="text-[10px] text-emerald-400/90 font-mono bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded">
+                        Synced
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-base">✨</span>
+                        <div>
+                          <div className="text-xs font-semibold text-slate-200">
+                            First Login Session
+                          </div>
+                          <div className="text-[10px] text-emerald-400 font-mono">
+                            Active Now
+                          </div>
+                        </div>
+                      </div>
+                      <span className="text-[10px] text-emerald-400 font-mono bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded">
+                        Active
+                      </span>
+                    </div>
+                  )}
+                </div>
 
-                <div className="mt-2 pt-2 border-t border-border/60">
+                {/* Status: Everything synced successfully */}
+                <div className="px-2.5 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-2 text-emerald-400">
+                  <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                  <div className="text-[11px] leading-tight">
+                    <span className="font-semibold block text-emerald-300">
+                      Everything synced successfully
+                    </span>
+                    <span className="text-[10px] text-emerald-400/80">
+                      Portfolio & market state preserved
+                    </span>
+                  </div>
+                </div>
+
+                {/* Intelligence Snapshot */}
+                <div className="grid grid-cols-2 gap-1.5 pt-1 border-t border-border/60">
+                  <div className="p-1.5 rounded-lg bg-surface border border-border/60 text-center">
+                    <div className="text-[10px] text-slate-400">Watchlist</div>
+                    <div className="text-xs font-bold text-slate-100 font-mono">
+                      {watchlist.length} Stocks
+                    </div>
+                  </div>
+                  <div className="p-1.5 rounded-lg bg-surface border border-border/60 text-center">
+                    <div className="text-[10px] text-slate-400">Attention Feed</div>
+                    <div className="text-xs font-bold text-slate-100 font-mono">
+                      {events.length} Events
+                    </div>
+                  </div>
+                </div>
+
+                {/* Session Refresh / Visit Action */}
+                <div className="pt-0.5">
                   <button
                     onClick={() => {
                       simulateNewSession();
                       setIsDeviceMenuOpen(false);
                     }}
-                    className="w-full flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg bg-surface-hover hover:bg-surface-active text-xs text-slate-300 transition-colors"
+                    className="w-full flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg bg-surface-hover hover:bg-surface-active text-xs text-slate-300 hover:text-white transition-colors border border-border/60 font-medium"
                   >
                     <Activity className="w-3.5 h-3.5 text-indigo-400" />
-                    <span>Simulate New Visit</span>
+                    <span>Simulate Session Visit</span>
                   </button>
                 </div>
               </div>
@@ -222,7 +328,10 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileSidebar }) => {
 
         {/* User Logout Button */}
         <button
-          onClick={() => logout()}
+          onClick={async () => {
+            await logout();
+            navigate('/login', { replace: true });
+          }}
           title="Sign out of account"
           className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-surface border border-border text-xs text-slate-400 hover:text-rose-400 hover:border-rose-500/30 hover:bg-rose-500/10 transition-colors"
         >

@@ -1,92 +1,101 @@
 import React from 'react';
-import { HistoricalDigest } from '../../types/digest';
-import { MemoryTimelineCard } from './MemoryTimelineCard';
-import { BrainCircuit, Sparkles } from 'lucide-react';
+import { ArchivedMarketEvent } from '../../types/memory';
+import { ArchivedEventCard } from './ArchivedEventCard';
+import { Sparkles, Calendar } from 'lucide-react';
 
 interface MemoryTimelineProps {
-  digests: HistoricalDigest[];
-  onInspect: (digest: HistoricalDigest) => void;
+  events: ArchivedMarketEvent[];
+  onMarkRead?: (eventId: string) => void;
+}
+
+interface GroupedArchivedEvents {
+  dateKey: string;
+  dateLabel: string;
+  items: ArchivedMarketEvent[];
+}
+
+function groupEventsByDate(events: ArchivedMarketEvent[]): GroupedArchivedEvents[] {
+  const groups: { [key: string]: { label: string; items: ArchivedMarketEvent[] } } = {};
+  const today = new Date().toDateString();
+  const yesterday = new Date(Date.now() - 86400000).toDateString();
+
+  events.forEach((ev) => {
+    const d = new Date(ev.savedAt || ev.readAt || ev.timestamp);
+    const dateKey = isNaN(d.getTime()) ? 'unknown' : d.toISOString().split('T')[0];
+    let label = isNaN(d.getTime())
+      ? 'Market Memories'
+      : d.toLocaleDateString(undefined, {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+        });
+
+    if (!isNaN(d.getTime())) {
+      if (d.toDateString() === today) {
+        label = `Today • ${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`;
+      } else if (d.toDateString() === yesterday) {
+        label = `Yesterday • ${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`;
+      }
+    }
+
+    if (!groups[dateKey]) {
+      groups[dateKey] = { label, items: [] };
+    }
+    groups[dateKey].items.push(ev);
+  });
+
+  return Object.keys(groups)
+    .sort((a, b) => b.localeCompare(a))
+    .map((key) => ({
+      dateKey: key,
+      dateLabel: groups[key].label,
+      items: groups[key].items,
+    }));
 }
 
 export const MemoryTimeline: React.FC<MemoryTimelineProps> = ({
-  digests,
-  onInspect,
+  events,
+  onMarkRead,
 }) => {
+  const groupedEvents = React.useMemo(() => groupEventsByDate(events), [events]);
+
   return (
-    <div className="space-y-8">
-      {/* Section 6: Market Learning Layer Prominent Hero Callout */}
-      <div className="p-5 rounded-2xl bg-gradient-to-r from-indigo-950/40 via-surface to-surface border border-indigo-500/30 shadow-sm space-y-3">
-        <div className="flex items-center gap-2 text-indigo-300">
-          <BrainCircuit className="w-5 h-5 text-indigo-400" />
-          <h3 className="text-sm font-bold font-mono uppercase tracking-wider text-slate-100">
-            Market Learning Layer: What Usually Happens Next?
-          </h3>
-          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-            Empirical Intelligence
-          </span>
-        </div>
-
-        <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-3xl">
-          By indexing realized forward returns post-catalyst across past digests, Market Memory reveals persistent market tendencies:
-        </p>
-
-        {/* Observation Stat Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
-          <div className="p-3 rounded-xl bg-surface border border-border space-y-1">
-            <div className="text-[10px] font-mono text-slate-400 uppercase">
-              52W Breakouts + High Conf.
-            </div>
-            <div className="text-sm font-bold text-emerald-400 font-mono">
-              68.3% Positive @ 30D
-            </div>
-            <p className="text-[11px] text-slate-400">
-              Institutional accumulation above key resistance historically sustained momentum into the monthly close.
-            </p>
-          </div>
-
-          <div className="p-3 rounded-xl bg-surface border border-border space-y-1">
-            <div className="text-[10px] font-mono text-slate-400 uppercase">
-              Earnings Beat &gt; 5% (IT)
-            </div>
-            <div className="text-sm font-bold text-emerald-400 font-mono">
-              74.1% Forward Drift
-            </div>
-            <p className="text-[11px] text-slate-400">
-              Guidance revisions in tech bluechips (Infosys, TCS) showed consistent post-announcement continuation.
-            </p>
-          </div>
-
-          <div className="p-3 rounded-xl bg-surface border border-border space-y-1">
-            <div className="text-[10px] font-mono text-slate-400 uppercase">
-              RBI Liquidity Pauses
-            </div>
-            <div className="text-sm font-bold text-indigo-300 font-mono">
-              +3.4% Bank Nifty 7D
-            </div>
-            <p className="text-[11px] text-slate-400">
-              Absence of CRR tightening relaxed cost-of-funds for private lenders (HDFC Bank, ICICI) within 5 sessions.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Chronological Timeline Stream */}
-      <div className="space-y-1">
-        <div className="text-xs font-mono font-bold uppercase tracking-wider text-slate-400 mb-4 flex items-center gap-1.5">
+    <div className="space-y-6">
+      {/* Grouped Chronological Archived Events Stream Header */}
+      <div className="text-xs font-mono font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
           <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-          <span>Chronological Intelligence Dossiers ({digests.length} Archives)</span>
+          <span>Preserved Memories ({events.length} Items)</span>
         </div>
-
-        <div className="relative">
-          {digests.map((digest) => (
-            <MemoryTimelineCard
-              key={digest.id}
-              digest={digest}
-              onInspect={onInspect}
-            />
-          ))}
-        </div>
+        <span className="text-[11px] text-slate-400 lowercase font-normal font-sans">
+          grouped by date recorded
+        </span>
       </div>
+
+      {groupedEvents.map((group) => (
+        <div key={group.dateKey} className="space-y-3">
+          {/* Date Group Header */}
+          <div className="flex items-center gap-2 text-xs font-mono text-indigo-300 bg-surface-subtle/80 px-3.5 py-1.5 rounded-lg border border-border/80 w-fit">
+            <Calendar className="w-3.5 h-3.5 text-indigo-400" />
+            <span className="font-semibold text-slate-200">{group.dateLabel}</span>
+            <span className="text-slate-400 font-normal">
+              ({group.items.length} {group.items.length === 1 ? 'event' : 'events'})
+            </span>
+          </div>
+
+          {/* Event Cards for this date group */}
+          <div className="space-y-3.5">
+            {group.items.map((event) => (
+              <ArchivedEventCard
+                key={event.id || event.readId || event.saveId}
+                event={event}
+                onMarkRead={onMarkRead}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 };

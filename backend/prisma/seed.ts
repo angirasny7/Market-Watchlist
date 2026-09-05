@@ -364,6 +364,9 @@ async function main() {
   const salt = await bcrypt.genSalt(10);
   const passwordHash = await bcrypt.hash('password123', salt);
 
+  const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
+  const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+
   const user = await prisma.user.create({
     data: {
       id: 'usr_angira_001',
@@ -371,16 +374,22 @@ async function main() {
       passwordHash,
       name: 'Angira',
       role: UserRole.PRO,
+      lastLoginAt: twoHoursAgo,
+      previousLoginAt: fiveDaysAgo,
     },
   });
 
-  // User was away for 5 days
-  const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
   await prisma.userState.create({
     data: {
       userId: user.id,
-      lastLoginAt: fiveDaysAgo,
-      lastActivityAt: fiveDaysAgo,
+      lastLoginAt: twoHoursAgo,
+      lastLogoutAt: twoHoursAgo,
+      lastActivityAt: twoHoursAgo,
+      previousSessionAt: twoHoursAgo,
+      currentDeviceType: 'Desktop',
+      currentDeviceName: 'Desktop',
+      previousDeviceType: 'Mobile',
+      previousDeviceName: 'Mobile',
       lastDigestViewedId: 'digest_002',
       lastDigestAcknowledgedId: 'digest_002',
     },

@@ -1,9 +1,21 @@
 import React from 'react';
-import { BellRing, Flame, AlertTriangle, CheckCheck, Sparkles } from 'lucide-react';
+import { BellRing, Flame, AlertTriangle, CheckCheck, Sparkles, Clock } from 'lucide-react';
 import { useMarketStore } from '../../store/useMarketStore';
+import { useAuthStore } from '../../store/useAuthStore';
+import { formatLastActiveTimestamp } from '../../lib/dateUtils';
 
 export const FeedHeader: React.FC = () => {
-  const { events, markAllEventsRead } = useMarketStore();
+  const { events, markAllEventsRead, userState, dashboardData } = useMarketStore();
+  const { user } = useAuthStore();
+
+  const previousLogin =
+    user?.previousLoginAt !== undefined
+      ? user?.previousLoginAt
+      : userState.previousLoginAt !== undefined
+      ? userState.previousLoginAt
+      : (dashboardData as any)?.previousLoginAt || null;
+
+  const formattedPreviousLogin = formatLastActiveTimestamp(previousLogin);
 
   const totalEvents = events.length;
   const criticalCount = events.filter((e) => e.priority === 'CRITICAL').length;
@@ -13,7 +25,7 @@ export const FeedHeader: React.FC = () => {
   return (
     <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-border">
       {/* Title & Subtitle */}
-      <div className="space-y-1">
+      <div className="space-y-1.5">
         <div className="flex items-center gap-2">
           <div className="p-1.5 rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/20">
             <BellRing className="w-4 h-4" />
@@ -26,8 +38,24 @@ export const FeedHeader: React.FC = () => {
           </span>
         </div>
         <p className="text-xs sm:text-sm text-slate-400">
-          Important developments since your last visit, prioritized by market significance and causal conviction.
+          Important developments prioritized by market significance, causal conviction, and your watchlist.
         </p>
+
+        {/* User Session Activity Status */}
+        <div className="flex flex-wrap items-center gap-2 pt-0.5 text-xs text-slate-400">
+          <div className="flex items-center gap-1.5 font-mono">
+            <Clock className="w-3 h-3 text-slate-400" />
+            <span className="text-slate-400">Last active:</span>
+            <span className="text-slate-200 text-[11px] font-medium">
+              {formattedPreviousLogin}
+            </span>
+          </div>
+          <span className="text-slate-600 hidden sm:inline">•</span>
+          <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-mono">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span>Status: Active Now</span>
+          </div>
+        </div>
       </div>
 
       {/* Live Metrics Row & Quick Actions */}

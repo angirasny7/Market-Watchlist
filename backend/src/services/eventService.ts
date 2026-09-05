@@ -36,11 +36,18 @@ export class EventService {
       readEventIds = new Set(reads.map((r) => r.eventId));
     }
 
-    if (options?.watchlistOnly) {
-      if (userWatchlistSymbols.size > 0) {
-        where.stockSymbol = { in: Array.from(userWatchlistSymbols) };
+    if (options?.userId) {
+      if (userWatchlistSymbols.size === 0) {
+        return []; // User has an empty watchlist, so no events exist
+      }
+      if (options?.symbol) {
+        const reqSym = options.symbol.toUpperCase();
+        if (!userWatchlistSymbols.has(reqSym)) {
+          return []; // Symbol not in user's watchlist
+        }
+        where.stockSymbol = reqSym;
       } else {
-        return []; // User has an empty watchlist, so no watchlist events exist
+        where.stockSymbol = { in: Array.from(userWatchlistSymbols) };
       }
     } else if (options?.symbol) {
       where.stockSymbol = options.symbol.toUpperCase();
@@ -53,9 +60,12 @@ export class EventService {
       where.eventType = options.eventType;
     }
 
-    // If unreadOnly is requested with a known user, filter out events already read by this user
-    if (options?.unreadOnly && options?.userId) {
+    // Attention Feed only returns actionable events: exclude events already handled (read or saved)
+    if (options?.userId) {
       where.userReads = {
+        none: { userId: options.userId },
+      };
+      where.userSaves = {
         none: { userId: options.userId },
       };
     }
@@ -117,10 +127,34 @@ export class EventService {
   }
 
   /**
+   * Save event for later for specific authenticated user
+   */
+  async saveEventForLater(id: string, userId: string) {
+    return prisma.userSavedEvent.upsert({
+      where: {
+        userId_eventId: { userId, eventId: id },
+      },
+      create: {
+        userId,
+        eventId: id,
+      },
+      update: {
+        savedAt: new Date(),
+      },
+    });
+  }
+
+  /**
    * Mark event as read for specific authenticated user
+   * If the event was previously saved, converts Saved -> Archived by deleting UserSavedEvent.
    */
   async markEventRead(id: string, userId?: string) {
     if (userId) {
+      // Remove from UserSavedEvent if it exists (Saved -> Archived conversion)
+      await prisma.userSavedEvent.deleteMany({
+        where: { userId, eventId: id },
+      });
+
       return prisma.userEventRead.upsert({
         where: {
           userId_eventId: { userId, eventId: id },
@@ -142,23 +176,27 @@ export class EventService {
   }
 
   /**
-   * Mark all events as read for specific authenticated user
+   * Mark all active feed events as read for specific authenticated user
+   * Only archives active unhandled events present in the feed. Does not touch saved events.
    */
   async markAllRead(userId?: string) {
     if (userId) {
-      // Find all events not yet read by this user
-      const unreadEvents = await prisma.event.findMany({
+      // Find all active unhandled events (neither read nor saved)
+      const unhandledEvents = await prisma.event.findMany({
         where: {
           userReads: {
+            none: { userId },
+          },
+          userSaves: {
             none: { userId },
           },
         },
         select: { id: true },
       });
 
-      if (unreadEvents.length > 0) {
+      if (unhandledEvents.length > 0) {
         await prisma.userEventRead.createMany({
-          data: unreadEvents.map((e) => ({
+          data: unhandledEvents.map((e) => ({
             userId,
             eventId: e.id,
           })),
@@ -171,7 +209,7 @@ export class EventService {
         data: { lastActivityAt: new Date() },
       });
 
-      return { count: unreadEvents.length };
+      return { count: unhandledEvents.length };
     }
 
     return prisma.event.updateMany({

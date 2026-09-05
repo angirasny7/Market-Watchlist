@@ -27,6 +27,7 @@ router.get('/', authenticateJwt, async (req: AuthenticatedRequest, res: Response
 
     // 1. Generate Since-Last-Visit Intelligence for authenticated user
     const summary = await sinceLastVisitService.getIntelligenceSinceLastVisit(userId);
+    const isOnboarded = summary.watchlistSymbols.length > 0;
 
     // 2. Compute Market Mood
     let marketMood: MarketMood = summary.latestDigest?.marketMood || MarketMood.NEUTRAL;
@@ -36,34 +37,67 @@ router.get('/', authenticateJwt, async (req: AuthenticatedRequest, res: Response
       marketMood = avgChange >= 0.5 ? MarketMood.BULLISH : avgChange <= -0.5 ? MarketMood.BEARISH : MarketMood.NEUTRAL;
     }
 
-    // 3. Construct Attention Summary (Watchlist prioritized)
-    const wlCritical = summary.watchlistCriticalCount;
-    const attentionSummary = wlCritical > 0
-      ? `${wlCritical} high-priority developments detected in your tracked watchlist while you were away (${summary.awayDuration}).`
-      : summary.criticalEventsCount > 0
-      ? `${summary.criticalEventsCount} high-priority developments detected across broader market while you were away (${summary.awayDuration}).`
-      : `Market conditions remained balanced across your tracked stocks over the past ${summary.awayDuration}.`;
+    // 3. Construct Attention Summary (Strictly watchlist scoped)
+    let attentionSummary: string;
+    if (!isOnboarded) {
+      attentionSummary = 'No watchlist found. Create your first watchlist to start receiving personalized market intelligence.';
+    } else {
+      const wlCritical = summary.watchlistCriticalCount;
+      const trackedList = summary.watchlistSymbols.join(', ');
+      attentionSummary = wlCritical > 0
+        ? `${wlCritical} high-priority developments detected in your tracked watchlist (${trackedList}) while you were away (${summary.awayDuration}).`
+        : `Market conditions remained balanced across your tracked stocks (${trackedList}) over the past ${summary.awayDuration}.`;
+    }
 
-    // 4. Resolve authenticated user from database for dynamic greeting
-    const dbUser = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true, name: true, email: true },
-    });
+    // 4. Resolve authenticated user and userState from database for dynamic greeting & session timestamps
+    const [dbUser, userState] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, name: true, email: true, lastLoginAt: true, previousLoginAt: true },
+      }),
+      prisma.userState.findUnique({
+        where: { userId },
+      }),
+    ]);
 
     const hour = new Date().getHours();
     const timeOfDay = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening';
     const userName = dbUser?.name || 'Investor';
     const greeting = `${timeOfDay}, ${userName}`;
 
+    const effectivePreviousLogin =
+      dbUser?.previousLoginAt?.toISOString() ||
+      userState?.previousSessionAt?.toISOString() ||
+      null;
+
     const responsePayload = {
+      isOnboarded,
       awayDuration: summary.awayDuration,
       attentionSummary,
       greeting,
       userName,
+      lastLoginAt: dbUser?.lastLoginAt ? dbUser.lastLoginAt.toISOString() : null,
+      previousLoginAt: effectivePreviousLogin,
+      previousSessionAt: userState?.previousSessionAt ? userState.previousSessionAt.toISOString() : effectivePreviousLogin,
+      lastLogoutAt: userState?.lastLogoutAt ? userState.lastLogoutAt.toISOString() : null,
+      currentDevice: {
+        deviceType: userState?.currentDeviceType || 'Desktop',
+        deviceName: userState?.currentDeviceName || 'Desktop',
+      },
+      previousDevice: userState?.previousDeviceType
+        ? {
+            deviceType: userState.previousDeviceType,
+            deviceName: userState.previousDeviceName || userState.previousDeviceType,
+          }
+        : null,
+      eventsAwayCount: summary.watchlistEventsCount > 0 ? summary.watchlistEventsCount : summary.newEventsCount,
+      insightsAwayCount: summary.newInsights.length,
       user: {
         id: dbUser?.id,
         name: dbUser?.name,
         email: dbUser?.email,
+        lastLoginAt: dbUser?.lastLoginAt ? dbUser.lastLoginAt.toISOString() : null,
+        previousLoginAt: effectivePreviousLogin,
       },
       criticalEvents: summary.criticalEvents,
       topInsights: summary.newInsights,

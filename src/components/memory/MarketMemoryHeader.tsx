@@ -1,38 +1,49 @@
 import React from 'react';
-import { History, Calendar, ShieldCheck, Database, BookmarkCheck } from 'lucide-react';
+import { History, Bookmark, CheckCircle2, Layers, Clock, Shield } from 'lucide-react';
 import { useMarketStore } from '../../store/useMarketStore';
 
-export const MarketMemoryHeader: React.FC = () => {
-  const { digests, insights } = useMarketStore();
+export interface MarketMemoryHeaderProps {
+  totalCount?: number;
+  savedCount?: number;
+  archivedCount?: number;
+  symbolsCoveredCount?: number;
+  lastAddedAt?: string | null;
+}
 
-  const totalDigests = digests.length;
+export const MarketMemoryHeader: React.FC<MarketMemoryHeaderProps> = ({
+  totalCount: propTotal,
+  savedCount: propSaved,
+  archivedCount: propArchived,
+  symbolsCoveredCount: propSymbols,
+  lastAddedAt,
+}) => {
+  const { totalMemoryCount, savedEventsCount, archivedEventsCount } = useMarketStore();
 
-  // Calculate unique events referenced across digests
-  const allDigestEventIds = Array.from(
-    new Set(digests.flatMap((d) => d.eventIds))
-  );
-  const totalEventsInDigests = allDigestEventIds.length;
+  const total = propTotal !== undefined ? propTotal : totalMemoryCount;
+  const saved = propSaved !== undefined ? propSaved : savedEventsCount;
+  const archived = propArchived !== undefined ? propArchived : archivedEventsCount;
+  const symbolsCount = propSymbols !== undefined ? propSymbols : 0;
 
-  // Calculate unique insights referenced across digests
-  const allDigestInsightIds = Array.from(
-    new Set(digests.flatMap((d) => d.insightIds))
-  );
-  const totalInsightsInDigests = allDigestInsightIds.length;
+  // Format last added timestamp
+  const formatLastAdded = (isoString?: string | null) => {
+    if (!isoString) return 'None yet';
+    const date = new Date(isoString);
+    if (isNaN(date.getTime())) return 'Recently';
 
-  // Average confidence score across all stored insights
-  const allInsightsList = Object.values(insights);
-  const avgConfidence =
-    allInsightsList.length > 0
-      ? (
-          allInsightsList.reduce((acc, curr) => acc + curr.confidenceScore, 0) /
-          allInsightsList.length
-        ) * 100
-      : 92.4;
+    const diffMs = Date.now() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffDays < 7) return `${diffDays}d ago`;
 
-  // Date range determination
-  const dates = digests.map((d) => new Date(d.digestDate).getTime()).sort();
-  const earliest = digests.find((d) => new Date(d.digestDate).getTime() === dates[0])?.displayDate.split(',')[0] || 'Sep 5';
-  const latest = digests.find((d) => new Date(d.digestDate).getTime() === dates[dates.length - 1])?.displayDate.split(',')[0] || 'Sep 15';
+    return date.toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+    });
+  };
 
   return (
     <div className="space-y-4 pb-4 border-b border-border">
@@ -47,82 +58,76 @@ export const MarketMemoryHeader: React.FC = () => {
               Market Memory
             </h1>
             <span className="text-[11px] font-mono font-medium px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
-              Permanent Knowledge Base
+              Personal Knowledge Repository
             </span>
           </div>
           <p className="text-xs sm:text-sm text-slate-400 mt-1">
-            Historical intelligence timeline storing every market digest, causal explanation, and realized outcome.
+            Your personal repository of saved and archived market intelligence.
           </p>
         </div>
 
-        {/* Date Range Badge */}
+        {/* Isolation Badge */}
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-surface border border-border text-xs font-mono text-slate-300">
-          <Calendar className="w-3.5 h-3.5 text-indigo-400" />
-          <span>Timeline:</span>
-          <span className="text-slate-100 font-semibold">{earliest} – {latest}, 2026</span>
-        </div>
-      </div>
-
-      {/* Hero Summary Narrative Box */}
-      <div className="p-4 rounded-xl bg-gradient-to-r from-surface via-surface-subtle to-surface border border-border flex items-center justify-between gap-4 text-xs sm:text-sm text-slate-300">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-indigo-600/15 text-indigo-400 border border-indigo-500/30 hidden sm:flex">
-            <Database className="w-4 h-4" />
-          </div>
-          <p className="leading-relaxed">
-            Your market memory contains{' '}
-            <span className="text-slate-100 font-bold font-mono">
-              {totalEventsInDigests} historical events
-            </span>
-            ,{' '}
-            <span className="text-emerald-400 font-bold font-mono">
-              {totalInsightsInDigests} verified insights
-            </span>
-            , and{' '}
-            <span className="text-indigo-300 font-bold font-mono">
-              {totalDigests} comprehensive digests
-            </span>{' '}
-            permanently preserved for retrospective review.
-          </p>
+          <Shield className="w-3.5 h-3.5 text-indigo-400" />
+          <span>User Vault:</span>
+          <span className="text-emerald-400 font-semibold">Private & Encrypted</span>
         </div>
       </div>
 
       {/* Metrics Row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="p-3 rounded-xl bg-surface border border-border flex items-center justify-between">
-          <div className="text-xs text-slate-400">Total Digests</div>
-          <div className="font-mono text-base font-bold text-slate-100">
-            {totalDigests} Archives
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        {/* Metric 1: Total Preserved Memories */}
+        <div className="p-3.5 rounded-xl bg-surface border border-border flex flex-col justify-between space-y-1">
+          <div className="text-[11px] font-medium text-slate-400 flex items-center gap-1.5">
+            <History className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Total Memories</span>
+          </div>
+          <div className="font-mono text-lg sm:text-xl font-bold text-slate-100">
+            {total}
           </div>
         </div>
 
-        <div className="p-3 rounded-xl bg-surface border border-border flex items-center justify-between">
-          <div className="text-xs text-slate-400 flex items-center gap-1.5">
-            <BookmarkCheck className="w-3.5 h-3.5 text-indigo-400" />
-            <span>Preserved Events</span>
+        {/* Metric 2: Saved For Later */}
+        <div className="p-3.5 rounded-xl bg-surface border border-border flex flex-col justify-between space-y-1">
+          <div className="text-[11px] font-medium text-slate-400 flex items-center gap-1.5">
+            <Bookmark className="w-3.5 h-3.5 text-amber-400" />
+            <span>Saved For Later</span>
           </div>
-          <div className="font-mono text-base font-bold text-indigo-300">
-            {totalEventsInDigests} Events
-          </div>
-        </div>
-
-        <div className="p-3 rounded-xl bg-surface border border-border flex items-center justify-between">
-          <div className="text-xs text-slate-400 flex items-center gap-1.5">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Avg Confidence</span>
-          </div>
-          <div className="font-mono text-base font-bold text-emerald-400">
-            {avgConfidence.toFixed(1)}%
+          <div className="font-mono text-lg sm:text-xl font-bold text-amber-400">
+            {saved}
           </div>
         </div>
 
-        <div className="p-3 rounded-xl bg-surface border border-border flex items-center justify-between">
-          <div className="text-xs text-slate-400 flex items-center gap-1.5">
-            <Calendar className="w-3.5 h-3.5 text-amber-400" />
-            <span>Time Depth</span>
+        {/* Metric 3: Archived (Read) */}
+        <div className="p-3.5 rounded-xl bg-surface border border-border flex flex-col justify-between space-y-1">
+          <div className="text-[11px] font-medium text-slate-400 flex items-center gap-1.5">
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Archived (Read)</span>
           </div>
-          <div className="font-mono text-base font-bold text-slate-200">
-            10 Trading Days
+          <div className="font-mono text-lg sm:text-xl font-bold text-emerald-400">
+            {archived}
+          </div>
+        </div>
+
+        {/* Metric 4: Watchlist Symbols Covered */}
+        <div className="p-3.5 rounded-xl bg-surface border border-border flex flex-col justify-between space-y-1">
+          <div className="text-[11px] font-medium text-slate-400 flex items-center gap-1.5">
+            <Layers className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Symbols Covered</span>
+          </div>
+          <div className="font-mono text-lg sm:text-xl font-bold text-cyan-300">
+            {symbolsCount}
+          </div>
+        </div>
+
+        {/* Metric 5: Last Memory Added */}
+        <div className="p-3.5 rounded-xl bg-surface border border-border flex flex-col justify-between space-y-1 col-span-2 sm:col-span-1">
+          <div className="text-[11px] font-medium text-slate-400 flex items-center gap-1.5">
+            <Clock className="w-3.5 h-3.5 text-slate-400" />
+            <span>Last Added</span>
+          </div>
+          <div className="font-mono text-sm sm:text-base font-bold text-slate-200 truncate">
+            {formatLastAdded(lastAddedAt)}
           </div>
         </div>
       </div>

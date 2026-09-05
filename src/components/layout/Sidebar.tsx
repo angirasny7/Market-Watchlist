@@ -18,10 +18,11 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ className, onItemClick }) => {
-  const { watchlist, events, digests } = useMarketStore();
+  const { watchlist, events, totalMemoryCount, archivedEventsCount, savedEventsCount, digests } = useMarketStore();
 
-  const unreadEventsCount = events.filter((e) => !e.read).length;
+  const activeEventsCount = events.length;
   const criticalEventsCount = events.filter((e) => e.priority === 'CRITICAL').length;
+  const memoryCount = totalMemoryCount > 0 ? totalMemoryCount : (archivedEventsCount + savedEventsCount);
 
   const navItems = [
     {
@@ -29,35 +30,41 @@ export const Sidebar: React.FC<SidebarProps> = ({ className, onItemClick }) => {
       path: '/',
       icon: LayoutDashboard,
       badge: null,
+      badgeColor: '',
+      description: 'Unified command center and personalized market delta summary',
     },
     {
       name: 'Attention Feed',
       path: '/feed',
       icon: BellRing,
-      badge: unreadEventsCount > 0 ? `${unreadEventsCount} New` : null,
-      badgeColor: criticalEventsCount > 0 ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30',
+      badge: activeEventsCount > 0 ? `${activeEventsCount}` : null,
+      badgeColor: criticalEventsCount > 0 ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30' : 'bg-amber-500/15 text-amber-400 border border-amber-500/30',
       highlightBadge: criticalEventsCount > 0,
+      description: 'Actionable real-time catalysts and events requiring investor attention',
     },
     {
       name: 'Watchlist',
       path: '/watchlist',
       icon: ListOrdered,
       badge: `${watchlist.length}`,
-      badgeColor: 'bg-surface-hover text-slate-400 border border-border',
+      badgeColor: 'bg-slate-800/80 text-slate-400 border border-slate-700/60',
+      description: 'Monitored portfolio equities with causal delta insights',
     },
     {
       name: 'Market Memory',
       path: '/memory',
       icon: History,
-      badge: `${digests.length}`,
-      badgeColor: 'bg-surface-hover text-slate-400 border border-border',
+      badge: memoryCount > 0 ? `${memoryCount}` : null,
+      badgeColor: 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/30',
+      description: 'Personal repository of saved and archived market events.',
     },
     {
       name: 'Market Highlights',
       path: '/highlights',
       icon: TrendingUp,
-      badge: 'Macro',
-      badgeColor: 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30',
+      badge: digests.length > 0 ? `${digests.length}` : null,
+      badgeColor: 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30',
+      description: 'Autonomous market intelligence hub.',
     },
   ];
 
@@ -99,6 +106,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className, onItemClick }) => {
               <NavLink
                 key={item.path}
                 to={item.path}
+                title={item.description}
                 onClick={onItemClick}
                 className={({ isActive }) =>
                   cn(
@@ -126,7 +134,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className, onItemClick }) => {
                     {item.badge && (
                       <span
                         className={cn(
-                          'text-[10px] font-mono font-medium px-2 py-0.5 rounded-full transition-all',
+                          'text-[10px] font-mono font-semibold px-1.5 py-0.5 min-w-[20px] h-5 rounded-full inline-flex items-center justify-center text-center transition-all shrink-0 whitespace-nowrap leading-none',
                           item.badgeColor
                         )}
                       >

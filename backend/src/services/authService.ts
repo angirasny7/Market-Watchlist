@@ -2,13 +2,15 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../config/prisma.js';
 import { config } from '../config/env.js';
+import { isUserOnboarded } from '../utils/userOnboarding.js';
+import { parseDeviceInfo } from '../utils/deviceParser.js';
 
 export class AuthService {
   /**
    * Register a new user with email validation, password strength validation,
    * duplicate prevention, bcrypt hashing, UserState creation, and default Watchlist.
    */
-  async register(data: { email: string; password: string; name: string }) {
+  async register(data: { email: string; password: string; name: string; deviceInfo?: any; userAgent?: string }) {
     const email = data.email?.toLowerCase().trim();
     const name = data.name?.trim();
     const password = data.password;
@@ -61,12 +63,17 @@ export class AuthService {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
+    const now = new Date();
+    const detected = parseDeviceInfo(data.userAgent, data.deviceInfo);
+
     // Create user along with default watchlist and initial userState
     const user = await prisma.user.create({
       data: {
         email,
         passwordHash,
         name,
+        lastLoginAt: now,
+        previousLoginAt: null, // Strictly null for first-ever login session
         watchlists: {
           create: {
             name: 'Primary Watchlist',
@@ -75,8 +82,14 @@ export class AuthService {
         },
         userState: {
           create: {
-            lastLoginAt: new Date(),
-            lastActivityAt: new Date(),
+            lastLoginAt: now,
+            lastActivityAt: now,
+            lastLogoutAt: null,
+            previousSessionAt: null,
+            currentDeviceType: detected.type,
+            currentDeviceName: detected.name,
+            previousDeviceType: null,
+            previousDeviceName: null,
           },
         },
       },
@@ -94,22 +107,28 @@ export class AuthService {
 
     return {
       token,
+      isOnboarded: false,
       user: {
         id: user.id,
         email: user.email,
         name: user.name,
         role: user.role,
+        lastLoginAt: user.lastLoginAt ? user.lastLoginAt.toISOString() : null,
+        previousLoginAt: null,
         createdAt: user.createdAt,
+        isOnboarded: false,
       },
+      lastLoginAt: user.lastLoginAt ? user.lastLoginAt.toISOString() : null,
+      previousLoginAt: null,
       userState: user.userState,
       defaultWatchlistId: user.watchlists[0]?.id,
     };
   }
 
   /**
-   * Authenticate an existing user and update activity cursors
+   * Authenticate an existing user and update session history and device continuity
    */
-  async login(credentials: { email: string; password: string }) {
+  async login(credentials: { email: string; password: string; deviceInfo?: any; userAgent?: string }) {
     const email = credentials.email?.toLowerCase().trim();
     const password = credentials.password;
 
@@ -140,18 +159,50 @@ export class AuthService {
       throw error;
     }
 
-    // Update lastLoginAt and lastActivityAt
     const now = new Date();
+    const detected = parseDeviceInfo(credentials.userAgent, credentials.deviceInfo);
+
+    // Compute previous session timestamp:
+    // Prioritize lastLogoutAt (if logged out), else lastActivityAt, else user.lastLoginAt
+    const existingState = user.userState;
+    const previousSessionTime =
+      existingState?.lastLogoutAt ||
+      existingState?.lastActivityAt ||
+      user.lastLoginAt ||
+      null;
+
+    const previousDeviceType = existingState?.currentDeviceType || null;
+    const previousDeviceName = existingState?.currentDeviceName || null;
+
+    // Update lastLoginAt and previousLoginAt on User model
+    const updatedUser = await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        previousLoginAt: previousSessionTime,
+        lastLoginAt: now,
+      },
+    });
+
     const updatedState = await prisma.userState.upsert({
       where: { userId: user.id },
       create: {
         userId: user.id,
         lastLoginAt: now,
         lastActivityAt: now,
+        previousSessionAt: previousSessionTime,
+        currentDeviceType: detected.type,
+        currentDeviceName: detected.name,
+        previousDeviceType,
+        previousDeviceName,
       },
       update: {
         lastLoginAt: now,
         lastActivityAt: now,
+        previousSessionAt: previousSessionTime,
+        currentDeviceType: detected.type,
+        currentDeviceName: detected.name,
+        previousDeviceType: previousDeviceType || undefined,
+        previousDeviceName: previousDeviceName || undefined,
       },
     });
 
@@ -161,18 +212,40 @@ export class AuthService {
       { expiresIn: '7d' }
     );
 
+    const onboarded = await isUserOnboarded(user.id);
+
     return {
       token,
+      isOnboarded: onboarded,
       user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        createdAt: user.createdAt,
+        id: updatedUser.id,
+        email: updatedUser.email,
+        name: updatedUser.name,
+        role: updatedUser.role,
+        lastLoginAt: updatedUser.lastLoginAt ? updatedUser.lastLoginAt.toISOString() : null,
+        previousLoginAt: updatedUser.previousLoginAt ? updatedUser.previousLoginAt.toISOString() : null,
+        createdAt: updatedUser.createdAt,
+        isOnboarded: onboarded,
       },
+      lastLoginAt: updatedUser.lastLoginAt ? updatedUser.lastLoginAt.toISOString() : null,
+      previousLoginAt: updatedUser.previousLoginAt ? updatedUser.previousLoginAt.toISOString() : null,
       userState: updatedState,
       defaultWatchlistId: user.watchlists[0]?.id,
     };
+  }
+
+  /**
+   * Log out an authenticated user and record timestamp
+   */
+  async logout(userId: string, _deviceInfo?: any) {
+    const now = new Date();
+    return prisma.userState.update({
+      where: { userId },
+      data: {
+        lastLogoutAt: now,
+        lastActivityAt: now,
+      },
+    });
   }
 
   /**
@@ -199,12 +272,17 @@ export class AuthService {
       throw error;
     }
 
+    const onboarded = await isUserOnboarded(userId);
+
     return {
       id: user.id,
       email: user.email,
       name: user.name,
       role: user.role,
+      lastLoginAt: user.lastLoginAt ? user.lastLoginAt.toISOString() : null,
+      previousLoginAt: user.previousLoginAt ? user.previousLoginAt.toISOString() : null,
       createdAt: user.createdAt,
+      isOnboarded: onboarded,
       userState: user.userState,
       watchlists: user.watchlists,
     };
@@ -222,3 +300,4 @@ export class AuthService {
 }
 
 export const authService = new AuthService();
+

@@ -32,6 +32,11 @@ export class EventService {
     return res.success;
   }
 
+  async saveEventForLater(id: string): Promise<boolean> {
+    const res = await apiClient.post(`/events/${id}/save`);
+    return res.success;
+  }
+
   async acknowledgeEvent(id: string): Promise<boolean> {
     const res = await apiClient.patch(`/events/${id}/acknowledge`);
     return res.success;

@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
-import { Search, Plus, Check, CheckCircle2 } from 'lucide-react';
-import { Modal, DeltaBadge } from '../common';
-import { stockCatalog } from '../../data/mockStocks';
-import { StockQuote, StockSector } from '../../types/stock';
-import { formatPrice } from '../../lib/utils';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Search, Plus, Check, Globe, SlidersHorizontal, ArrowUpDown, AlertCircle, RefreshCw } from 'lucide-react';
+import { Modal } from '../common';
+import { StockQuote } from '../../types/stock';
 import { useMarketStore } from '../../store/useMarketStore';
+import { useToastStore } from '../../store/useToastStore';
+import { stockService } from '../../services/stockService';
+import { filterAndRankStocks, getStockAvatarDetails } from '../../lib/stockSearch';
 
 interface AddStockModalProps {
   isOpen: boolean;
@@ -15,67 +16,112 @@ export const AddStockModal: React.FC<AddStockModalProps> = ({
   isOpen,
   onClose,
 }) => {
-  const { watchlist, addStock } = useMarketStore();
-  const [catalogSearch, setCatalogSearch] = useState('');
-  const [activeTab, setActiveTab] = useState<'catalog' | 'custom'>('catalog');
-  const [addedFeedback, setAddedFeedback] = useState<string | null>(null);
+  const { watchlist, allStocks, addStock } = useMarketStore();
+  const { addToast } = useToastStore();
 
-  // Custom stock form states
-  const [customSymbol, setCustomSymbol] = useState('');
-  const [customName, setCustomName] = useState('');
-  const [customSector, setCustomSector] = useState<StockSector>('Information Technology');
-  const [customPrice, setCustomPrice] = useState('1500.00');
+  const [catalog, setCatalog] = useState<StockQuote[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedMarket, setSelectedMarket] = useState<'ALL' | 'IN' | 'US'>('ALL');
+  const [selectedSector, setSelectedSector] = useState('ALL');
+  const [sortOrder, setSortOrder] = useState<'DEFAULT' | 'A-Z' | 'Z-A'>('DEFAULT');
+  const [recentlyAddedSymbol, setRecentlyAddedSymbol] = useState<string | null>(null);
 
-  const filteredCatalog = stockCatalog.filter((item) => {
-    const q = catalogSearch.toLowerCase().trim();
-    if (!q) return true;
-    return (
-      item.symbol.toLowerCase().includes(q) ||
-      item.name.toLowerCase().includes(q) ||
-      item.sector.toLowerCase().includes(q)
-    );
-  });
+  // 1. Load full stock catalog whenever modal opens
+  useEffect(() => {
+    if (!isOpen) return;
 
-  const handleAddStock = (stock: StockQuote) => {
-    addStock(stock);
-    setAddedFeedback(stock.symbol);
-    setTimeout(() => {
-      setAddedFeedback(null);
-    }, 2000);
-  };
+    let isMounted = true;
+    setLoading(true);
 
-  const handleAddCustom = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!customSymbol.trim() || !customName.trim()) return;
+    stockService
+      .getAllStocks()
+      .then((data) => {
+        if (isMounted && data && Array.isArray(data)) {
+          setCatalog(
+            data.map((s: any) => ({
+              symbol: s.symbol,
+              name: s.companyName || s.name || s.symbol,
+              currency: s.currency || (s.exchange === 'NASDAQ' || s.exchange === 'NYSE' ? '$' : '₹'),
+              currentPrice: Number(s.currentPrice) || 0,
+              changeAmount: Number(s.changeAmount) || 0,
+              changePercent: Number(s.dailyChangePercent ?? s.changePercent) || 0,
+              dailyChangePercent: Number(s.dailyChangePercent ?? s.changePercent) || 0,
+              lastUpdated: s.updatedAt || 'Live',
+              sector: s.sector || 'General',
+              exchange: s.exchange || (s.currency === '$' ? 'NASDAQ' : 'NSE'),
+              volume: Number(s.volume) || 0,
+              avgVolume20D: Number(s.avgVolume20D) || 0,
+              marketCap: s.marketCap || 'N/A',
+              peRatio: s.peRatio ? Number(s.peRatio) : 0,
+              high52w: Number(s.high52w) || 0,
+              low52w: Number(s.low52w) || 0,
+              sparkline: Array.isArray(s.sparkline) ? s.sparkline : [],
+              tags: Array.isArray(s.tags) ? s.tags : [],
+            }))
+          );
+        } else if (isMounted && allStocks.length > 0) {
+          setCatalog(allStocks);
+        }
+      })
+      .catch(() => {
+        if (isMounted && allStocks.length > 0) {
+          setCatalog(allStocks);
+        }
+      })
+      .finally(() => {
+        if (isMounted) setLoading(false);
+      });
 
-    const parsedPrice = parseFloat(customPrice) || 1000;
-    const newStock: StockQuote = {
-      symbol: customSymbol.toUpperCase().trim(),
-      name: customName.trim(),
-      currency: '₹',
-      currentPrice: parsedPrice,
-      changeAmount: 0,
-      changePercent: 0,
-      lastUpdated: 'Just added',
-      sector: customSector,
-      volume: 1000000,
-      avgVolume20D: 1000000,
-      marketCap: '₹1.0 Lakh Cr',
-      peRatio: 25.0,
-      high52w: parsedPrice * 1.15,
-      low52w: parsedPrice * 0.85,
-      tags: ['Custom', customSector],
-      sparkline: [
-        { date: 'Day -3', price: parsedPrice * 0.98 },
-        { date: 'Day -2', price: parsedPrice * 0.99 },
-        { date: 'Yesterday', price: parsedPrice },
-        { date: 'Today', price: parsedPrice },
-      ],
+    return () => {
+      isMounted = false;
     };
+  }, [isOpen, allStocks]);
 
-    handleAddStock(newStock);
-    setCustomSymbol('');
-    setCustomName('');
+  // 2. Extract sector categories
+  const sectors = useMemo(() => {
+    const list = new Set(catalog.map((s) => s.sector));
+    return ['ALL', ...Array.from(list)];
+  }, [catalog]);
+
+  // 3. Set of already-added watchlist symbols for instant duplicate lookup
+  const watchlistSymbolSet = useMemo(() => {
+    return new Set(watchlist.map((s) => s.symbol.toUpperCase()));
+  }, [watchlist]);
+
+  const isMaxCapacity = watchlist.length >= 50;
+
+  // 4. Multi-tiered search, market filtering, sector filtering, and sorting
+  const filteredStocks = useMemo(() => {
+    const prepared = catalog.map((s) => ({
+      ...s,
+      companyName: s.name,
+    }));
+
+    return filterAndRankStocks(prepared, {
+      query: searchQuery,
+      market: selectedMarket,
+      sector: selectedSector,
+      sortOrder,
+    });
+  }, [catalog, searchQuery, selectedMarket, selectedSector, sortOrder]);
+
+  const handleAdd = (stock: StockQuote) => {
+    if (isMaxCapacity) {
+      addToast('Watchlist limit reached (maximum 50 stocks).', 'error');
+      return;
+    }
+    if (watchlistSymbolSet.has(stock.symbol.toUpperCase())) {
+      return;
+    }
+
+    addStock(stock);
+    setRecentlyAddedSymbol(stock.symbol);
+    addToast(`Added ${stock.symbol} to watchlist`, 'success');
+
+    setTimeout(() => {
+      setRecentlyAddedSymbol(null);
+    }, 2000);
   };
 
   return (
@@ -83,186 +129,225 @@ export const AddStockModal: React.FC<AddStockModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       title="Add Equities to Watchlist"
-      subtitle="Select trending equities from catalog or register a custom instrument"
-      maxWidth="lg"
+      subtitle="Search and discover equities across Indian (NSE) and US markets"
+      maxWidth="xl"
     >
       <div className="space-y-4">
-        {/* Tab switcher: Catalog vs Custom */}
-        <div className="flex items-center p-1 rounded-xl bg-surface-subtle border border-border">
-          <button
-            onClick={() => setActiveTab('catalog')}
-            className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-colors ${
-              activeTab === 'catalog'
-                ? 'bg-indigo-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            Catalog Discovery
-          </button>
-          <button
-            onClick={() => setActiveTab('custom')}
-            className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-colors ${
-              activeTab === 'custom'
-                ? 'bg-indigo-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            Custom Symbol Entry
-          </button>
+        {/* Capacity Indicator Banner */}
+        <div className="flex items-center justify-between px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs">
+          <div className="flex items-center gap-2">
+            <span className="text-slate-400">Current Watchlist Capacity:</span>
+            <span
+              className={`font-mono font-bold ${
+                isMaxCapacity ? 'text-rose-400' : 'text-indigo-400'
+              }`}
+            >
+              {watchlist.length} / 50 Stocks
+            </span>
+          </div>
+          {isMaxCapacity && (
+            <span className="flex items-center gap-1 text-rose-400 font-semibold">
+              <AlertCircle className="w-3.5 h-3.5" />
+              Maximum Capacity Reached
+            </span>
+          )}
         </div>
 
-        {/* Success Toast Banner */}
-        {addedFeedback && (
-          <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-xs font-mono text-emerald-300 flex items-center gap-2 animate-fade-in">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-            <span>Successfully added {addedFeedback} to your active watchlist!</span>
+        {/* Search & Market Filter Row */}
+        <div className="flex flex-col sm:flex-row items-center gap-2.5">
+          {/* Search Input */}
+          <div className="relative w-full">
+            <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by symbol (e.g. TCS, NVDA, INFY) or company name..."
+              className="w-full pl-10 pr-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs sm:text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
+            />
           </div>
-        )}
 
-        {/* TAB 1: CATALOG DISCOVERY */}
-        {activeTab === 'catalog' && (
-          <div className="space-y-3">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input
-                type="text"
-                value={catalogSearch}
-                onChange={(e) => setCatalogSearch(e.target.value)}
-                placeholder="Filter catalog by ticker (e.g. AAPL, LT) or sector..."
-                className="w-full pl-9 pr-4 py-2 bg-surface-subtle rounded-lg border border-border text-xs sm:text-sm text-slate-100 placeholder-slate-400 focus:outline-none focus:border-indigo-500"
-              />
-            </div>
+          {/* Market Filter Chips */}
+          <div className="flex items-center gap-1 shrink-0 bg-slate-950 p-1 rounded-xl border border-slate-800">
+            <Globe className="w-3.5 h-3.5 text-slate-500 ml-1.5 mr-0.5" />
+            {(
+              [
+                { id: 'ALL', label: 'All' },
+                { id: 'IN', label: 'NSE' },
+                { id: 'US', label: 'US' },
+              ] as const
+            ).map((m) => (
+              <button
+                key={m.id}
+                onClick={() => setSelectedMarket(m.id)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                  selectedMarket === m.id
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
 
-            <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
-              {filteredCatalog.map((item) => {
-                const isAlreadyInWatchlist = watchlist.some(
-                  (s) => s.symbol === item.symbol
-                );
+          {/* Sorting Toggle */}
+          <div className="flex items-center gap-1 shrink-0 bg-slate-950 p-1 rounded-xl border border-slate-800">
+            <ArrowUpDown className="w-3.5 h-3.5 text-slate-500 ml-1 mr-0.5" />
+            {(
+              [
+                { id: 'DEFAULT', label: 'Rank' },
+                { id: 'A-Z', label: 'A-Z' },
+                { id: 'Z-A', label: 'Z-A' },
+              ] as const
+            ).map((s) => (
+              <button
+                key={s.id}
+                onClick={() => setSortOrder(s.id)}
+                className={`px-2 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                  sortOrder === s.id
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </div>
 
-                return (
-                  <div
-                    key={item.symbol}
-                    className="p-3 rounded-xl bg-surface-subtle border border-border flex items-center justify-between gap-3 hover:border-slate-700 transition-colors"
-                  >
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-slate-100 text-sm">
-                          {item.name}
-                        </span>
-                        <span className="text-xs font-mono text-slate-400">
-                          {item.symbol}
-                        </span>
-                      </div>
-                      <div className="text-[11px] text-slate-400 font-mono mt-0.5">
-                        {item.sector}
-                      </div>
+        {/* Sector Filter Chips */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+          <SlidersHorizontal className="w-3.5 h-3.5 text-slate-500 shrink-0 mr-1" />
+          {sectors.map((sec) => (
+            <button
+              key={sec}
+              onClick={() => setSelectedSector(sec)}
+              className={`px-2.5 py-1 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
+                selectedSector === sec
+                  ? 'bg-indigo-600 text-white font-semibold shadow-sm'
+                  : 'bg-slate-950 text-slate-400 hover:text-slate-200 border border-slate-800'
+              }`}
+            >
+              {sec === 'ALL' ? 'All Sectors' : sec}
+            </button>
+          ))}
+        </div>
+
+        {/* Stock Results List */}
+        {loading ? (
+          <div className="py-16 flex flex-col items-center justify-center gap-3 text-slate-400">
+            <RefreshCw className="w-6 h-6 animate-spin text-indigo-500" />
+            <p className="text-xs">Loading master equity universe...</p>
+          </div>
+        ) : filteredStocks.length === 0 ? (
+          <div className="py-12 text-center text-slate-400 space-y-1">
+            <p className="text-sm font-semibold">No equities match your criteria</p>
+            <p className="text-xs text-slate-500">Try adjusting your search query, market, or sector filters.</p>
+          </div>
+        ) : (
+          <div className="max-h-[380px] overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-slate-800">
+            {filteredStocks.map((stock) => {
+              const isAlreadyAdded = watchlistSymbolSet.has(stock.symbol.toUpperCase());
+              const isRecent = recentlyAddedSymbol === stock.symbol;
+              const { initials, style } = getStockAvatarDetails(stock.symbol, stock.sector);
+              const isPositive = stock.changePercent >= 0;
+
+              return (
+                <div
+                  key={stock.symbol}
+                  className={`p-3 rounded-xl border flex items-center justify-between transition-colors ${
+                    isAlreadyAdded
+                      ? 'bg-slate-950/40 border-slate-800/80 opacity-75'
+                      : 'bg-slate-950/80 border-slate-800 hover:border-slate-700'
+                  }`}
+                >
+                  {/* Left: Avatar & Stock Info */}
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div
+                      className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold font-mono text-xs border shrink-0 ${style.bg} ${style.text} ${style.border}`}
+                    >
+                      {initials}
                     </div>
 
-                    <div className="flex items-center gap-3">
-                      <div className="text-right">
-                        <div className="text-xs font-mono font-bold text-slate-100">
-                          {formatPrice(item.currentPrice, item.currency)}
-                        </div>
-                        <DeltaBadge value={item.changePercent} size="sm" />
-                      </div>
-
-                      {isAlreadyInWatchlist ? (
-                        <span className="px-3 py-1.5 rounded-lg bg-surface border border-border text-[11px] font-mono text-slate-400 flex items-center gap-1">
-                          <Check className="w-3.5 h-3.5 text-emerald-400" />
-                          <span>Added</span>
+                    <div className="space-y-0.5 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-sm text-white tracking-wide">{stock.symbol}</span>
+                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 font-mono">
+                          {stock.exchange || 'NSE'}
                         </span>
-                      ) : (
-                        <button
-                          onClick={() => handleAddStock(item)}
-                          className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white flex items-center gap-1 transition-colors"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                          <span>Add</span>
-                        </button>
-                      )}
+                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-800/60 text-slate-400 hidden sm:inline">
+                          {stock.sector}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400 truncate max-w-[220px] sm:max-w-xs">{stock.name}</p>
                     </div>
                   </div>
-                );
-              })}
-            </div>
+
+                  {/* Right: Pricing & Add CTA */}
+                  <div className="flex items-center gap-4 shrink-0">
+                    <div className="text-right">
+                      <div className="text-xs font-bold text-slate-200">
+                        {stock.currency}
+                        {stock.currentPrice.toFixed(2)}
+                      </div>
+                      <div
+                        className={`text-[11px] font-semibold ${
+                          isPositive ? 'text-emerald-400' : 'text-rose-400'
+                        }`}
+                      >
+                        {isPositive ? '+' : ''}
+                        {stock.changePercent.toFixed(2)}%
+                      </div>
+                    </div>
+
+                    {isAlreadyAdded ? (
+                      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs font-semibold text-slate-400">
+                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>In Watchlist</span>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => handleAdd(stock)}
+                        disabled={isMaxCapacity}
+                        className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                          isRecent
+                            ? 'bg-emerald-600 text-white shadow-sm'
+                            : isMaxCapacity
+                            ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+                            : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm shadow-indigo-600/20'
+                        }`}
+                      >
+                        {isRecent ? (
+                          <>
+                            <Check className="w-3.5 h-3.5" />
+                            <span>Added</span>
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Add</span>
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
 
-        {/* TAB 2: CUSTOM SYMBOL ENTRY */}
-        {activeTab === 'custom' && (
-          <form onSubmit={handleAddCustom} className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="text-[11px] font-mono text-slate-400 uppercase">
-                  Ticker Symbol
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={customSymbol}
-                  onChange={(e) => setCustomSymbol(e.target.value)}
-                  placeholder="e.g. SBIN"
-                  className="w-full px-3 py-2 rounded-lg bg-surface-subtle border border-border text-xs sm:text-sm text-slate-100 uppercase focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[11px] font-mono text-slate-400 uppercase">
-                  Base Price (₹)
-                </label>
-                <input
-                  type="number"
-                  step="0.05"
-                  required
-                  value={customPrice}
-                  onChange={(e) => setCustomPrice(e.target.value)}
-                  placeholder="850.00"
-                  className="w-full px-3 py-2 rounded-lg bg-surface-subtle border border-border text-xs sm:text-sm text-slate-100 focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-[11px] font-mono text-slate-400 uppercase">
-                Company Full Name
-              </label>
-              <input
-                type="text"
-                required
-                value={customName}
-                onChange={(e) => setCustomName(e.target.value)}
-                placeholder="e.g. State Bank of India"
-                className="w-full px-3 py-2 rounded-lg bg-surface-subtle border border-border text-xs sm:text-sm text-slate-100 focus:outline-none focus:border-indigo-500"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-[11px] font-mono text-slate-400 uppercase">
-                Sector
-              </label>
-              <select
-                value={customSector}
-                onChange={(e) => setCustomSector(e.target.value as StockSector)}
-                className="w-full px-3 py-2 rounded-lg bg-surface-subtle border border-border text-xs sm:text-sm text-slate-100 focus:outline-none focus:border-indigo-500"
-              >
-                <option value="Banking & Financial Services">Banking & Financial Services</option>
-                <option value="Information Technology">Information Technology</option>
-                <option value="Automobile">Automobile</option>
-                <option value="Energy & Petrochemicals">Energy & Petrochemicals</option>
-                <option value="Consumer Goods">Consumer Goods</option>
-                <option value="Conglomerate">Conglomerate</option>
-              </select>
-            </div>
-
-            <button
-              type="submit"
-              className="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white transition-colors flex items-center justify-center gap-1.5"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Register & Add Stock to Watchlist</span>
-            </button>
-          </form>
-        )}
+        {/* Footer Note */}
+        <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-xs text-slate-500">
+          <span>Real-time anomaly scoring activates immediately for added stocks.</span>
+          <button
+            onClick={onClose}
+            className="px-4 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 transition-colors"
+          >
+            Done
+          </button>
+        </div>
       </div>
     </Modal>
   );

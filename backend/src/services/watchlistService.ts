@@ -154,7 +154,94 @@ export class WatchlistService {
   }
 
   /**
-   * Add a stock to user's watchlist with strict ownership verification
+   * Complete initial onboarding or batch configuration of user's primary watchlist.
+   * Enforces min 3 stocks, max 50 stocks, and master catalog validation.
+   */
+  async setupWatchlist(userId: string, data: { name?: string; symbols: string[] }) {
+    const rawSymbols = Array.isArray(data.symbols) ? data.symbols : [];
+    if (rawSymbols.length < 1) {
+      const error: any = new Error('Onboarding watchlist requires at least 1 stock');
+      error.statusCode = 400;
+      throw error;
+    }
+    if (rawSymbols.length > 50) {
+      const error: any = new Error('Watchlist cannot exceed 50 stocks');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const normalizedSymbols = Array.from(new Set(rawSymbols.map((s) => s.trim().toUpperCase())));
+    if (normalizedSymbols.length < 1) {
+      const error: any = new Error('Onboarding watchlist requires at least 1 stock');
+      error.statusCode = 400;
+      throw error;
+    }
+    if (normalizedSymbols.length > 50) {
+      const error: any = new Error('Watchlist cannot exceed 50 stocks');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    // Verify all symbols exist in master stock catalog
+    const validStocks = await prisma.stock.findMany({
+      where: { symbol: { in: normalizedSymbols } },
+      select: { symbol: true },
+    });
+    const validSet = new Set(validStocks.map((s) => s.symbol));
+    const invalidSymbols = normalizedSymbols.filter((s) => !validSet.has(s));
+
+    if (invalidSymbols.length > 0) {
+      const error: any = new Error(
+        `Invalid symbol(s) detected not in master catalog: ${invalidSymbols.join(', ')}`
+      );
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const finalSymbols = normalizedSymbols;
+
+    // Resolve or create primary watchlist for this user
+    let defaultWl = await prisma.watchlist.findFirst({
+      where: { userId, isDefault: true },
+    });
+
+    if (!defaultWl) {
+      defaultWl = await prisma.watchlist.create({
+        data: {
+          userId,
+          name: (data.name || 'Primary Watchlist').trim(),
+          isDefault: true,
+        },
+      });
+    } else if (data.name && data.name.trim() !== defaultWl.name) {
+      defaultWl = await prisma.watchlist.update({
+        where: { id: defaultWl.id },
+        data: { name: data.name.trim() },
+      });
+    }
+
+    // Insert all stocks for this watchlist
+    for (const sym of finalSymbols) {
+      await prisma.watchlistStock.upsert({
+        where: {
+          watchlistId_stockSymbol: {
+            watchlistId: defaultWl.id,
+            stockSymbol: sym,
+          },
+        },
+        create: {
+          watchlistId: defaultWl.id,
+          stockSymbol: sym,
+        },
+        update: {},
+      });
+    }
+
+    return this.getWatchlist(userId, defaultWl.id);
+  }
+
+  /**
+   * Add a stock to user's watchlist with strict ownership, existence, capacity, and duplicate verification
    */
   async addStock(userId: string, symbol: string, watchlistId?: string) {
     const targetSymbol = symbol.toUpperCase().trim();
@@ -193,6 +280,16 @@ export class WatchlistService {
       targetWatchlistId = defaultWl.id;
     }
 
+    // Check capacity: maximum 50 stocks
+    const currentCount = await prisma.watchlistStock.count({
+      where: { watchlistId: targetWatchlistId },
+    });
+    if (currentCount >= 50) {
+      const error: any = new Error('Watchlist cannot exceed 50 stocks');
+      error.statusCode = 400;
+      throw error;
+    }
+
     // Check if already in watchlist
     const existing = await prisma.watchlistStock.findUnique({
       where: {
@@ -205,20 +302,9 @@ export class WatchlistService {
     });
 
     if (existing) {
-      return {
-        ...existing,
-        stock: {
-          ...existing.stock,
-          currentPrice: Number(existing.stock.currentPrice),
-          changeAmount: Number(existing.stock.changeAmount),
-          changePercent: Number(existing.stock.changePercent),
-          volume: Number(existing.stock.volume),
-          avgVolume20D: Number(existing.stock.avgVolume20D),
-          peRatio: existing.stock.peRatio ? Number(existing.stock.peRatio) : null,
-          high52w: Number(existing.stock.high52w),
-          low52w: Number(existing.stock.low52w),
-        },
-      };
+      const error: any = new Error(`Stock ${targetSymbol} is already in your watchlist`);
+      error.statusCode = 409;
+      throw error;
     }
 
     const created = await prisma.watchlistStock.create({

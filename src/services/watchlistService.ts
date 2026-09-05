@@ -38,6 +38,11 @@ export class WatchlistService {
     return res.success;
   }
 
+  async setupWatchlist(data: { name?: string; symbols: string[] }): Promise<boolean> {
+    const res = await apiClient.post('/watchlist/setup', data);
+    return res.success;
+  }
+
   async togglePin(symbol: string, watchlistId?: string): Promise<boolean> {
     const res = await apiClient.patch('/watchlist/pin-stock', { symbol, watchlistId });
     return res.success;

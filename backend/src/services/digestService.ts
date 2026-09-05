@@ -1,9 +1,25 @@
 import { MarketMood } from '@prisma/client';
 import { prisma } from '../config/prisma.js';
+import { getUserWatchlistSymbols } from '../utils/userOnboarding.js';
 
 export class DigestService {
   async getDigests(options?: { mood?: MarketMood; search?: string; userId?: string }) {
     const where: any = {};
+
+    let userWatchlistSymbols: string[] = [];
+    if (options?.userId) {
+      userWatchlistSymbols = await getUserWatchlistSymbols(options.userId);
+      if (userWatchlistSymbols.length === 0) {
+        return []; // User has an empty watchlist, so no personalized digests exist
+      }
+      where.digestEvents = {
+        some: {
+          event: {
+            stockSymbol: { in: userWatchlistSymbols },
+          },
+        },
+      };
+    }
 
     if (options?.mood) {
       where.marketMood = options.mood;

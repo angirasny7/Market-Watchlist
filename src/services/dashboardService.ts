@@ -9,10 +9,26 @@ export interface DashboardIntelligence {
   marketMood: string;
   greeting?: string;
   userName?: string;
+  lastLoginAt?: string | null;
+  previousLoginAt?: string | null;
+  previousSessionAt?: string | null;
+  lastLogoutAt?: string | null;
+  currentDevice?: {
+    deviceType: string;
+    deviceName: string;
+  };
+  previousDevice?: {
+    deviceType: string;
+    deviceName: string;
+  } | null;
+  eventsAwayCount?: number;
+  insightsAwayCount?: number;
   user?: {
     id?: string;
     name?: string;
     email?: string;
+    lastLoginAt?: string | null;
+    previousLoginAt?: string | null;
   };
   watchlistSummary?: {
     symbols: string[];
@@ -26,9 +42,23 @@ export interface UserStateResponse {
   userName?: string;
   email?: string;
   lastLoginAt: string;
+  previousLoginAt?: string | null;
+  previousSessionAt?: string | null;
+  lastLogoutAt?: string | null;
   lastActivityAt: string;
+  currentDevice?: {
+    deviceType: string;
+    deviceName: string;
+  };
+  previousDevice?: {
+    deviceType: string;
+    deviceName: string;
+  } | null;
   unreadEvents: number;
   unreadDigests: number;
+  archivedEventsCount?: number;
+  savedEventsCount?: number;
+  totalMemoryCount?: number;
   lastDigestViewedId?: string;
   lastDigestAcknowledgedId?: string;
 }

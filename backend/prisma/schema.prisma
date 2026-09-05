@@ -67,14 +67,17 @@ model User {
   id           String       @id @default(uuid())
   email        String       @unique
   passwordHash String
-  name         String
-  role         UserRole     @default(USER)
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  name             String
+  role             UserRole     @default(USER)
+  lastLoginAt      DateTime?
+  previousLoginAt  DateTime?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
 
   watchlists   Watchlist[]
   userState    UserState?
   eventReads   UserEventRead[]
+  savedEvents  UserSavedEvent[]
   digestReads  UserDigestRead[]
 
   @@map("users")
@@ -84,7 +87,13 @@ model UserState {
   id                       String    @id @default(uuid())
   userId                   String    @unique
   lastLoginAt              DateTime  @default(now())
+  lastLogoutAt             DateTime?
   lastActivityAt           DateTime  @default(now())
+  previousSessionAt        DateTime?
+  currentDeviceType        String    @default("DESKTOP")
+  currentDeviceName        String    @default("Laptop")
+  previousDeviceType       String?
+  previousDeviceName       String?
   lastDigestViewedId       String?
   lastDigestAcknowledgedId String?
   updatedAt                DateTime  @updatedAt
@@ -218,6 +227,7 @@ model Event {
   insights     Insight[]
   digestEvents DigestEvent[]
   userReads    UserEventRead[]
+  userSaves    UserSavedEvent[]
 
   @@index([stockSymbol, timestamp(sort: Desc)])
   @@index([priority, timestamp(sort: Desc)])
@@ -357,6 +367,22 @@ model UserDigestRead {
   @@index([userId])
   @@index([digestId])
   @@map("user_digest_reads")
+}
+
+model UserSavedEvent {
+  id        String   @id @default(uuid())
+  userId    String
+  eventId   String
+  savedAt   DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, eventId])
+  @@index([userId])
+  @@index([eventId])
+  @@index([userId, savedAt(sort: Desc)])
+  @@map("user_saved_events")
 }
 
 

@@ -75,6 +75,25 @@ export class EventController {
     }
   }
 
+  async saveForLater(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) {
+        res.status(401).json({ success: false, message: 'Unauthorized' });
+        return;
+      }
+      const id = req.params.id as string;
+      await eventService.saveEventForLater(id, userId);
+
+      res.status(200).json({
+        success: true,
+        message: 'Event saved for later',
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async markAllRead(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const userId = req.user?.userId;

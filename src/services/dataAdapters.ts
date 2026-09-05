@@ -46,6 +46,8 @@ export function adaptBackendStockToStockQuote(
     currentPrice: Number(backendStock.currentPrice) || 0,
     changeAmount: Number(backendStock.changeAmount) || 0,
     changePercent: Number(backendStock.changePercent) || 0,
+    dailyChangePercent: Number(backendStock.dailyChangePercent ?? backendStock.changePercent) || 0,
+    exchange: backendStock.exchange || 'NSE',
     lastUpdated: backendStock.updatedAt || new Date().toISOString(),
     sector: backendStock.sector || 'Conglomerate',
     volume: Number(backendStock.volume) || 0,

@@ -1,16 +1,34 @@
 import { prisma } from '../config/prisma.js';
+import { getUserWatchlistSymbols } from '../utils/userOnboarding.js';
 
 export class InsightService {
   async getInsights(options?: {
     minConfidence?: number;
     symbol?: string;
     limit?: number;
+    userId?: string;
   }) {
     const where: any = {};
 
-    if (options?.symbol) {
+    if (options?.userId) {
+      const watchlistSymbols = await getUserWatchlistSymbols(options.userId);
+      if (watchlistSymbols.length === 0) {
+        return []; // User has an empty watchlist, so no insights exist
+      }
+
+      if (options?.symbol) {
+        const reqSym = options.symbol.toUpperCase();
+        if (!watchlistSymbols.includes(reqSym)) {
+          return []; // Symbol not in user's watchlist
+        }
+        where.stockSymbol = reqSym;
+      } else {
+        where.stockSymbol = { in: watchlistSymbols };
+      }
+    } else if (options?.symbol) {
       where.stockSymbol = options.symbol.toUpperCase();
     }
+
     if (options?.minConfidence) {
       where.confidenceScore = { gte: options.minConfidence };
     }

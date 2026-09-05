@@ -55,6 +55,35 @@ export class WatchlistController {
     }
   }
 
+  async setupWatchlist(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) {
+        res.status(401).json({ success: false, message: 'Unauthorized' });
+        return;
+      }
+      const { name, symbols } = req.body;
+
+      if (!symbols || !Array.isArray(symbols) || symbols.length === 0) {
+        res.status(400).json({ success: false, error: 'At least one stock symbol is required' });
+        return;
+      }
+
+      const watchlist = await watchlistService.setupWatchlist(userId, { name, symbols });
+      res.status(200).json({
+        success: true,
+        isOnboarded: true,
+        data: serializeBigInt(watchlist),
+      });
+    } catch (err: any) {
+      if (err.statusCode) {
+        res.status(err.statusCode).json({ success: false, error: err.message });
+        return;
+      }
+      next(err);
+    }
+  }
+
   async addStock(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const userId = req.user?.userId;

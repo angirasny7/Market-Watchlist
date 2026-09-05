@@ -1,19 +1,81 @@
 import { prisma } from '../config/prisma.js';
+import { masterStockCatalog } from '../data/stockCatalogData.js';
 
 export class StockService {
+  /**
+   * Automatically verifies and upserts the master catalog on startup.
+   * Preserves all user-generated watchlists, reads, memories, and state.
+   */
+  async ensureMasterCatalogSeeded(): Promise<number> {
+    let count = 0;
+    for (const item of masterStockCatalog) {
+      await prisma.stock.upsert({
+        where: { symbol: item.symbol },
+        update: {
+          companyName: item.companyName,
+          sector: item.sector,
+          exchange: item.exchange,
+          currency: item.currency,
+          currentPrice: item.currentPrice,
+          changeAmount: item.changeAmount,
+          changePercent: item.changePercent,
+          volume: item.volume,
+          avgVolume20D: item.avgVolume20D,
+          marketCap: item.marketCap,
+          peRatio: item.peRatio,
+          high52w: item.high52w,
+          low52w: item.low52w,
+          tags: item.tags,
+          sparkline: item.sparkline,
+        },
+        create: {
+          symbol: item.symbol,
+          companyName: item.companyName,
+          sector: item.sector,
+          exchange: item.exchange,
+          currency: item.currency,
+          currentPrice: item.currentPrice,
+          changeAmount: item.changeAmount,
+          changePercent: item.changePercent,
+          volume: item.volume,
+          avgVolume20D: item.avgVolume20D,
+          marketCap: item.marketCap,
+          peRatio: item.peRatio,
+          high52w: item.high52w,
+          low52w: item.low52w,
+          tags: item.tags,
+          sparkline: item.sparkline,
+        },
+      });
+      count++;
+    }
+    console.log(`[StockService] Master stock catalog verified (${count} stocks synced)`);
+    return count;
+  }
+
   async getAllStocks(query?: { sector?: string; search?: string; exchange?: string }) {
     const where: any = {};
 
-    if (query?.sector) {
+    if (query?.sector && query.sector !== 'ALL') {
       where.sector = query.sector;
     }
-    if (query?.exchange) {
-      where.exchange = query.exchange;
+
+    if (query?.exchange && query.exchange !== 'ALL') {
+      const ex = query.exchange.trim().toUpperCase();
+      if (ex === 'US' || ex === 'GLOBAL') {
+        where.exchange = { in: ['NASDAQ', 'NYSE'] };
+      } else if (ex === 'INDIA' || ex === 'IN') {
+        where.exchange = 'NSE';
+      } else {
+        where.exchange = { equals: query.exchange, mode: 'insensitive' };
+      }
     }
-    if (query?.search) {
+
+    if (query?.search && query.search.trim()) {
+      const s = query.search.trim();
       where.OR = [
-        { symbol: { contains: query.search, mode: 'insensitive' } },
-        { companyName: { contains: query.search, mode: 'insensitive' } },
+        { symbol: { contains: s, mode: 'insensitive' } },
+        { companyName: { contains: s, mode: 'insensitive' } },
       ];
     }
 
@@ -29,11 +91,13 @@ export class StockService {
     });
 
     // Map BigInt volume fields to numbers/strings for clean JSON serialization
+    // and provide both changePercent and dailyChangePercent
     return stocks.map((s) => ({
       ...s,
       currentPrice: Number(s.currentPrice),
       changeAmount: Number(s.changeAmount),
       changePercent: Number(s.changePercent),
+      dailyChangePercent: Number(s.changePercent),
       volume: Number(s.volume),
       avgVolume20D: Number(s.avgVolume20D),
       peRatio: s.peRatio ? Number(s.peRatio) : null,

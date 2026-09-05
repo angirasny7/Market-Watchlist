@@ -36,9 +36,18 @@ export const TopInsightsSection: React.FC = () => {
         </div>
       </div>
 
-      {/* 3 Enriched Insight Cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5">
-        {topInsights.map((insight) => {
+      {/* Enriched Insight Cards or Empty State */}
+      {topInsights.length === 0 ? (
+        <div className="p-8 rounded-2xl bg-surface border border-border text-center space-y-2">
+          <div className="w-10 h-10 rounded-xl bg-surface-subtle text-slate-400 border border-border flex items-center justify-center mx-auto">
+            <Lightbulb className="w-5 h-5" />
+          </div>
+          <h3 className="text-sm font-bold text-slate-200">No watchlist insights available.</h3>
+          <p className="text-xs text-slate-400">Add stocks to your watchlist to receive causal reasoning and anomaly explanations.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5">
+          {topInsights.map((insight) => {
           const matchedEvent = events.find((e) => e.id === insight.relatedEventId);
 
           return (
@@ -136,7 +145,8 @@ export const TopInsightsSection: React.FC = () => {
             </div>
           );
         })}
-      </div>
+        </div>
+      )}
 
       {/* Accessible Detail Modal for View Full Insight */}
       {activeModalInsight && (

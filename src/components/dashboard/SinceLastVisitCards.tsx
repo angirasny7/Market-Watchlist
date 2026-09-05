@@ -6,12 +6,31 @@ import { cn } from '../../lib/utils';
 
 export const SinceLastVisitCards: React.FC = () => {
   const navigate = useNavigate();
-  const { events, setFeedFilter, setFeedScope } = useMarketStore();
+  const { watchlist, events, setFeedFilter, setFeedScope } = useMarketStore();
 
-  // Watchlist-Centric Prioritization: Use watchlist events as primary source when available
-  const watchlistEvents = events.filter((e) => e.inWatchlist);
-  const isWatchlistSourced = watchlistEvents.length > 0;
-  const sourceEvents = isWatchlistSourced ? watchlistEvents : events;
+  if (watchlist.length === 0) {
+    return (
+      <section className="p-8 rounded-2xl bg-surface border border-border text-center space-y-3">
+        <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center justify-center mx-auto">
+          <Star className="w-6 h-6" />
+        </div>
+        <h3 className="text-base font-bold text-slate-100">No watchlist found.</h3>
+        <p className="text-xs text-slate-400 max-w-md mx-auto">
+          Create your first watchlist to start receiving personalized market intelligence.
+        </p>
+        <button
+          onClick={() => navigate('/onboarding')}
+          className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white transition-all shadow-md"
+        >
+          Create Watchlist
+        </button>
+      </section>
+    );
+  }
+
+  // Watchlist-Centric: Strictly use watchlist events
+  const sourceEvents = events.filter((e) => e.inWatchlist);
+  const isWatchlistSourced = true;
 
   // 1. Stocks Requiring Attention (Critical & High)
   const attentionEvents = sourceEvents.filter(

@@ -36,15 +36,38 @@ export class SinceLastVisitService {
     const watchlistArray = Array.from(watchlistSymbols);
 
     const defaultSince = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000); // 5 days default
-    const lastActivity = userState?.lastActivityAt || defaultSince;
+    const lastActivity =
+      userState?.previousSessionAt ||
+      userState?.lastLogoutAt ||
+      userState?.lastActivityAt ||
+      defaultSince;
 
     // 3. Format away duration
     const elapsedMs = Math.max(0, Date.now() - lastActivity.getTime());
     const awayDuration = this.formatDuration(elapsedMs);
 
-    // 4. Find events created while away
+    // If user has NO stocks in their watchlist, return strictly empty intelligence
+    if (watchlistArray.length === 0) {
+      return {
+        awayDuration,
+        awayDurationMs: elapsedMs,
+        lastActivityAt: lastActivity.toISOString(),
+        newEventsCount: 0,
+        criticalEventsCount: 0,
+        watchlistEventsCount: 0,
+        watchlistCriticalCount: 0,
+        watchlistSymbols: [],
+        newEvents: [],
+        criticalEvents: [],
+        newInsights: [],
+        latestDigest: null,
+      };
+    }
+
+    // 4. Find events created while away strictly for user's tracked watchlist stocks
     let rawEvents = await prisma.event.findMany({
       where: {
+        stockSymbol: { in: watchlistArray },
         createdAt: { gte: lastActivity },
       },
       include: {
@@ -55,10 +78,11 @@ export class SinceLastVisitService {
       take: 15,
     });
 
-    // Fallback: If user was active recently and no events occurred while away,
-    // provide the most recent events to maintain high-value context
     if (rawEvents.length === 0) {
       rawEvents = await prisma.event.findMany({
+        where: {
+          stockSymbol: { in: watchlistArray },
+        },
         include: {
           stock: true,
           insights: true,
@@ -80,15 +104,12 @@ export class SinceLastVisitService {
       .map((e) => ({
         ...e,
         read: readEventIds.has(e.id),
-        inWatchlist: watchlistSymbols.has(e.stockSymbol),
+        inWatchlist: true,
         isPinnedWatchlist: watchlistStocks.some((w) => w.stockSymbol === e.stockSymbol && w.isPinned),
       }))
       .sort((a, b) => {
-        // Watchlist events prioritized first, then pinned, then recency
         if (a.isPinnedWatchlist && !b.isPinnedWatchlist) return -1;
         if (!a.isPinnedWatchlist && b.isPinnedWatchlist) return 1;
-        if (a.inWatchlist && !b.inWatchlist) return -1;
-        if (!a.inWatchlist && b.inWatchlist) return 1;
         return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
       });
 
@@ -96,12 +117,13 @@ export class SinceLastVisitService {
       (e) => e.priority === Priority.CRITICAL || e.priority === Priority.HIGH
     );
 
-    const watchlistEvents = newEvents.filter((e) => e.inWatchlist);
-    const watchlistCritical = criticalEvents.filter((e) => e.inWatchlist);
+    const watchlistEvents = newEvents;
+    const watchlistCritical = criticalEvents;
 
-    // 5. Find insights generated while away (prioritize watchlist stocks)
+    // 5. Find insights generated strictly for user's tracked watchlist stocks
     let rawInsights = await prisma.insight.findMany({
       where: {
+        stockSymbol: { in: watchlistArray },
         createdAt: { gte: lastActivity },
       },
       include: {
@@ -115,6 +137,9 @@ export class SinceLastVisitService {
 
     if (rawInsights.length === 0) {
       rawInsights = await prisma.insight.findMany({
+        where: {
+          stockSymbol: { in: watchlistArray },
+        },
         include: {
           event: {
             include: { stock: true },
@@ -128,22 +153,37 @@ export class SinceLastVisitService {
     const newInsights = rawInsights
       .map((ins) => ({
         ...ins,
-        inWatchlist: watchlistSymbols.has(ins.stockSymbol),
+        inWatchlist: true,
       }))
-      .sort((a, b) => {
-        if (a.inWatchlist && !b.inWatchlist) return -1;
-        if (!a.inWatchlist && b.inWatchlist) return 1;
-        return Number(b.confidenceScore) - Number(a.confidenceScore);
-      });
+      .sort((a, b) => Number(b.confidenceScore) - Number(a.confidenceScore));
 
-    // 6. Fetch latest Market Memory Digest & tag with watchlist affinity
+    // 6. Fetch latest Market Memory Digest containing user's watchlist events
     const rawLatestDigest = await prisma.digest.findFirst({
+      where: {
+        digestEvents: {
+          some: {
+            event: {
+              stockSymbol: { in: watchlistArray },
+            },
+          },
+        },
+      },
       orderBy: { timestamp: 'desc' },
       include: {
         digestEvents: {
+          where: {
+            event: {
+              stockSymbol: { in: watchlistArray },
+            },
+          },
           include: { event: { include: { stock: true } } },
         },
         digestInsights: {
+          where: {
+            insight: {
+              stockSymbol: { in: watchlistArray },
+            },
+          },
           include: { insight: true },
         },
       },
@@ -151,15 +191,10 @@ export class SinceLastVisitService {
 
     let latestDigest = null;
     if (rawLatestDigest) {
-      const hasWatchlistEvents = rawLatestDigest.digestEvents.some((de) =>
-        watchlistSymbols.has(de.event.stockSymbol)
-      );
       latestDigest = {
         ...rawLatestDigest,
-        hasWatchlistEvents,
-        watchlistMatchedCount: rawLatestDigest.digestEvents.filter((de) =>
-          watchlistSymbols.has(de.event.stockSymbol)
-        ).length,
+        hasWatchlistEvents: true,
+        watchlistMatchedCount: rawLatestDigest.digestEvents.length,
       };
     }
 

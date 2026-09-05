@@ -21,18 +21,17 @@ export const HighlightsHeader: React.FC = () => {
       {/* Top Header & Breadcrumbs */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-border">
         <div>
-          <div className="flex items-center gap-2 text-xs text-slate-400 mb-1">
-            <TrendingUp className="w-3.5 h-3.5 text-cyan-400" />
-            <span>Macro</span>
-            <span>/</span>
-            <span className="text-slate-300 font-medium">Market Highlights</span>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-mono font-medium px-2.5 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+              <TrendingUp className="w-3.5 h-3.5 text-cyan-400" />
+              Autonomous Intelligence Engine
+            </span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-100">
-            Market Highlights
+            Market Highlights & Intelligence Hub
           </h1>
           <p className="text-xs sm:text-sm text-slate-400 mt-1 max-w-2xl leading-relaxed">
-            Broader market backdrop, central bank macro signals, sector leadership rotations,
-            and outlier market movers beyond your immediate watchlist.
+            Macro signals, sector rotation, catalyst intelligence, forward-return analytics, and historical market dossiers.
           </p>
         </div>
 

@@ -6,7 +6,7 @@ import { serializeBigInt } from '../utils/json.js';
 export class AuthController {
   async register(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { email, password, name } = req.body;
+      const { email, password, name, deviceInfo } = req.body;
       if (!email || !password || !name) {
         res.status(400).json({
           success: false,
@@ -15,7 +15,13 @@ export class AuthController {
         return;
       }
 
-      const result = await authService.register({ email, password, name });
+      const result = await authService.register({
+        email,
+        password,
+        name,
+        deviceInfo,
+        userAgent: req.headers['user-agent'],
+      });
       res.status(201).json({
         success: true,
         data: serializeBigInt(result),
@@ -31,7 +37,7 @@ export class AuthController {
 
   async login(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { email, password } = req.body;
+      const { email, password, deviceInfo } = req.body;
       if (!email || !password) {
         res.status(400).json({
           success: false,
@@ -40,7 +46,12 @@ export class AuthController {
         return;
       }
 
-      const result = await authService.login({ email, password });
+      const result = await authService.login({
+        email,
+        password,
+        deviceInfo,
+        userAgent: req.headers['user-agent'],
+      });
       res.status(200).json({
         success: true,
         data: serializeBigInt(result),
@@ -75,7 +86,14 @@ export class AuthController {
     }
   }
 
-  async logout(_req: Request, res: Response): Promise<void> {
+  async logout(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      if (req.user?.userId) {
+        await authService.logout(req.user.userId, req.body?.deviceInfo);
+      }
+    } catch (err) {
+      console.warn('[AuthController] Logout tracking error:', err);
+    }
     res.status(200).json({
       success: true,
       message: 'Logged out successfully',

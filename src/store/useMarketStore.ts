@@ -6,10 +6,6 @@ import { HistoricalDigest } from '../types/digest';
 import { IndexSnapshot, MacroAlert, SectorPerformance, MarketMover } from '../types/market';
 import { UserState, SyncStatus } from '../types/userState';
 import {
-  mockStocks,
-  mockEvents,
-  mockDigests,
-  mockInsights,
   mockIndices,
   mockMacroAlerts,
   mockSectorPerformance,
@@ -30,6 +26,7 @@ import {
   adaptBackendInsightToInsight,
   adaptBackendDigestToHistoricalDigest,
 } from '../services';
+import { useToastStore } from './useToastStore';
 
 export type FeedFilterType = 'all' | 'critical' | 'high' | 'earnings' | 'dividend' | '52w' | 'unread';
 export type FeedScopeType = 'watchlist' | 'all';
@@ -67,8 +64,15 @@ interface MarketState {
   setFeedScope: (scope: FeedScopeType) => void;
   setFeedSearchQuery: (query: string) => void;
   markEventRead: (id: string) => void;
+  saveEventForLater: (id: string) => void;
   markAllEventsRead: () => void;
+  convertSavedToArchived: (id: string) => void;
   acknowledgeEvent: (id: string) => void;
+
+  // Memory Counters
+  archivedEventsCount: number;
+  savedEventsCount: number;
+  totalMemoryCount: number;
 
   // Selected Item States
   selectedInsight: Insight | null;
@@ -98,6 +102,7 @@ interface MarketState {
   // Data Loading & Hydration
   fetchMarketData: () => Promise<void>;
   refreshMarketData: () => Promise<void>;
+  resetMarketStore: () => void;
 
   // Relational Selectors (Stock -> Event -> Insight -> Digest)
   getEventsByStock: (symbol: string) => MarketEvent[];
@@ -117,12 +122,12 @@ export const useMarketStore = create<MarketState>((set, get) => ({
   lastRefreshedAt: null,
   dashboardData: null,
 
-  // Core Entities (Initial fallback to mock)
-  watchlist: mockStocks,
-  allStocks: mockStocks,
-  events: mockEvents,
-  insights: mockInsights,
-  digests: mockDigests,
+  // Core Entities (Initial empty state until live hydration)
+  watchlist: [],
+  allStocks: [],
+  events: [],
+  insights: {},
+  digests: [],
 
   // Watchlist View Settings
   watchlistViewMode: 'grid',
@@ -179,9 +184,16 @@ export const useMarketStore = create<MarketState>((set, get) => ({
     set({ feedSearchQuery: query });
   },
 
+  // Memory Counters
+  archivedEventsCount: 0,
+  savedEventsCount: 0,
+  totalMemoryCount: 0,
+
   markEventRead: (id: string) => {
     set((state) => ({
-      events: state.events.map((e) => (e.id === id ? { ...e, read: true } : e)),
+      events: state.events.filter((e) => e.id !== id),
+      archivedEventsCount: state.archivedEventsCount + 1,
+      totalMemoryCount: state.totalMemoryCount + 1,
       userState: {
         ...state.userState,
         cursor: {
@@ -190,12 +202,33 @@ export const useMarketStore = create<MarketState>((set, get) => ({
         },
       },
     }));
+    useToastStore.getState().addToast('Moved to Market Memory (Archived)', 'success');
     eventService.markEventRead(id).catch(() => {});
   },
 
-  markAllEventsRead: () => {
+  saveEventForLater: (id: string) => {
     set((state) => ({
-      events: state.events.map((e) => ({ ...e, read: true })),
+      events: state.events.filter((e) => e.id !== id),
+      savedEventsCount: state.savedEventsCount + 1,
+      totalMemoryCount: state.totalMemoryCount + 1,
+      userState: {
+        ...state.userState,
+        cursor: {
+          ...state.userState.cursor,
+          unreadEventsCount: Math.max(0, state.userState.cursor.unreadEventsCount - 1),
+        },
+      },
+    }));
+    useToastStore.getState().addToast('Saved to Market Memory', 'info');
+    eventService.saveEventForLater(id).catch(() => {});
+  },
+
+  markAllEventsRead: () => {
+    const activeCount = get().events.length;
+    set((state) => ({
+      events: [],
+      archivedEventsCount: state.archivedEventsCount + activeCount,
+      totalMemoryCount: state.totalMemoryCount + activeCount,
       userState: {
         ...state.userState,
         cursor: {
@@ -204,16 +237,21 @@ export const useMarketStore = create<MarketState>((set, get) => ({
         },
       },
     }));
+    useToastStore.getState().addToast('Moved to Market Memory (Archived)', 'success');
     eventService.markAllRead().catch(() => {});
   },
 
-  acknowledgeEvent: (id: string) => {
+  convertSavedToArchived: (id: string) => {
     set((state) => ({
-      events: state.events.map((e) =>
-        e.id === id ? { ...e, acknowledged: true, read: true } : e
-      ),
+      savedEventsCount: Math.max(0, state.savedEventsCount - 1),
+      archivedEventsCount: state.archivedEventsCount + 1,
     }));
-    eventService.acknowledgeEvent(id).catch(() => {});
+    useToastStore.getState().addToast('Moved to Archived Memory', 'success');
+    eventService.markEventRead(id).catch(() => {});
+  },
+
+  acknowledgeEvent: (id: string) => {
+    get().saveEventForLater(id);
   },
 
   // Insights State
@@ -364,19 +402,13 @@ export const useMarketStore = create<MarketState>((set, get) => ({
       const watchlistSymbols = new Set<string>(
         watchlistItems.map((w: any) => (w.stockSymbol || w.symbol || '').toUpperCase())
       );
-      // If user watchlist is empty, seed defaults
-      if (watchlistSymbols.size === 0) {
-        ['TATAMOTORS', 'INFY', 'TCS', 'RELIANCE', 'HDFCBANK', 'NVDA', 'AAPL'].forEach((s) =>
-          watchlistSymbols.add(s)
-        );
-      }
 
       const pinnedSymbols = new Set<string>(
         watchlistItems.filter((w: any) => w.isPinned).map((w: any) => (w.stockSymbol || w.symbol || '').toUpperCase())
       );
 
       // 4. Adapt Stocks
-      const stockList = Array.isArray(rawStocks) ? rawStocks : mockStocks;
+      const stockList = Array.isArray(rawStocks) ? rawStocks : [];
       const adaptedAllStocks: StockQuote[] = stockList.map((s: any) =>
         adaptBackendStockToStockQuote(s, pinnedSymbols.has(s.symbol), rawEvents || [])
       );
@@ -384,13 +416,13 @@ export const useMarketStore = create<MarketState>((set, get) => ({
       const adaptedWatchlist = adaptedAllStocks.filter((s) => watchlistSymbols.has(s.symbol));
 
       // 5. Adapt Events
-      const eventList = Array.isArray(rawEvents) ? rawEvents : mockEvents;
+      const eventList = Array.isArray(rawEvents) ? rawEvents : [];
       const adaptedEvents: MarketEvent[] = eventList.map((e: any) =>
         adaptBackendEventToMarketEvent(e, watchlistSymbols)
       );
 
       // 6. Adapt Insights
-      const insightList = Array.isArray(rawInsights) ? rawInsights : Object.values(mockInsights);
+      const insightList = Array.isArray(rawInsights) ? rawInsights : [];
       const adaptedInsights: Record<string, Insight> = {};
       for (const ins of insightList) {
         const adapted = adaptBackendInsightToInsight(ins, watchlistSymbols);
@@ -398,7 +430,7 @@ export const useMarketStore = create<MarketState>((set, get) => ({
       }
 
       // 7. Adapt Digests (Watchlist-prioritized)
-      const digestList = Array.isArray(rawDigests) ? rawDigests : mockDigests;
+      const digestList = Array.isArray(rawDigests) ? rawDigests : [];
       const adaptedDigests: HistoricalDigest[] = digestList
         .map((d: any) => adaptBackendDigestToHistoricalDigest(d, watchlistSymbols))
         .sort((a, b) => {
@@ -415,18 +447,45 @@ export const useMarketStore = create<MarketState>((set, get) => ({
         ? `${dashboardData.awayDuration} ago`
         : get().userState.lastSeenDisplay;
 
-      const currentDev = get().userState.currentDevice;
+      const liveCurrentDevice = dashboardData?.currentDevice || userStateRes?.currentDevice;
+      const livePreviousDevice = dashboardData?.previousDevice || userStateRes?.previousDevice;
+
+      const currentDeviceSession = {
+        deviceId: 'dev_current',
+        deviceName: liveCurrentDevice?.deviceName || 'Desktop',
+        deviceType: (liveCurrentDevice?.deviceType || 'Desktop') as any,
+        lastActive: 'Active Now',
+        isCurrentDevice: true,
+      };
+
+      const previousDeviceSession = livePreviousDevice
+        ? {
+            deviceId: 'dev_previous',
+            deviceName: livePreviousDevice.deviceName,
+            deviceType: livePreviousDevice.deviceType as any,
+            lastActive: awayDisplay,
+            isCurrentDevice: false,
+          }
+        : null;
+
+      const allDevicesList = [
+        currentDeviceSession,
+        ...(previousDeviceSession ? [previousDeviceSession] : []),
+      ];
 
       set({
         isLiveMode: true,
         isLoading: false,
         lastRefreshedAt: new Date().toLocaleTimeString(),
         dashboardData,
-        watchlist: adaptedWatchlist.length > 0 ? adaptedWatchlist : adaptedAllStocks,
+        watchlist: adaptedWatchlist,
         allStocks: adaptedAllStocks,
         events: adaptedEvents,
-        insights: Object.keys(adaptedInsights).length > 0 ? adaptedInsights : mockInsights,
-        digests: adaptedDigests.length > 0 ? adaptedDigests : mockDigests,
+        insights: adaptedInsights,
+        digests: adaptedDigests,
+        archivedEventsCount: userStateRes?.archivedEventsCount ?? get().archivedEventsCount,
+        savedEventsCount: userStateRes?.savedEventsCount ?? get().savedEventsCount,
+        totalMemoryCount: userStateRes?.totalMemoryCount ?? (get().archivedEventsCount + get().savedEventsCount),
         marketStatus: (dashboardData?.marketMood === 'CHOPPY' || dashboardData?.marketMood === 'BULLISH')
           ? 'REGULAR_OPEN'
           : get().marketStatus,
@@ -434,17 +493,20 @@ export const useMarketStore = create<MarketState>((set, get) => ({
           ...get().userState,
           userName: (dashboardData as any)?.userName || userStateRes?.userName || get().userState.userName,
           userId: (dashboardData as any)?.user?.id || userStateRes?.userId || get().userState.userId,
+          lastLoginAt: (dashboardData as any)?.lastLoginAt || userStateRes?.lastLoginAt || (dashboardData as any)?.user?.lastLoginAt || null,
+          previousLoginAt: (dashboardData as any)?.previousLoginAt || userStateRes?.previousLoginAt || (dashboardData as any)?.user?.previousLoginAt || null,
+          previousSessionAt: (dashboardData as any)?.previousSessionAt || userStateRes?.previousSessionAt || null,
+          lastLogoutAt: (dashboardData as any)?.lastLogoutAt || userStateRes?.lastLogoutAt || null,
           lastSeenDisplay: awayDisplay,
-          lastVisitTimestamp: userStateRes?.lastActivityAt || get().userState.lastVisitTimestamp,
+          lastVisitTimestamp: (dashboardData as any)?.previousSessionAt || userStateRes?.lastActivityAt || get().userState.lastVisitTimestamp,
           syncStatus: 'SYNCED',
           cursor: {
             ...get().userState.cursor,
             unreadEventsCount: unreadCount,
           },
-          currentDevice: {
-            ...currentDev,
-            lastActive: 'Active Now',
-          },
+          currentDevice: currentDeviceSession,
+          previousDevice: previousDeviceSession,
+          allDevices: allDevicesList,
         },
       });
     } catch (err: any) {
@@ -460,6 +522,25 @@ export const useMarketStore = create<MarketState>((set, get) => ({
 
   refreshMarketData: async () => {
     return get().fetchMarketData();
+  },
+
+  resetMarketStore: () => {
+    set({
+      watchlist: [],
+      allStocks: [],
+      events: [],
+      insights: {},
+      digests: [],
+      selectedInsight: null,
+      selectedDigestId: null,
+      isDigestDrawerOpen: false,
+      feedFilter: 'all',
+      feedScope: 'watchlist',
+      isLoading: false,
+      isError: false,
+      errorMessage: null,
+      userState: mockUserState,
+    });
   },
 
   // Relational Selectors
@@ -493,28 +574,22 @@ export const useMarketStore = create<MarketState>((set, get) => ({
       .filter((i): i is Insight => Boolean(i));
   },
 
-  // 5. Top Insights (Prioritizes user watchlist stocks first, then confidence score)
+  // 5. Top Insights (Strictly scoped to user watchlist stocks)
   getTopInsights: (limit: number = 3) => {
-    const { insights } = get();
+    const { insights, watchlist } = get();
+    if (watchlist.length === 0) return [];
     return Object.values(insights)
-      .sort((a, b) => {
-        // Watchlist insights first
-        if (a.inWatchlist && !b.inWatchlist) return -1;
-        if (!a.inWatchlist && b.inWatchlist) return 1;
-        return b.confidenceScore - a.confidenceScore;
-      })
+      .filter((i) => i.inWatchlist)
+      .sort((a, b) => b.confidenceScore - a.confidenceScore)
       .slice(0, limit);
   },
 
-  // 6. Critical Events (Prioritizes user watchlist critical events first)
+  // 6. Critical Events (Strictly scoped to user watchlist critical events)
   getCriticalEvents: () => {
-    const { events } = get();
-    return events
-      .filter((e) => e.priority === 'CRITICAL' || e.priority === 'HIGH')
-      .sort((a, b) => {
-        if (a.inWatchlist && !b.inWatchlist) return -1;
-        if (!a.inWatchlist && b.inWatchlist) return 1;
-        return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
-      });
+    const { events, watchlist } = get();
+    if (watchlist.length === 0) return [];
+    return events.filter(
+      (e) => e.inWatchlist && (e.priority === 'CRITICAL' || e.priority === 'HIGH')
+    );
   },
 }));

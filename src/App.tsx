@@ -10,15 +10,29 @@ import {
   MarketHighlightsPage,
   LoginPage,
   RegisterPage,
+  OnboardingPage,
 } from './pages';
+
+import { ToastContainer } from './components/common';
 
 export const App: React.FC = () => {
   return (
     <BrowserRouter>
+      <ToastContainer />
       <Routes>
         {/* Public Authentication Routes */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+
+        {/* Onboarding Flow */}
+        <Route
+          path="/onboarding"
+          element={
+            <ProtectedRoute>
+              <OnboardingPage />
+            </ProtectedRoute>
+          }
+        />
 
         {/* Protected Application Routes */}
         <Route

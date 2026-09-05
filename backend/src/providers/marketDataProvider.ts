@@ -10,6 +10,7 @@
  * - Polygon.io
  * without altering downstream core services or business logic.
  */
+import { prisma } from '../config/prisma.js';
 
 export interface MarketQuote {
   symbol: string;
@@ -119,10 +120,53 @@ export class SimulatedMarketDataProvider implements IMarketDataProvider {
   };
 
   async getQuote(symbol: string): Promise<MarketQuote | null> {
-    const quote = this.mockCatalog[symbol.toUpperCase()];
+    const sym = symbol.toUpperCase().trim();
+    const quote = this.mockCatalog[sym];
     if (quote) {
-      return { ...quote, timestamp: new Date() };
+      // Apply subtle realistic intraday variation (-0.2% to +0.2%)
+      const jitter = 1 + (Math.random() * 0.004 - 0.002);
+      const livePrice = +(quote.price * jitter).toFixed(2);
+      return {
+        ...quote,
+        price: livePrice,
+        timestamp: new Date(),
+      };
     }
+
+    // Dynamic database fallback for all master stocks
+    try {
+      const stock = await prisma.stock.findUnique({
+        where: { symbol: sym },
+      });
+
+      if (stock) {
+        const basePrice = Number(stock.currentPrice);
+        const jitter = 1 + (Math.random() * 0.004 - 0.002);
+        const livePrice = +(basePrice * jitter).toFixed(2);
+        const changeAmount = +(livePrice - basePrice + Number(stock.changeAmount)).toFixed(2);
+        const changePercent = +((changeAmount / (basePrice || 1)) * 100).toFixed(2);
+
+        return {
+          symbol: stock.symbol,
+          companyName: stock.companyName,
+          price: livePrice,
+          changeAmount,
+          changePercent,
+          volume: Number(stock.volume),
+          avgVolume20D: Number(stock.avgVolume20D),
+          high52w: Math.max(Number(stock.high52w), livePrice),
+          low52w: Math.min(Number(stock.low52w), livePrice),
+          peRatio: stock.peRatio ? Number(stock.peRatio) : undefined,
+          marketCap: stock.marketCap,
+          exchange: stock.exchange,
+          currency: stock.currency,
+          timestamp: new Date(),
+        };
+      }
+    } catch (err) {
+      console.error(`[SimulatedMarketDataProvider] Error querying stock ${sym}:`, err);
+    }
+
     return null;
   }
 
@@ -136,7 +180,16 @@ export class SimulatedMarketDataProvider implements IMarketDataProvider {
   }
 
   async getHistoricalBars(symbol: string, days = 7): Promise<HistoricalBar[]> {
-    const base = this.mockCatalog[symbol.toUpperCase()]?.price || 1000;
+    const sym = symbol.toUpperCase().trim();
+    let base = this.mockCatalog[sym]?.price;
+    if (!base) {
+      try {
+        const s = await prisma.stock.findUnique({ where: { symbol: sym } });
+        if (s) base = Number(s.currentPrice);
+      } catch {}
+    }
+    if (!base) base = 1000;
+
     const bars: HistoricalBar[] = [];
     const now = Date.now();
 
