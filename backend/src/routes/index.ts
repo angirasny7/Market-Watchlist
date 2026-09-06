@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import authRoutes from './authRoutes.js';
 import stockRoutes from './stockRoutes.js';
 import watchlistRoutes from './watchlistRoutes.js';
@@ -14,15 +14,18 @@ import memoryRoutes from './memoryRoutes.js';
 
 const router = Router();
 
-// Requirement 8: Health Check Endpoint
-router.get('/health', (_req, res) => {
+// Requirement 8: Health Check Endpoint (supports both /health and /api/health)
+const healthCheckHandler = (_req: Request, res: Response): void => {
   res.status(200).json({
     status: 'healthy',
     service: 'smart-market-watchlist-backend',
     timestamp: new Date().toISOString(),
     uptimeSeconds: Math.floor(process.uptime()),
   });
-});
+};
+
+router.get('/health', healthCheckHandler);
+router.get('/api/health', healthCheckHandler);
 
 router.use('/auth', authRoutes);
 router.use('/user', userRoutes);

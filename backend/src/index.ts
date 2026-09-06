@@ -51,14 +51,28 @@ app.use((req, _res, next) => {
   next();
 });
 
-// Root welcome
-app.get('/', (_req, res) => {
+// Health check endpoints (supports both /health and /api/health directly)
+const healthHandler = (_req: express.Request, res: express.Response) => {
+  res.status(200).json({
+    status: 'healthy',
+    service: 'smart-market-watchlist-backend',
+    timestamp: new Date().toISOString(),
+    uptimeSeconds: Math.floor(process.uptime()),
+  });
+};
+app.get('/health', healthHandler);
+app.get('/api/health', healthHandler);
+
+// Root & API welcome endpoints (supports both / and /api)
+const welcomeHandler = (_req: express.Request, res: express.Response) => {
   res.json({
     message: 'Smart Market Watchlist API Engine',
     version: '1.0.0',
     documentation: '/api/health',
   });
-});
+};
+app.get('/', welcomeHandler);
+app.get('/api', welcomeHandler);
 
 // Mount API routes
 app.use('/api', apiRouter);
