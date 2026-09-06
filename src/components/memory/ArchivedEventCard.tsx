@@ -53,9 +53,9 @@ export const ArchivedEventCard: React.FC<ArchivedEventCardProps> = ({ event, onM
   const currency = isAMZN ? '$' : '₹';
 
   return (
-    <article className="rounded-2xl bg-surface border border-border/80 hover:border-indigo-500/40 p-5 sm:p-6 transition-all duration-200 space-y-4 shadow-sm hover:shadow-md">
+    <article className="rounded-2xl bg-surface border border-border/80 hover:border-indigo-500/40 p-5 sm:p-6 transition-all duration-200 space-y-4 shadow-sm hover:shadow-md overflow-hidden">
       {/* Header: Company, Symbol, Catalyst, and Read Timestamp */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/60 pb-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/60 pb-3 min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <EventTypeBadge eventType={event.eventType} />
           {event.priority && <PriorityBadge priority={event.priority} size="sm" />}

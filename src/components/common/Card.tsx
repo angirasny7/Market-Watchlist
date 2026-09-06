@@ -32,7 +32,7 @@ export const Card: React.FC<CardProps> = ({
     <div
       onClick={onClick}
       className={cn(
-        'rounded-[20px] border shadow-sm transition-all duration-200 ease-out',
+        'rounded-[20px] border shadow-sm transition-all duration-200 ease-out overflow-hidden',
         variantStyles[variant],
         hoverEffect && 'hover:shadow-md hover:-translate-y-0.5',
         isClickable && 'cursor-pointer',

@@ -47,7 +47,7 @@ export const MemoryTimelineCard: React.FC<MemoryTimelineCardProps> = ({
       <div className="absolute left-1 sm:left-1.5 top-2.5 w-3.5 h-3.5 rounded-full bg-surface border-2 border-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)] group-hover:scale-125 transition-transform" />
 
       {/* Card Body */}
-      <div className="rounded-2xl bg-surface border border-border p-5 sm:p-6 hover:border-indigo-500/40 hover:shadow-lg hover:shadow-indigo-500/5 transition-all duration-200 space-y-4">
+      <div className="rounded-2xl bg-surface border border-border p-5 sm:p-6 hover:border-indigo-500/40 hover:shadow-lg hover:shadow-indigo-500/5 transition-all duration-200 space-y-4 overflow-hidden">
         {/* Header: Date, Mood & Acknowledged status */}
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-3">
           <div className="flex items-center gap-2 font-mono">

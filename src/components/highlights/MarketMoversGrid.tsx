@@ -109,49 +109,49 @@ export const MarketMoversGrid: React.FC = () => {
           return (
             <div
               key={mover.symbol}
-              className="p-4 rounded-xl bg-surface border border-border hover:border-slate-700 transition-all flex flex-col justify-between space-y-3.5"
+              className="p-4 rounded-xl bg-surface border border-border hover:border-slate-700 transition-all flex flex-col justify-between space-y-3.5 overflow-hidden"
             >
-              <div className="space-y-2.5">
+              <div className="space-y-2.5 min-w-0">
                 {/* Header: Symbol, Name & Watchlist status */}
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold font-mono text-slate-100">
+                <div className="flex items-start justify-between gap-2 min-w-0">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                      <span className="text-sm font-bold font-mono text-slate-100 shrink-0">
                         {mover.symbol}
                       </span>
                       {inWatchlist ? (
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 shrink-0">
                           In Watchlist
                         </span>
                       ) : (
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 shrink-0">
                           Market Discovery
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-slate-400 mt-0.5">
+                    <p className="text-xs text-slate-400 mt-0.5 truncate">
                       {mover.name}
                     </p>
                   </div>
 
-                  <DeltaBadge value={mover.changePercent} size="sm" />
+                  <DeltaBadge value={mover.changePercent} size="sm" className="shrink-0" />
                 </div>
 
                 {/* Price & Volume Ratio */}
-                <div className="flex items-baseline justify-between pt-1">
-                  <span className="text-lg font-bold font-mono text-slate-100">
+                <div className="flex items-baseline justify-between pt-1 gap-2 min-w-0">
+                  <span className="text-lg font-bold font-mono text-slate-100 truncate">
                     ₹{mover.price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </span>
 
-                  <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded bg-slate-800 text-cyan-300 border border-slate-700/60 flex items-center gap-1">
-                    <Layers className="w-3 h-3 text-cyan-400" />
+                  <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded bg-slate-800 text-cyan-300 border border-slate-700/60 flex items-center gap-1 shrink-0">
+                    <Layers className="w-3 h-3 text-cyan-400 shrink-0" />
                     {mover.volumeRatio}
                   </span>
                 </div>
 
                 {/* Catalyst Explanation */}
-                <div className="p-2.5 rounded-lg bg-slate-900/60 border border-border/80">
-                  <p className="text-xs text-slate-300 leading-relaxed">
+                <div className="p-2.5 rounded-lg bg-slate-900/60 border border-border/80 overflow-hidden">
+                  <p className="text-xs text-slate-300 leading-relaxed break-words">
                     {mover.catalystSummary}
                   </p>
                 </div>

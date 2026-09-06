@@ -46,16 +46,16 @@ export const StockCard: React.FC<StockCardProps> = ({
   const isPositive = stock.changePercent >= 0;
 
   return (
-    <div className="flex flex-col justify-between rounded-2xl bg-surface border border-border hover:border-slate-700 transition-all duration-200 p-5 shadow-sm hover:shadow-md group">
-      <div className="space-y-4">
+    <div className="flex flex-col justify-between rounded-2xl bg-surface border border-border hover:border-slate-700 transition-all duration-200 p-5 shadow-sm hover:shadow-md group overflow-hidden">
+      <div className="space-y-4 min-w-0">
         {/* 1. CARD HEADER */}
-        <div className="flex items-start justify-between gap-3 border-b border-border/70 pb-3">
-          <div className="space-y-1">
+        <div className="flex items-start justify-between gap-3 border-b border-border/70 pb-3 min-w-0">
+          <div className="space-y-1 min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <h3 className="font-extrabold text-base text-slate-100 font-sans tracking-tight">
                 {stock.name}
               </h3>
-              <span className="text-xs font-mono font-medium text-slate-400 bg-surface-subtle px-1.5 py-0.5 rounded border border-border">
+              <span className="text-xs font-mono font-medium text-slate-400 bg-surface-subtle px-1.5 py-0.5 rounded border border-border shrink-0">
                 {stock.symbol}
               </span>
             </div>
@@ -68,7 +68,7 @@ export const StockCard: React.FC<StockCardProps> = ({
           <button
             onClick={() => togglePinStock(stock.symbol)}
             title={stock.isPinned ? 'Unpin Stock' : 'Pin Stock to Top'}
-            className={`p-1.5 rounded-lg border transition-colors ${
+            className={`p-1.5 rounded-lg border transition-colors shrink-0 ${
               stock.isPinned
                 ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
                 : 'bg-surface-subtle text-slate-400 hover:text-slate-200 border-border'
@@ -83,14 +83,14 @@ export const StockCard: React.FC<StockCardProps> = ({
         </div>
 
         {/* 2. PRICE BLOCK & SPARKLINE ROW */}
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <div className="text-2xl font-extrabold font-sans text-slate-100 tabular-numbers tracking-tight">
+        <div className="flex items-center justify-between gap-2 sm:gap-3 min-w-0">
+          <div className="min-w-0 flex-1">
+            <div className="text-xl sm:text-2xl font-extrabold font-sans text-slate-100 tabular-numbers tracking-tight truncate">
               {formatPrice(stock.currentPrice, currency)}
             </div>
-            <div className="flex items-center gap-2 mt-1 font-mono text-xs">
-              <DeltaBadge value={stock.changePercent} size="sm" />
-              <span className="text-slate-400 text-[11px]">
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-1 font-mono text-xs">
+              <DeltaBadge value={stock.changePercent} size="sm" className="shrink-0" />
+              <span className="text-slate-400 text-[11px] whitespace-nowrap">
                 {stock.changeAmount >= 0 ? '+' : ''}
                 {formatPrice(stock.changeAmount, currency)} today
               </span>
@@ -98,14 +98,15 @@ export const StockCard: React.FC<StockCardProps> = ({
           </div>
 
           {/* Sparkline Trend Graph */}
-          <div className="shrink-0 flex flex-col items-end">
+          <div className="shrink-0 max-w-[45%] flex flex-col items-end">
             <Sparkline
               data={stock.sparkline}
               width={105}
               height={36}
               isPositive={isPositive}
+              className="max-w-full"
             />
-            <span className="text-[10px] text-slate-400 font-mono mt-1">
+            <span className="text-[10px] text-slate-400 font-mono mt-1 whitespace-nowrap text-right">
               7-Day Trajectory
             </span>
           </div>

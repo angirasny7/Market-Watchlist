@@ -45,23 +45,23 @@ export const TopInsightsSection: React.FC = () => {
           return (
             <div
               key={insight.id}
-              className="flex flex-col justify-between bg-surface/85 backdrop-blur-md rounded-[20px] border border-border/80 p-5 hover:border-indigo-500/40 hover:shadow-lg hover:shadow-indigo-500/5 transition-all duration-200 group"
+              className="flex flex-col justify-between bg-surface/85 backdrop-blur-md rounded-[20px] border border-border/80 p-5 hover:border-indigo-500/40 hover:shadow-lg hover:shadow-indigo-500/5 transition-all duration-200 group overflow-hidden"
             >
-              <div className="space-y-3.5">
+              <div className="space-y-3.5 min-w-0">
                 {/* Header: Symbol, Name & Delta */}
-                <div className="flex items-start justify-between gap-3 border-b border-border/60 pb-3">
-                  <div>
-                    <div className="flex items-center gap-2">
+                <div className="flex items-start justify-between gap-3 border-b border-border/60 pb-3 min-w-0">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="font-extrabold text-base text-slate-100 font-sans tracking-tight">
                         {matchedEvent?.companyName || insight.stockSymbol}
                       </span>
-                      <span className="text-xs font-mono font-medium text-slate-400 bg-surface-subtle px-1.5 py-0.5 rounded border border-border">
+                      <span className="text-xs font-mono font-medium text-slate-400 bg-surface-subtle px-1.5 py-0.5 rounded border border-border shrink-0">
                         {insight.stockSymbol}
                       </span>
                     </div>
 
                     {matchedEvent && (
-                      <div className="text-xs text-slate-300 font-medium mt-1">
+                      <div className="text-xs text-slate-300 font-medium mt-1 truncate">
                         {matchedEvent.headline}
                       </div>
                     )}
@@ -71,6 +71,7 @@ export const TopInsightsSection: React.FC = () => {
                     <DeltaBadge
                       value={matchedEvent.changePercent}
                       size="sm"
+                      className="shrink-0"
                     />
                   )}
                 </div>

@@ -47,24 +47,24 @@ export const IndexTickerRibbon: React.FC = () => {
           return (
             <div
               key={index.symbol}
-              className="p-4 rounded-xl bg-surface border border-border hover:border-slate-700 transition-all hover:shadow-md flex flex-col justify-between space-y-3"
+              className="p-4 rounded-xl bg-surface border border-border hover:border-slate-700 transition-all hover:shadow-md flex flex-col justify-between space-y-3 overflow-hidden"
             >
               {/* Top row: Symbol and Exchange */}
-              <div className="flex items-center justify-between">
-                <div>
+              <div className="flex items-center justify-between gap-2 min-w-0">
+                <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xs">{exchange.flag}</span>
-                    <span className="text-xs font-semibold text-slate-400">
+                    <span className="text-xs shrink-0">{exchange.flag}</span>
+                    <span className="text-xs font-semibold text-slate-400 truncate">
                       {exchange.label}
                     </span>
                   </div>
-                  <h3 className="text-base font-bold text-slate-100 mt-0.5">
+                  <h3 className="text-base font-bold text-slate-100 mt-0.5 truncate">
                     {index.name}
                   </h3>
                 </div>
 
-                <div className="flex flex-col items-end">
-                  <DeltaBadge value={index.changePercent} size="sm" />
+                <div className="flex flex-col items-end shrink-0">
+                  <DeltaBadge value={index.changePercent} size="sm" className="shrink-0" />
                 </div>
               </div>
 

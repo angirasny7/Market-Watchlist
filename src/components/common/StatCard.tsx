@@ -40,41 +40,41 @@ export const StatCard: React.FC<StatCardProps> = ({
     <div
       onClick={onClick}
       className={cn(
-        'relative bg-surface p-4 sm:p-5 rounded-xl border border-border transition-all duration-200 group',
+        'relative bg-surface p-4 sm:p-5 rounded-xl border border-border transition-all duration-200 group overflow-hidden',
         accentGlow,
         isClickable && 'cursor-pointer hover:bg-surface-hover',
         className
       )}
     >
-      <div className="flex items-center justify-between gap-2 mb-2">
-        <span className="text-xs sm:text-sm font-medium text-slate-400">
+      <div className="flex items-center justify-between gap-2 mb-2 min-w-0">
+        <span className="text-xs sm:text-sm font-medium text-slate-400 truncate">
           {label}
         </span>
         {Icon && (
-          <div className="p-1.5 rounded-lg bg-surface-hover text-slate-300 group-hover:text-indigo-400 transition-colors">
+          <div className="p-1.5 rounded-lg bg-surface-hover text-slate-300 group-hover:text-indigo-400 transition-colors shrink-0">
             <Icon className="w-4 h-4" />
           </div>
         )}
       </div>
 
-      <div className="flex items-baseline justify-between gap-3">
-        <span className="text-2xl sm:text-3xl font-bold font-sans text-slate-100 tabular-numbers tracking-tight">
+      <div className="flex items-baseline justify-between gap-2 sm:gap-3 min-w-0">
+        <span className="text-2xl sm:text-3xl font-bold font-sans text-slate-100 tabular-numbers tracking-tight truncate">
           {value}
         </span>
 
         {typeof change === 'number' && (
           <div
             className={cn(
-              'flex items-center text-xs font-mono font-medium px-2 py-0.5 rounded',
+              'flex items-center text-xs font-mono font-medium px-2 py-0.5 rounded whitespace-nowrap shrink-0',
               change >= 0
                 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
                 : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
             )}
           >
             {change >= 0 ? (
-              <TrendingUp className="w-3 h-3 mr-1 inline" />
+              <TrendingUp className="w-3 h-3 mr-1 inline shrink-0" />
             ) : (
-              <TrendingDown className="w-3 h-3 mr-1 inline" />
+              <TrendingDown className="w-3 h-3 mr-1 inline shrink-0" />
             )}
             {change >= 0 ? '+' : ''}
             {change.toFixed(2)}%

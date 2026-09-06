@@ -49,19 +49,19 @@ export const AttentionFeedPreview: React.FC = () => {
           {topEvents.map((event) => (
             <div
               key={event.id}
-              className={`p-4 rounded-xl bg-surface border transition-all duration-200 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:border-slate-700 hover:bg-surface-hover ${
+              className={`p-4 rounded-xl bg-surface border transition-all duration-200 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:border-slate-700 hover:bg-surface-hover overflow-hidden ${
                 !event.read ? 'border-indigo-500/30 shadow-[0_0_15px_-3px_rgba(99,102,241,0.07)]' : 'border-border'
               }`}
             >
               {/* Left: Metadata, Symbol, Badges & Headline */}
-              <div className="space-y-2 max-w-2xl">
+              <div className="space-y-2 max-w-2xl min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <PriorityBadge priority={event.priority} size="sm" />
                   <EventTypeBadge eventType={event.eventType} />
-                  <span className="font-extrabold text-sm text-slate-100 font-sans tracking-wide">
+                  <span className="font-extrabold text-sm text-slate-100 font-sans tracking-wide truncate">
                     {event.companyName}
                   </span>
-                  <span className="text-xs font-mono font-medium text-slate-400 bg-surface-subtle px-1.5 py-0.5 rounded border border-border">
+                  <span className="text-xs font-mono font-medium text-slate-400 bg-surface-subtle px-1.5 py-0.5 rounded border border-border shrink-0">
                     {event.stockSymbol}
                   </span>
                 </div>
@@ -81,7 +81,7 @@ export const AttentionFeedPreview: React.FC = () => {
               </div>
 
               {/* Right: Metrics, Price Delta & Action */}
-              <div className="flex items-center justify-between md:justify-end gap-4 shrink-0 border-t md:border-t-0 pt-2 md:pt-0 border-border">
+              <div className="flex items-center justify-between md:justify-end gap-3 sm:gap-4 shrink-0 border-t md:border-t-0 pt-2 md:pt-0 border-border min-w-0">
                 <div className="text-right">
                   <div className="text-xs font-bold text-slate-100 font-mono">
                     {formatPrice(event.price)}
@@ -90,6 +90,7 @@ export const AttentionFeedPreview: React.FC = () => {
                     <DeltaBadge
                       value={event.changePercent}
                       size="sm"
+                      className="shrink-0"
                     />
                   </div>
                 </div>

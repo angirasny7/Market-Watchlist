@@ -52,12 +52,13 @@ export const Sparkline: React.FC<SparklineProps> = ({
   const areaD = `${pathD} L ${width - paddingX},${height} L ${paddingX},${height} Z`;
 
   return (
-    <div className={cn('relative flex items-center', className)}>
+    <div className={cn('relative flex items-center max-w-full overflow-hidden', className)}>
       <svg
         width={width}
         height={height}
         viewBox={`0 0 ${width} ${height}`}
-        className="overflow-visible"
+        className="max-w-full h-auto overflow-hidden"
+        style={{ maxWidth: width, maxHeight: height }}
       >
         <defs>
           <linearGradient id={fillGradientId} x1="0" y1="0" x2="0" y2="1">

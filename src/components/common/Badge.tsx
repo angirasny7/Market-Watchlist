@@ -235,7 +235,7 @@ export const DeltaBadge: React.FC<DeltaBadgeProps> = ({
   return (
     <span
       className={cn(
-        'inline-flex items-center font-mono tabular-nums rounded font-medium',
+        'inline-flex items-center font-mono tabular-nums rounded font-medium whitespace-nowrap shrink-0 max-w-full',
         isPositive
           ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
           : 'bg-rose-500/15 text-rose-400 border border-rose-500/20',
@@ -244,11 +244,11 @@ export const DeltaBadge: React.FC<DeltaBadgeProps> = ({
       )}
     >
       {isPositive ? (
-        <TrendingUp className="w-3.5 h-3.5 mr-1 inline" />
+        <TrendingUp className="w-3.5 h-3.5 mr-1 inline shrink-0" />
       ) : (
-        <TrendingDown className="w-3.5 h-3.5 mr-1 inline" />
+        <TrendingDown className="w-3.5 h-3.5 mr-1 inline shrink-0" />
       )}
-      {text}
+      <span className="truncate">{text}</span>
     </span>
   );
 };

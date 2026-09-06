@@ -97,20 +97,20 @@ export const SectorHeatmap: React.FC = () => {
           return (
             <div
               key={sector.sector}
-              className="p-4 rounded-xl bg-surface border border-border hover:border-slate-700 transition-all space-y-3"
+              className="p-4 rounded-xl bg-surface border border-border hover:border-slate-700 transition-all space-y-3 overflow-hidden"
             >
               {/* Top Row: Sector Name & Delta */}
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <h3 className="text-sm font-bold text-slate-100">
+              <div className="flex items-start justify-between gap-2 min-w-0">
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-sm font-bold text-slate-100 truncate">
                     {sector.sector}
                   </h3>
-                  <div className="text-[11px] text-slate-400 mt-0.5">
+                  <div className="text-[11px] text-slate-400 mt-0.5 truncate">
                     Lead: <span className="text-slate-200 font-medium">{sector.leadStock}</span>
                   </div>
                 </div>
 
-                <DeltaBadge value={sector.changePercent} size="sm" />
+                <DeltaBadge value={sector.changePercent} size="sm" className="shrink-0" />
               </div>
 
               {/* Visual Performance Gauge Bar */}
