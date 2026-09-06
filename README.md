@@ -23,21 +23,20 @@ Smart Market Watchlist transforms raw market volatility into actionable, evidenc
 └─────────────────┘       └───────────────────────┘       └──────────────────────┘
 ```
 
-1. **What Happened? (Automated Anomaly Detection)**: Continuously scans watched equities and flags statistically abnormal price action, volume surges, or corporate milestones using a deterministic 7-rule engine.
+1. **What Happened? (Automated Anomaly Detection)**: Continuously scans watched equities and flags statistically abnormal price action, volume surges, or corporate milestones using a deterministic 6-rule engine.
 2. **Why Did It Happen? (Context Enrichment Engine)**: Gathers corroborated evidence from real-time news disclosures and official exchange filings, producing multi-factor confidence scores and factual causal drivers before routing users to external verification.
 3. **Does It Matter? (Empirical Historical Pattern Analysis)**: Queries historical price databases to compute forward return probabilities, win rates, and 5-day drift distributions based on how the stock historically reacted to similar catalysts.
 
 ### Key Implemented Features
 
 - **Watchlist Management**: Add, remove, and pin stocks in personalized watchlists with both Grid and Table view modes. Single-write master stock architecture ensures real-time price updates propagate without database write amplification.
-- **Change Detection Engine (`changeDetectionJob.ts`)**: Evaluates all active stock quotes in PostgreSQL on a recurring background cycle with a 4-hour event deduplication window against 7 concrete anomaly rules:
+- **Change Detection Engine (`changeDetectionJob.ts`)**: Evaluates all active stock quotes in PostgreSQL on a recurring background cycle with a 4-hour event deduplication window against 6 concrete anomaly rules:
   - **Rule 1: Price Surge** — Intraday price change $\ge +5.0\%$
   - **Rule 2: Price Drop** — Intraday price change $\le -5.0\%$
   - **Rule 3: Volume Spike** — Trading volume $\ge 2.0\times$ the 20-day historical average (or elevated at $\ge 1.5\times$)
   - **Rule 4: 52-Week High** — Current price within $0.5\%$ of or exceeding the 52-week peak (`currentPrice >= high52w * 0.995`)
   - **Rule 5: 52-Week Low** — Current price within $0.5\%$ of or breaching the 52-week floor (`currentPrice <= low52w * 1.005`)
-  - **Rule 6: Earnings Catalyst** — Keyword matching across recent news (`earnings`, `q1`–`q4`, `profit`) classifying events into `EARNINGS_BEAT` or `EARNINGS_MISS` based on sentiment and price movement
-  - **Rule 7: Capital Distribution** — Keyword matching (`dividend`, `bonus`, `buyback`) generating `DIVIDEND_ANNOUNCED` events
+  - **Rule 6: News Catalyst Detection** — Keyword matching across recent news covering both earnings (`earnings`, `q1`–`q4`, `profit`) classifying events into `EARNINGS_BEAT` or `EARNINGS_MISS` based on sentiment and price movement, and capital distribution (`dividend`, `bonus`, `buyback`) generating `DIVIDEND_ANNOUNCED` events
 - **Attention Scoring (`attentionScoringService.ts`)**: Computes a dynamic 0–100 attention score and assigns priority tiers (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`) factoring in price magnitude, volume ratio, and anomaly category.
 - **Context Enrichment & Confidence Scoring (`contextEnrichmentService.ts`, `confidenceScoringService.ts`)**: Derives deterministic, non-fabricated confidence scores (0–100) based on weighted evidence:
   - News coverage presence: up to 25 pts
@@ -59,9 +58,9 @@ To guarantee both production viability and reliable, zero-dependency offline jud
 
 | Layer / Feature | Real Implementation | Simulated / Mock Fallback | Notes |
 | :--- | :--- | :--- | :--- |
-| **Market Quotes** | `YahooFinanceProvider`<br>(Live quotes via `yahoo-finance2` for NSE/BSE and US stocks) | `SimulatedMarketDataProvider`<br>(Deterministic variations based on seed stock catalog) | Configurable via `MARKET_PROVIDER=yahoo` or `simulated`. Defaults to `simulated` for evaluation reliability. |
-| **Financial News & Disclosures** | `NewsApiProvider`<br>(Live RSS feeds via `rss-parser` from Google News, Economic Times, Yahoo Finance) | `SimulatedNewsProvider`<br>(Pre-seeded realistic contextual news disclosures) | Configurable via `NEWS_PROVIDER=rss` or `simulated`. |
-| **Benchmark Indices in Digests** | Live Yahoo Finance quotes for `^NSEI` (Nifty 50), `^BSESN` (Sensex), `^INDIAVIX` (India VIX) | Fallback to cached benchmark values if provider network times out | Real index values and percentage changes embedded in synthesized digests. |
+| **Market Quotes** | `YahooFinanceProvider`<br>(Live quotes via `yahoo-finance2` for NSE/BSE and US stocks) | `SimulatedMarketDataProvider`<br>(Deterministic variations based on seed stock catalog) | Defaults to live Yahoo Finance and live RSS feeds (MARKET_PROVIDER/NEWS_PROVIDER unset). Set MARKET_PROVIDER=simulated and NEWS_PROVIDER=simulated if you'd prefer offline, rate-limit-free evaluation with deterministic demo data instead. |
+| **Financial News & Disclosures** | `NewsApiProvider`<br>(Live RSS feeds via `rss-parser` from Google News, Economic Times, Yahoo Finance) | `SimulatedNewsProvider`<br>(Pre-seeded realistic contextual news disclosures) | Configurable via `NEWS_PROVIDER=rss` or `simulated`. Defaults to live RSS feeds when unset. |
+| **Benchmark Indices in Digests** | Live Yahoo Finance quotes for `^NSEI` (Nifty 50), `^BSESN` (Sensex), `^INDIAVIX` (India VIX) | Returns null for any benchmark index that fails to fetch (verified via forced-failure testing), rather than caching a stale value or fabricating one. | Real index values and percentage changes embedded in synthesized digests. |
 | **Forward Return Calculations** | `historicalPatternService.ts`<br>Empirically computes forward returns and win rates from `StockPriceHistory` table rows | Returns `null` when empirical sample size is $< 5$ (zero fabrication) | Run `npm run prisma:seed-historical-demo` to populate historical sample bars for demo backtesting. |
 | **Database & Persistence** | PostgreSQL via Prisma ORM (`Stock`, `Event`, `Insight`, `Digest`, `User`, `UserState`) | None | 100% live database persistence for all user watchlists, events, and insights. |
 | **Top-Level Highlights Banner** | None | `src/data/mockMarket.ts`<br>(Macro alerts, sector performance heatmap, broad index tiles) | The top Highlights banner uses static mock data on the frontend; individual stock data, the Attention Feed, Insights, and Digests are 100% backend-driven. |
@@ -110,7 +109,7 @@ To guarantee both production viability and reliable, zero-dependency offline jud
 ### Background Pipeline Scheduling (`scheduler.ts`)
 - **Market Intelligence Pipeline (`*/5 * * * *` — every 5 minutes)**:
   1. `syncStocksJob`: Pulls latest price, volume, and intraday delta; writes historical price snapshot to `StockPriceHistory`.
-  2. `changeDetectionJob`: Runs 7 anomaly rules against active stocks; deduplicates against events within 4 hours; creates `Event` records with attention scores.
+  2. `changeDetectionJob`: Runs 6 anomaly rules against active stocks; deduplicates against events within 4 hours; creates `Event` records with attention scores.
   3. `insightGenerationJob`: Resolves attributed evidence; calculates deterministic confidence scores; queries empirical historical patterns; creates `Insight` records.
   4. `digestGenerationJob`: Pulls benchmark indices; computes per-stock forward performance; creates `Digest` records.
 - **News Sync Job (`*/15 * * * *` — every 15 minutes)**: Fetches and indexes recent financial news items against master tickers.
@@ -190,11 +189,11 @@ cd "Smart Market Watchlist"
    | `JWT_SECRET` | Secret key for signing auth tokens | Pre-populated secure random string |
    | `JWT_EXPIRES_IN` | JWT token validity lifespan | `180d` |
    | `CORS_ORIGIN` | Allowed frontend origins | `http://localhost:3000,http://localhost:5173` |
-   | `MARKET_PROVIDER` | Market quote provider (`simulated` or `yahoo`) | **`simulated`** *(Zero API rate limits/outages for evaluation)* |
-   | `NEWS_PROVIDER` | News feed provider (`simulated` or `rss`) | **`simulated`** *(Reliable contextual disclosures for evaluation)* |
-   | `NEWS_API_KEY` | Optional API key for NewsAPI | Leave blank if using `simulated` or `rss` |
+   | `MARKET_PROVIDER` | Market quote provider (`simulated` or `yahoo`) | Leave unset (defaults to live Yahoo Finance); optional override: `simulated` for offline evaluation |
+   | `NEWS_PROVIDER` | News feed provider (`simulated` or `rss`) | Leave unset (defaults to live RSS feeds); optional override: `simulated` for offline evaluation |
+   | `NEWS_API_KEY` | Optional API key for NewsAPI | Leave blank when using default live RSS or `simulated` |
 
-   > **Recommendation for Evaluators**: Keep `MARKET_PROVIDER=simulated` and `NEWS_PROVIDER=simulated` for initial evaluation. This ensures instant page loads, zero third-party rate limiting, and complete offline reliability. Set `MARKET_PROVIDER=yahoo` and `NEWS_PROVIDER=rss` whenever you wish to connect to live Yahoo Finance and live financial RSS feeds.
+   > **Recommendation for Evaluators**: Defaults to live Yahoo Finance and live RSS feeds (MARKET_PROVIDER/NEWS_PROVIDER unset). Set MARKET_PROVIDER=simulated and NEWS_PROVIDER=simulated if you'd prefer offline, rate-limit-free evaluation with deterministic demo data instead.
 
 3. Start PostgreSQL with Docker Compose:
    ```bash
@@ -215,7 +214,7 @@ cd "Smart Market Watchlist"
    ```bash
    npm run prisma:seed
    ```
-   *What this does*: Populates 8 master stocks (Tata Motors, Infosys, TCS, Reliance, HDFC Bank, Apple, Zomato, Larsen & Toubro), news items, initial anomaly events, evidence-grounded insights, historical market memory digests, and the pre-configured demo user.
+   *What this does*: Populates 10 master stocks (Tata Motors, Infosys, TCS, Reliance, HDFC Bank, Apple, Suzlon, Zomato, Larsen & Toubro, ITC), news items, initial anomaly events, evidence-grounded insights, historical market memory digests, and the pre-configured demo user.
 
 7. Seed historical backtesting data:
    ```bash
@@ -263,7 +262,7 @@ cd "Smart Market Watchlist"
    ```bash
    curl http://localhost:5000/api/providers/status
    ```
-   Expected response: `{"marketProvider":"simulated","marketConnected":true,"newsProvider":"simulated","newsConnected":true}`
+   Expected response (live defaults): `{"marketProvider":"yahoo","marketConnected":true,"newsProvider":"rss","newsConnected":true}` (or `"simulated"` if configured as simulated)
 
 3. **Open Application**: Navigate to `http://localhost:3000` in your browser.
 
