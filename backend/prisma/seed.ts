@@ -362,17 +362,17 @@ async function main() {
 
   // 4. Seed User, UserState & Watchlist
   const salt = await bcrypt.genSalt(10);
-  const passwordHash = await bcrypt.hash('password123', salt);
+  const passwordHash = await bcrypt.hash('Alex1@123', salt);
 
   const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
   const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
 
   const user = await prisma.user.create({
     data: {
-      id: 'usr_angira_001',
-      email: 'angira@marketwatch.pro',
+      id: 'usr_alex_001',
+      email: 'alex1@example.com',
       passwordHash,
-      name: 'Angira',
+      name: 'Alex',
       role: UserRole.PRO,
       lastLoginAt: twoHoursAgo,
       previousLoginAt: fiveDaysAgo,

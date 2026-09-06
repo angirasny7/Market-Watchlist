@@ -61,8 +61,8 @@ export const KpiCard: React.FC<KpiCardProps> = ({
       )}
     >
       {/* Top Header: Label & Icon/Badge */}
-      <div className="flex items-center justify-between gap-3 mb-3">
-        <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 truncate">
+      <div className="flex items-start justify-between gap-2.5 mb-3">
+        <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 leading-snug break-words flex-1 min-w-0">
           {label}
         </span>
         <div className="flex items-center gap-2 shrink-0">

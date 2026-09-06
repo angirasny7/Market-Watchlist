@@ -267,9 +267,11 @@ cd "Smart Market Watchlist"
 
 3. **Open Application**: Navigate to `http://localhost:3000` in your browser.
 
-4. **Sign In with Seeded Demo Account**:
-   - **Email**: `angira@marketwatch.pro`
-   - **Password**: `password123`
+4. **Sign In with Demo Account**:
+   - **Email**: `alex1@example.com`
+   - **Password**: `Alex1@123`
+
+   > **Tip**: You can also click **Create Account** to register your own account and test the application with your own credentials if you prefer not to use the shared demo account.
 
 5. **Verify Core Features**:
    - **Since-Last-Visit Banner**: Displays "Away for 5 days" with calculated event deltas.

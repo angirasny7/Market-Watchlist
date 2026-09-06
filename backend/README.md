@@ -101,8 +101,8 @@ The server will start at `http://localhost:5000`.
 - `POST /api/auth/login` — Authenticate and receive JWT token.
   ```json
   {
-    "email": "angira@marketwatch.pro",
-    "password": "password123"
+    "email": "alex1@example.com",
+    "password": "Alex1@123"
   }
   ```
 - `GET /api/auth/me` — Retrieve authenticated user profile and userState. (Requires `Authorization: Bearer <token>`)
