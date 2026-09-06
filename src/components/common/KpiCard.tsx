@@ -60,24 +60,28 @@ export const KpiCard: React.FC<KpiCardProps> = ({
         className
       )}
     >
-      {/* Top Header: Label & Icon/Badge */}
-      <div className="flex items-start justify-between gap-2.5 mb-3">
-        <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 leading-snug break-words flex-1 min-w-0">
-          {label}
-        </span>
-        <div className="flex items-center gap-2 shrink-0">
-          {badge}
-          {icon && (
-            <div
-              className={cn(
-                'w-8 h-8 rounded-xl border flex items-center justify-center transition-colors shrink-0',
-                accentIconStyles[accent]
-              )}
-            >
-              {icon}
+      {/* Top Header: Label, Badge & Icon */}
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div className="flex-1 min-w-0 space-y-1.5">
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 leading-snug block break-normal whitespace-normal">
+            {label}
+          </span>
+          {badge && (
+            <div className="flex items-center">
+              {badge}
             </div>
           )}
         </div>
+        {icon && (
+          <div
+            className={cn(
+              'w-8 h-8 rounded-xl border flex items-center justify-center transition-colors shrink-0',
+              accentIconStyles[accent]
+            )}
+          >
+            {icon}
+          </div>
+        )}
       </div>
 
       {/* Main Metric Value */}
