@@ -1,40 +1,86 @@
-import React, { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
-  Clock,
-  CheckCircle2,
   RefreshCw,
-  Menu,
-  ChevronDown,
-  Activity,
   LogOut,
+  CheckCircle2,
+  ChevronDown,
 } from 'lucide-react';
 import { useMarketStore } from '../../store/useMarketStore';
 import { useAuthStore } from '../../store/useAuthStore';
-import { cn } from '../../lib/utils';
-import { formatLastActiveTimestamp, formatRelativeTime } from '../../lib/dateUtils';
-import { detectCurrentDevice, getDeviceEmoji } from '../../lib/deviceUtils';
+import { formatRelativeTime } from '../../lib/dateUtils';
+import { detectCurrentDevice } from '../../lib/deviceUtils';
+import { getNseMarketStatus } from '../../lib/marketHours';
 
 interface HeaderProps {
-  onToggleMobileSidebar: () => void;
+  onToggleMobileSidebar?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onToggleMobileSidebar }) => {
-  const navigate = useNavigate();
+export const Header: React.FC<HeaderProps> = () => {
+  const location = useLocation();
+  const { user, logout } = useAuthStore();
   const {
-    userState,
-    marketStatus,
-    toggleMarketStatus,
-    simulateNewSession,
-    isLiveMode,
+    dashboardData,
     isLoading,
     refreshMarketData,
-    dashboardData,
     watchlist,
-    events,
+    userState,
   } = useMarketStore();
-  const { user, logout } = useAuthStore();
-  const [isDeviceMenuOpen, setIsDeviceMenuOpen] = useState(false);
+
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on click outside or Escape
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setIsProfileMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsProfileMenuOpen(false);
+    };
+
+    if (isProfileMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleKeyDown);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isProfileMenuOpen]);
+
+  // Page title mapping
+  const pageTitle = useMemo(() => {
+    switch (location.pathname) {
+      case '/':
+        return 'Dashboard';
+      case '/feed':
+        return 'Attention Feed';
+      case '/watchlist':
+        return 'Watchlist';
+      case '/memory':
+        return 'Market Memory';
+      case '/highlights':
+        return 'Highlights';
+      default:
+        return 'Smart Market Watchlist';
+    }
+  }, [location.pathname]);
+
+  // Non-interactive market status derived from NSE IST hours
+  const marketStatus = useMemo(() => getNseMarketStatus(), []);
+
+  // Data Freshness & Sync status
+  const dataFreshness = dashboardData?.dataFreshness;
+  const isStale = Boolean(dataFreshness?.isStale);
+  const lastSyncedTime = dataFreshness?.lastSyncedAt
+    ? formatRelativeTime(dataFreshness.lastSyncedAt, true)
+    : 'recently';
+
+  // Device & session continuity
+  const detectedDevice = useMemo(() => detectCurrentDevice(), []);
 
   const previousLogin =
     user?.previousLoginAt !== undefined
@@ -43,545 +89,160 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileSidebar }) => {
       ? (dashboardData as any)?.previousLoginAt
       : (dashboardData as any)?.previousSessionAt !== undefined
       ? (dashboardData as any)?.previousSessionAt
-      : userState.previousSessionAt !== undefined
-      ? userState.previousSessionAt
-      : userState.previousLoginAt !== undefined
-      ? userState.previousLoginAt
-      : null;
-  const formattedPreviousLogin = formatLastActiveTimestamp(previousLogin);
+      : userState?.previousSessionAt || null;
 
-  // Dynamic user greeting based on local time
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Good Morning';
-    if (hour < 17) return 'Good Afternoon';
-    return 'Good Evening';
-  };
+  const previousSessionTime = previousLogin
+    ? formatRelativeTime(previousLogin, false)
+    : null;
 
-  // Automatic browser User-Agent device detection
-  const detectedDevice = useMemo(() => {
-    return detectCurrentDevice();
-  }, []);
+  const previousDevice = userState?.previousDevice || (dashboardData as any)?.previousDevice;
 
-  // Compute previous session details
-  const previousSession = useMemo(() => {
-    if (!previousLogin) return null;
-
-    const prevDev = userState.previousDevice;
-    const devType = prevDev?.deviceType || 'Mobile';
-    const devName = prevDev?.deviceName || 'Mobile Phone';
-    const emoji = getDeviceEmoji(devType);
-
-    return {
-      deviceName: devName,
-      deviceType: devType,
-      emoji,
-      time: formatRelativeTime(previousLogin, false),
-      formattedTime: formattedPreviousLogin,
-    };
-  }, [previousLogin, userState.previousDevice, formattedPreviousLogin]);
+  const userName = user?.name || (dashboardData as any)?.userName || 'Investor';
+  const userEmail = user?.email || (dashboardData as any)?.user?.email || '';
 
   return (
-    <header className="min-h-16 h-auto md:h-16 px-4 sm:px-6 bg-surface/90 backdrop-blur-md border-b border-border sticky top-0 z-30 py-2.5 md:py-0 flex flex-col md:flex-row md:items-center md:justify-between gap-2.5 md:gap-0">
-      {/* ========================================================================= */}
-      {/* MOBILE HEADER (< md breakpoint) - DEDICATED CLEAN TWO-ROW LAYOUT          */}
-      {/* ========================================================================= */}
-      <div className="flex flex-col gap-2.5 w-full md:hidden">
-        {/* Top Control Bar: Mobile Menu Toggle & Action Buttons */}
-        <div className="flex items-center justify-between w-full">
-          <button
-            onClick={onToggleMobileSidebar}
-            className="p-1.5 -ml-1 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-surface-hover"
-            aria-label="Toggle Navigation Menu"
-          >
-            <Menu className="w-5 h-5" />
-          </button>
-
-          <div className="flex items-center gap-2">
-            {/* Refresh Live Data Button */}
-            <button
-              onClick={() => refreshMarketData()}
-              disabled={isLoading}
-              title="Refresh live intelligence from PostgreSQL"
-              className="p-1.5 rounded-lg bg-surface border border-border text-slate-300 hover:text-white hover:border-slate-600 disabled:opacity-50 transition-colors"
-            >
-              <RefreshCw className={cn('w-3.5 h-3.5', isLoading && 'animate-spin text-indigo-400')} />
-            </button>
-
-            {/* Market Status Pill */}
-            <button
-              onClick={toggleMarketStatus}
-              title="Click to toggle simulated market session status (Open/Closed)"
-              className={cn(
-                'flex items-center gap-1.5 text-xs font-mono font-medium px-2.5 py-1 rounded-full border transition-all',
-                marketStatus === 'REGULAR_OPEN'
-                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
-                  : 'bg-amber-500/10 text-amber-300 border-amber-500/30 hover:bg-amber-500/20'
-              )}
-            >
-              <span
-                className={cn(
-                  'w-1.5 h-1.5 rounded-full',
-                  marketStatus === 'REGULAR_OPEN'
-                    ? 'bg-emerald-400 animate-pulse'
-                    : 'bg-amber-400'
-                )}
-              />
-              <span>{marketStatus === 'REGULAR_OPEN' ? 'OPEN' : 'CLOSED'}</span>
-            </button>
-
-            {/* Session Continuity Indicator Dropdown */}
-            <div className="relative">
-              <button
-                onClick={() => setIsDeviceMenuOpen(!isDeviceMenuOpen)}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-surface border border-border text-xs text-slate-300 hover:border-slate-600 transition-colors"
-                title="Session Continuity & Device Status"
-              >
-                <span className="text-xs">{detectedDevice.emoji}</span>
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                <ChevronDown className="w-3 h-3 text-slate-400" />
-              </button>
-
-              {/* Session Continuity Card (Mobile Popup) */}
-              {isDeviceMenuOpen && (
-                <>
-                  <div
-                    className="fixed inset-0 z-40"
-                    onClick={() => setIsDeviceMenuOpen(false)}
-                  />
-                  <div className="absolute right-0 mt-2 w-72 rounded-2xl bg-surface/95 border border-border shadow-2xl backdrop-blur-xl p-3 z-50 animate-fade-in space-y-2.5">
-                    {/* Header */}
-                    <div className="flex items-center justify-between pb-1.5 border-b border-border/60">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                        <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-300">
-                          Session Continuity
-                        </span>
-                      </div>
-                      <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded-full font-medium">
-                        Live
-                      </span>
-                    </div>
-
-                    {/* Current Device Section */}
-                    <div className="p-2 rounded-xl bg-surface-subtle border border-border/70 space-y-1">
-                      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                        Current Device
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="text-base">{detectedDevice.emoji}</span>
-                          <div>
-                            <div className="text-xs font-semibold text-slate-100 flex items-center gap-1.5">
-                              <span>{detectedDevice.name}</span>
-                              <span className="text-[9px] font-mono font-medium px-1.5 py-0.2 rounded bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
-                                Current
-                              </span>
-                            </div>
-                            <div className="text-[10px] text-slate-400">
-                              This Browser Session
-                            </div>
-                          </div>
-                        </div>
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                      </div>
-                    </div>
-
-                    {/* Last Session / Fallback Section */}
-                    <div className="p-2 rounded-xl bg-surface-subtle border border-border/70 space-y-1">
-                      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                        {previousSession ? 'Last Session' : 'Session Status'}
-                      </div>
-                      {previousSession ? (
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="text-base">{previousSession.emoji}</span>
-                            <div>
-                              <div className="text-xs font-semibold text-slate-200">
-                                {previousSession.deviceName}
-                              </div>
-                              <div className="text-[10px] text-slate-400 font-mono">
-                                {previousSession.time}
-                              </div>
-                            </div>
-                          </div>
-                          <span className="text-[10px] text-emerald-400/90 font-mono bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded">
-                            Synced
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="text-base">✨</span>
-                            <div>
-                              <div className="text-xs font-semibold text-slate-200">
-                                First Login Session
-                              </div>
-                              <div className="text-[10px] text-emerald-400 font-mono">
-                                Active Now
-                              </div>
-                            </div>
-                          </div>
-                          <span className="text-[10px] text-emerald-400 font-mono bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded">
-                            Active
-                          </span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Status: Everything synced successfully */}
-                    <div className="px-2.5 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-2 text-emerald-400">
-                      <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
-                      <div className="text-[11px] leading-tight">
-                        <span className="font-semibold block text-emerald-300">
-                          Everything synced successfully
-                        </span>
-                        <span className="text-[10px] text-emerald-400/80">
-                          Portfolio & market state preserved
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Intelligence Snapshot */}
-                    <div className="grid grid-cols-2 gap-1.5 pt-1 border-t border-border/60">
-                      <div className="p-1.5 rounded-lg bg-surface border border-border/60 text-center">
-                        <div className="text-[10px] text-slate-400">Watchlist</div>
-                        <div className="text-xs font-bold text-slate-100 font-mono">
-                          {watchlist.length} Stocks
-                        </div>
-                      </div>
-                      <div className="p-1.5 rounded-lg bg-surface border border-border/60 text-center">
-                        <div className="text-[10px] text-slate-400">Attention Feed</div>
-                        <div className="text-xs font-bold text-slate-100 font-mono">
-                          {events.length} Events
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Session Refresh / Visit Action */}
-                    <div className="pt-0.5">
-                      <button
-                        onClick={() => {
-                          simulateNewSession();
-                          setIsDeviceMenuOpen(false);
-                        }}
-                        className="w-full flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg bg-surface-hover hover:bg-surface-active text-xs text-slate-300 hover:text-white transition-colors border border-border/60 font-medium"
-                      >
-                        <Activity className="w-3.5 h-3.5 text-indigo-400" />
-                        <span>Simulate Session Visit</span>
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* User Logout Button */}
-            <button
-              onClick={async () => {
-                await logout();
-                navigate('/login', { replace: true });
-              }}
-              title="Sign out of account"
-              className="p-1.5 rounded-lg bg-surface border border-border text-slate-400 hover:text-rose-400 hover:border-rose-500/30 hover:bg-rose-500/10 transition-colors"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-
-        {/* User Information Bar (< md) */}
-        <div className="flex flex-col gap-1 w-full">
-          {/* Row 1: User Greeting */}
-          <h1 className="text-sm font-semibold text-slate-100 truncate">
-            {getGreeting()}, {user?.name || userState.userName}
-          </h1>
-
-          {/* Row 2: Status Badges & Activity Indicators */}
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span className="inline-flex items-center text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 shrink-0">
-              Pro Trader
-            </span>
-
-            <div className="flex items-center gap-1.5 text-slate-400 shrink-0">
-              <Clock className="w-3 h-3 text-slate-400" />
-              <span
-                className="text-slate-200 font-mono text-[11px] font-medium"
-                title={formattedPreviousLogin}
-              >
-                {previousLogin ? `Last active: ${formatRelativeTime(previousLogin, true)}` : 'First Login Session'}
-              </span>
-            </div>
-
-            <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-mono shrink-0">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span>Active Now</span>
-            </div>
-          </div>
-        </div>
+    <header className="h-14 sm:h-16 px-4 sm:px-6 bg-surface/90 backdrop-blur-md border-b border-border sticky top-0 z-30 flex items-center justify-between gap-4">
+      {/* 1. Page Title */}
+      <div className="flex items-center gap-3 min-w-0">
+        <h1 className="text-base sm:text-lg font-semibold text-slate-100 truncate tracking-tight">
+          {pageTitle}
+        </h1>
       </div>
 
-      {/* ========================================================================= */}
-      {/* DESKTOP / TABLET HEADER (>= md breakpoint) - 100% UNCHANGED               */}
-      {/* ========================================================================= */}
-      <div className="hidden md:flex items-center justify-between w-full h-16">
-        {/* Left: Mobile Toggle & Greeting */}
-        <div className="flex items-center gap-3">
-          <button
-            onClick={onToggleMobileSidebar}
-            className="p-2 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-surface-hover lg:hidden"
-          >
-            <Menu className="w-5 h-5" />
-          </button>
-
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-sm sm:text-base font-semibold text-slate-100">
-                {getGreeting()}, {user?.name || userState.userName}
-              </h1>
-              <span className="hidden sm:inline-flex items-center text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                Pro Trader
-              </span>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
-              <div className="flex items-center gap-1.5">
-                <Clock className="w-3 h-3 text-slate-400" />
-                <span className="hidden sm:inline text-slate-400">
-                  {previousLogin ? 'Last active:' : 'Session:'}
-                </span>
-                <span
-                  className="text-slate-200 font-mono text-[11px] font-medium"
-                  title={formattedPreviousLogin}
-                >
-                  {previousLogin ? formatRelativeTime(previousLogin, false) : 'First Login Session'}
-                </span>
-              </div>
-              <span className="text-slate-600 hidden sm:inline">•</span>
-              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-mono">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span>Status: Active Now</span>
-              </div>
-            </div>
-          </div>
+      {/* 2. Right Controls */}
+      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+        {/* Market Status (Non-interactive derived from NSE schedule) */}
+        <div
+          className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border select-none ${
+            marketStatus.isOpen
+              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+              : 'bg-zinc-800 text-zinc-400 border-zinc-700/60'
+          }`}
+          title={marketStatus.subtext}
+        >
+          <span
+            className={`w-1.5 h-1.5 rounded-full ${
+              marketStatus.isOpen ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-500'
+            }`}
+          />
+          <span className="hidden xs:inline">{marketStatus.label}</span>
+          <span className="xs:hidden">{marketStatus.isOpen ? 'Open' : 'Closed'}</span>
         </div>
 
-        {/* Right: Live Data Sync, Market Status, Device Sync & Refresh */}
-        <div className="flex items-center gap-2 sm:gap-3">
-          {/* Live PostgreSQL vs Offline Indicator */}
-          <div
-            className={cn(
-              'hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-mono border',
-              isLiveMode
-                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                : 'bg-amber-500/10 text-amber-300 border-amber-500/30'
-            )}
-            title={isLiveMode ? 'Connected to live PostgreSQL intelligence engine' : 'Running in offline cached mode'}
+        {/* Updated indicator with refresh icon button */}
+        <div className="flex items-center gap-1">
+          <span
+            className={`text-xs px-2 py-0.5 rounded border ${
+              isStale
+                ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                : 'text-slate-400 border-transparent hidden sm:inline'
+            }`}
+            title={dataFreshness?.lastSyncedAt ? `Last synchronized at ${dataFreshness.lastSyncedAt}` : undefined}
           >
-            <span
-              className={cn(
-                'w-1.5 h-1.5 rounded-full',
-                isLiveMode ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
-              )}
-            />
-            <span>{isLiveMode ? 'Live PostgreSQL' : 'Offline Cache'}</span>
-          </div>
+            {isStale ? `Stale • ${lastSyncedTime}` : `Updated ${lastSyncedTime}`}
+          </span>
 
-          {/* Refresh Live Data Button */}
           <button
             onClick={() => refreshMarketData()}
             disabled={isLoading}
-            title="Refresh live intelligence from PostgreSQL"
-            className="p-1.5 rounded-lg bg-surface border border-border text-slate-300 hover:text-white hover:border-slate-600 disabled:opacity-50 transition-colors"
+            aria-label="Refresh market data"
+            title="Refresh market data"
+            className="p-1.5 rounded-lg border border-border bg-surface text-slate-300 hover:text-white hover:border-slate-600 disabled:opacity-50 transition-colors"
           >
-            <RefreshCw className={cn('w-3.5 h-3.5', isLoading && 'animate-spin text-indigo-400')} />
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-indigo-400' : ''}`} />
           </button>
+        </div>
 
-          {/* Market Status Pill */}
+        {/* 3. Single Unified Profile Menu */}
+        <div className="relative" ref={menuRef}>
           <button
-            onClick={toggleMarketStatus}
-            title="Click to toggle simulated market session status (Open/Closed)"
-            className={cn(
-              'flex items-center gap-1.5 text-xs font-mono font-medium px-2.5 py-1 rounded-full border transition-all',
-              marketStatus === 'REGULAR_OPEN'
-                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
-                : 'bg-amber-500/10 text-amber-300 border-amber-500/30 hover:bg-amber-500/20'
-            )}
+            onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+            aria-expanded={isProfileMenuOpen}
+            aria-haspopup="dialog"
+            aria-label="User profile and session menu"
+            className="flex items-center gap-1.5 p-1 sm:px-2.5 sm:py-1 rounded-lg border border-border bg-surface hover:bg-surface-hover hover:border-slate-600 transition-colors text-xs text-slate-200"
           >
-            <span
-              className={cn(
-                'w-2 h-2 rounded-full',
-                marketStatus === 'REGULAR_OPEN'
-                  ? 'bg-emerald-400 animate-pulse'
-                  : 'bg-amber-400'
-              )}
-            />
-            <span className="hidden sm:inline">Market</span>
-            <span>{marketStatus === 'REGULAR_OPEN' ? 'OPEN' : 'CLOSED'}</span>
+            <div className="w-6 h-6 rounded-full bg-indigo-500/20 border border-indigo-500/40 text-indigo-300 flex items-center justify-center font-semibold text-xs">
+              {userName.charAt(0).toUpperCase()}
+            </div>
+            <span className="hidden sm:inline font-medium max-w-[100px] truncate">{userName}</span>
+            <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
           </button>
 
-          {/* Session Continuity Indicator Dropdown */}
-          <div className="relative">
-            <button
-              onClick={() => setIsDeviceMenuOpen(!isDeviceMenuOpen)}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-surface border border-border text-xs text-slate-300 hover:border-slate-600 transition-colors"
-              title="Session Continuity & Device Status"
+          {/* Profile & Session Continuity Dropdown */}
+          {isProfileMenuOpen && (
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Profile and session details"
+              className="absolute right-0 mt-2 w-72 sm:w-80 rounded-2xl bg-surface/98 border border-border shadow-2xl backdrop-blur-xl p-4 z-50 animate-fade-in space-y-3.5"
             >
-              <span className="text-xs">{detectedDevice.emoji}</span>
-              <span className="hidden lg:inline text-slate-300 font-medium">
-                {detectedDevice.name}
-              </span>
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-              <ChevronDown className="w-3 h-3 text-slate-400" />
-            </button>
+              {/* User Identity Header */}
+              <div className="pb-3 border-b border-border/80">
+                <div className="font-semibold text-sm text-slate-100">{userName}</div>
+                {userEmail && <div className="text-xs text-slate-400 truncate mt-0.5">{userEmail}</div>}
+              </div>
 
-            {/* Session Continuity Card */}
-            {isDeviceMenuOpen && (
-              <>
-                <div
-                  className="fixed inset-0 z-40"
-                  onClick={() => setIsDeviceMenuOpen(false)}
-                />
-                <div className="absolute right-0 mt-2 w-72 rounded-2xl bg-surface/95 border border-border shadow-2xl backdrop-blur-xl p-3 z-50 animate-fade-in space-y-2.5">
-                  {/* Header */}
-                  <div className="flex items-center justify-between pb-1.5 border-b border-border/60">
+              {/* Session Continuity & Device Info */}
+              <div className="space-y-2">
+                <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
+                  Device & Session Continuity
+                </div>
+
+                <div className="p-2.5 rounded-xl bg-surface-subtle border border-border/70 space-y-2 text-xs">
+                  {/* Current Device */}
+                  <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                      <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-300">
-                        Session Continuity
-                      </span>
+                      <span className="text-base">{detectedDevice.emoji}</span>
+                      <div>
+                        <div className="font-medium text-slate-200 flex items-center gap-1">
+                          <span>{detectedDevice.name}</span>
+                          <span className="text-[10px] text-indigo-400 font-mono">(This device)</span>
+                        </div>
+                        <div className="text-[11px] text-slate-400">Current Session</div>
+                      </div>
                     </div>
-                    <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded-full font-medium">
-                      Live
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  </div>
+
+                  {/* Previous Session (if available) */}
+                  {previousSessionTime && (
+                    <div className="pt-2 border-t border-border/50 flex items-center justify-between text-slate-400 text-[11px]">
+                      <span>Last active on {previousDevice?.deviceName || 'Previous device'}</span>
+                      <span className="font-mono text-slate-300">{previousSessionTime}</span>
+                    </div>
+                  )}
+
+                  {/* Sync status */}
+                  <div className="pt-1.5 flex items-center justify-between text-[11px] text-emerald-400">
+                    <span className="flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                      <span>Watchlist & reads synced</span>
                     </span>
-                  </div>
-
-                  {/* Current Device Section */}
-                  <div className="p-2 rounded-xl bg-surface-subtle border border-border/70 space-y-1">
-                    <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                      Current Device
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="text-base">{detectedDevice.emoji}</span>
-                        <div>
-                          <div className="text-xs font-semibold text-slate-100 flex items-center gap-1.5">
-                            <span>{detectedDevice.name}</span>
-                            <span className="text-[9px] font-mono font-medium px-1.5 py-0.2 rounded bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
-                              Current
-                            </span>
-                          </div>
-                          <div className="text-[10px] text-slate-400">
-                            This Browser Session
-                          </div>
-                        </div>
-                      </div>
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                    </div>
-                  </div>
-
-                  {/* Last Session / Fallback Section */}
-                  <div className="p-2 rounded-xl bg-surface-subtle border border-border/70 space-y-1">
-                    <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                      {previousSession ? 'Last Session' : 'Session Status'}
-                    </div>
-                    {previousSession ? (
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="text-base">{previousSession.emoji}</span>
-                          <div>
-                            <div className="text-xs font-semibold text-slate-200">
-                              {previousSession.deviceName}
-                            </div>
-                            <div className="text-[10px] text-slate-400 font-mono">
-                              {previousSession.time}
-                            </div>
-                          </div>
-                        </div>
-                        <span className="text-[10px] text-emerald-400/90 font-mono bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded">
-                          Synced
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="text-base">✨</span>
-                          <div>
-                            <div className="text-xs font-semibold text-slate-200">
-                              First Login Session
-                            </div>
-                            <div className="text-[10px] text-emerald-400 font-mono">
-                              Active Now
-                            </div>
-                          </div>
-                        </div>
-                        <span className="text-[10px] text-emerald-400 font-mono bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded">
-                          Active
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Status: Everything synced successfully */}
-                  <div className="px-2.5 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-2 text-emerald-400">
-                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
-                    <div className="text-[11px] leading-tight">
-                      <span className="font-semibold block text-emerald-300">
-                        Everything synced successfully
-                      </span>
-                      <span className="text-[10px] text-emerald-400/80">
-                        Portfolio & market state preserved
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Intelligence Snapshot */}
-                  <div className="grid grid-cols-2 gap-1.5 pt-1 border-t border-border/60">
-                    <div className="p-1.5 rounded-lg bg-surface border border-border/60 text-center">
-                      <div className="text-[10px] text-slate-400">Watchlist</div>
-                      <div className="text-xs font-bold text-slate-100 font-mono">
-                        {watchlist.length} Stocks
-                      </div>
-                    </div>
-                    <div className="p-1.5 rounded-lg bg-surface border border-border/60 text-center">
-                      <div className="text-[10px] text-slate-400">Attention Feed</div>
-                      <div className="text-xs font-bold text-slate-100 font-mono">
-                        {events.length} Events
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Session Refresh / Visit Action */}
-                  <div className="pt-0.5">
-                    <button
-                      onClick={() => {
-                        simulateNewSession();
-                        setIsDeviceMenuOpen(false);
-                      }}
-                      className="w-full flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg bg-surface-hover hover:bg-surface-active text-xs text-slate-300 hover:text-white transition-colors border border-border/60 font-medium"
-                    >
-                      <Activity className="w-3.5 h-3.5 text-indigo-400" />
-                      <span>Simulate Session Visit</span>
-                    </button>
+                    <span className="font-mono text-slate-300">{watchlist.length} stocks</span>
                   </div>
                 </div>
-              </>
-            )}
-          </div>
+              </div>
 
-          {/* User Logout Button */}
-          <button
-            onClick={async () => {
-              await logout();
-              navigate('/login', { replace: true });
-            }}
-            title="Sign out of account"
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-surface border border-border text-xs text-slate-400 hover:text-rose-400 hover:border-rose-500/30 hover:bg-rose-500/10 transition-colors"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Logout</span>
-          </button>
+              {/* Logout Action */}
+              <div className="pt-2 border-t border-border/80">
+                <button
+                  onClick={() => {
+                    setIsProfileMenuOpen(false);
+                    logout();
+                  }}
+                  className="w-full flex items-center justify-center gap-2 p-2 rounded-xl text-xs font-medium text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 transition-colors"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Log out</span>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </header>
   );
 };
+
+export default Header;

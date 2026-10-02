@@ -150,16 +150,29 @@ export const AttentionFeedPage: React.FC = () => {
       .filter((i): i is NonNullable<typeof i> => Boolean(i));
   }, [displayedEvents, getInsightsByEvent]);
 
+  const [showMetrics, setShowMetrics] = useState(false);
+
   return (
     <PageContainer>
-      {/* 1. Standardized Page Header */}
+      {/* 1. Page Header */}
       <FeedHeader onMarkAllRead={markAllEventsRead} unreadCount={unreadCount} />
 
-      {/* 2. Standardized KPI Grid */}
-      <FeedMetricsSummary
-        visibleEvents={filteredEvents}
-        insights={insights}
-      />
+      {/* Optional Metrics Summary collapsed behind toggle */}
+      <div className="flex items-center justify-end -mt-3 mb-1">
+        <button
+          onClick={() => setShowMetrics(!showMetrics)}
+          className="text-xs text-slate-400 hover:text-slate-200 transition-colors py-1 px-2 rounded hover:bg-surface"
+        >
+          {showMetrics ? 'Hide summary stats' : 'Show summary stats'}
+        </button>
+      </div>
+
+      {showMetrics && (
+        <FeedMetricsSummary
+          visibleEvents={filteredEvents}
+          insights={insights}
+        />
+      )}
 
       {/* 3. Standardized Multi-Dimensional Filter Bar with Watchlist Scope */}
       <FeedFilterBar

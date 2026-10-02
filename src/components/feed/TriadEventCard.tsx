@@ -7,15 +7,14 @@ import {
   CheckCircle2,
   Bookmark,
   BarChart3,
-  ArrowUpRight,
-  Sparkles,
+  ChevronDown,
+  ChevronUp,
+  ShieldCheck,
   FileText,
   AlertCircle,
-  ShieldCheck,
 } from 'lucide-react';
 import { MarketEvent } from '../../types/event';
 import { Insight } from '../../types/insight';
-import { PriorityBadge, EventTypeBadge, DeltaBadge, ConfidenceBadge, Modal } from '../common';
 import { formatPrice } from '../../lib/utils';
 import { useMarketStore } from '../../store/useMarketStore';
 
@@ -28,482 +27,239 @@ export const TriadEventCard: React.FC<TriadEventCardProps> = ({
   event,
   insight,
 }) => {
-  const { markEventRead, saveEventForLater } = useMarketStore();
-  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const { markEventRead, saveEventForLater, watchlist, allStocks } = useMarketStore();
+  const [isExpanded, setIsExpanded] = useState(false);
 
-  const isAMZN = event.stockSymbol === 'AMZN';
-  const currency = isAMZN ? '$' : '₹';
+  // Dynamic currency from stock catalog
+  const matchedStock =
+    watchlist.find((s) => s.symbol === event.stockSymbol) ||
+    allStocks.find((s) => s.symbol === event.stockSymbol);
+  const currency = matchedStock?.currency || (event as any).currency || '₹';
 
+  // Attention Score translated to plain-English label
+  const score = event.scoring?.finalScore ?? 50;
+  const getScoreBadge = (sc: number, pri: string) => {
+    if (sc >= 80 || pri === 'CRITICAL') {
+      return { label: 'Urgent', color: 'bg-rose-500/10 text-rose-400 border-rose-500/20' };
+    }
+    if (sc >= 65 || pri === 'HIGH') {
+      return { label: 'Important', color: 'bg-amber-500/10 text-amber-400 border-amber-500/20' };
+    }
+    if (sc >= 50) {
+      return { label: 'Worth a look', color: 'bg-indigo-500/10 text-indigo-300 border-indigo-500/20' };
+    }
+    return { label: 'FYI', color: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20' };
+  };
+  const scoreInfo = getScoreBadge(score, event.priority);
+
+  const isGain = event.changePercent >= 0;
   const enrichment = event.enrichment;
-  const hasEvidence = Boolean(enrichment && enrichment.evidence && enrichment.evidence.length > 0);
-  const confidenceScore = enrichment?.confidenceScore ?? (insight ? Math.round(insight.confidenceScore * 100) : Math.round(event.scoring.finalScore));
-  const primaryVerifyUrl = enrichment?.evidence?.[0]?.url || insight?.sourceUrl || 'https://www.nseindia.com';
-  const primaryVerifySource = enrichment?.evidence?.[0]?.source || insight?.sourceName || 'Regulatory Disclosure';
+  const evidenceList = enrichment?.evidence || [];
+  const hasEvidence = evidenceList.length > 0;
+  const confidenceScore =
+    enrichment?.confidenceScore ?? (insight ? Math.round(insight.confidenceScore * 100) : Math.round(score));
+
+  const oneLineWhy =
+    insight?.explanation ||
+    enrichment?.summary ||
+    enrichment?.possibleDrivers?.[0] ||
+    event.whatHappened;
 
   return (
-    <>
-      <article
-        className="rounded-2xl border bg-surface transition-all duration-200 overflow-hidden shadow-sm hover:shadow-md hover:border-slate-700 border-indigo-500/40 shadow-[0_0_20px_-5px_rgba(99,102,241,0.12)]"
-      >
-        {/* CARD HEADER */}
-        <div className="p-4 sm:p-5 border-b border-border/80 bg-surface-subtle/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          {/* Left: Priority, Event Type, Symbol, Company */}
-          <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
-            <PriorityBadge priority={event.priority} size="sm" />
-            <EventTypeBadge eventType={event.eventType} />
+    <article className="rounded-xl border border-border bg-surface hover:border-slate-700 transition-all overflow-hidden shadow-sm">
+      {/* 1. COLLAPSED CARD HEADER & SUMMARY (Always Visible) */}
+      <div className="p-4 sm:p-5 space-y-3">
+        {/* Top Line: Priority, Instrument, Timestamp, Price & Change */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className={`text-[11px] font-medium px-2 py-0.5 rounded-full border ${scoreInfo.color}`}
+              title={`Attention score: ${score.toFixed(1)} / 100`}
+            >
+              {scoreInfo.label}
+            </span>
 
-            <div className="flex items-center gap-1.5 ml-0.5">
-              <span className="font-extrabold text-sm sm:text-base text-slate-100 tracking-tight">
-                {event.companyName}
-              </span>
-              <span className="text-xs font-mono font-medium text-slate-400 bg-surface px-1.5 py-0.5 rounded border border-border">
-                {event.stockSymbol}
-              </span>
+            <span className="font-semibold text-slate-100 text-sm sm:text-base">
+              {event.companyName}
+            </span>
+
+            <span className="text-xs font-mono text-slate-400 bg-surface-subtle px-1.5 py-0.2 rounded border border-border/70">
+              {event.stockSymbol}
+            </span>
+
+            <div className="flex items-center gap-1 text-[11px] text-slate-400 font-mono ml-auto sm:ml-2">
+              <Clock className="w-3 h-3 text-slate-400" />
+              <span>{event.timestamp}</span>
             </div>
           </div>
 
-          {/* Right: Timestamp & Attention Score Meter */}
-          <div className="flex items-center justify-between sm:justify-end gap-3 text-xs font-mono">
-            <div className="flex items-center gap-1 text-slate-400">
-              <Clock className="w-3.5 h-3.5 text-slate-400" />
-              <span>{event.timestamp}</span>
-            </div>
-
-            {/* Score Pill */}
-            <div
-              className="flex items-center gap-1 px-2 py-0.5 rounded bg-surface border border-border text-[11px]"
-              title="Attention Score computed by multi-factor engine"
+          <div className="flex items-center justify-between sm:justify-end gap-3 font-mono text-right">
+            <span className="text-sm sm:text-base font-semibold text-slate-100">
+              {currency}{formatPrice(event.price)}
+            </span>
+            <span
+              className={`text-xs font-medium flex items-center gap-0.5 ${
+                isGain ? 'text-emerald-400' : 'text-rose-400'
+              }`}
             >
-              <span className="text-slate-400">Score:</span>
-              <span
-                className={`font-bold ${
-                  event.scoring.finalScore >= 85
-                    ? 'text-rose-400'
-                    : event.scoring.finalScore >= 70
-                    ? 'text-amber-400'
-                    : 'text-indigo-300'
-                }`}
-              >
-                {event.scoring.finalScore.toFixed(1)}
-              </span>
-            </div>
+              <span>{isGain ? '▲ +' : '▼ '}</span>
+              <span>{Math.abs(event.changePercent).toFixed(2)}%</span>
+            </span>
           </div>
         </div>
 
-        {/* CARD BODY: THE TRIAD */}
-        <div className="p-4 sm:p-6 space-y-5">
-          {/* 1. WHAT HAPPENED SECTION */}
-          <section className="space-y-3">
-            <div className="flex items-center justify-between gap-2">
-              <div className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                <BarChart3 className="w-3.5 h-3.5 text-slate-400" />
-                <span>What Happened</span>
-              </div>
+        {/* Headline */}
+        <h2 className="text-sm sm:text-base font-semibold text-slate-100 leading-snug">
+          {event.headline}
+        </h2>
 
-              {/* Price & Delta */}
-              <div className="flex items-center gap-2 font-mono">
-                <span className="text-sm sm:text-base font-bold text-slate-100 tabular-numbers">
-                  {formatPrice(event.price, currency)}
-                </span>
-                <DeltaBadge value={event.changePercent} size="sm" />
-              </div>
+        {/* One-Line "Why" */}
+        <p className="text-xs sm:text-sm text-slate-400 line-clamp-2 leading-relaxed">
+          <span className="text-slate-300 font-medium">Why: </span>
+          {oneLineWhy}
+        </p>
+
+        {/* Collapsed Actions Bar */}
+        <div className="flex items-center justify-between pt-2 border-t border-border/60 text-xs">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => markEventRead(event.id)}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-surface-subtle hover:bg-surface-hover text-slate-300 hover:text-slate-100 border border-border/70 transition-colors"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Mark as read</span>
+            </button>
+
+            <button
+              onClick={() => saveEventForLater(event.id)}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-surface-subtle hover:bg-surface-hover text-slate-300 hover:text-slate-100 border border-border/70 transition-colors"
+            >
+              <Bookmark className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Save for later</span>
+            </button>
+          </div>
+
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="flex items-center gap-1 font-medium text-indigo-400 hover:text-indigo-300 transition-colors py-1 px-2 rounded hover:bg-surface-hover"
+          >
+            <span>{isExpanded ? 'Hide details' : 'Show details'}</span>
+            {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+          </button>
+        </div>
+      </div>
+
+      {/* 2. EXPANDED DETAILS (What Happened / Why It Happened / Why It Matters / Evidence) */}
+      {isExpanded && (
+        <div className="p-4 sm:p-5 border-t border-border/80 bg-surface-subtle/40 space-y-4 animate-fade-in text-xs sm:text-sm">
+          {/* Detailed What Happened */}
+          <section className="space-y-1.5">
+            <div className="text-[11px] font-mono font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+              <BarChart3 className="w-3.5 h-3.5 text-slate-400" />
+              <span>What Happened</span>
             </div>
+            <p className="text-slate-300 leading-relaxed">{event.whatHappened}</p>
 
-            <h3 className="text-base sm:text-lg font-bold text-slate-100 leading-snug">
-              {event.headline}
-            </h3>
-
-            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              {event.whatHappened}
-            </p>
-
-            {/* Event Metrics Chips Strip */}
+            {/* Metrics Chips */}
             <div className="flex flex-wrap items-center gap-2 pt-1 font-mono text-[11px]">
-              {event.metrics.volumeRatio && (
-                <span className="px-2 py-0.5 rounded-md bg-indigo-500/10 border border-indigo-500/20 text-indigo-300">
-                  ⚡ {event.metrics.volumeRatio}x 20D Avg Volume
+              {event.metrics?.volumeRatio && (
+                <span className="px-2 py-0.5 rounded bg-indigo-500/10 border border-indigo-500/20 text-indigo-300">
+                  Volume: {event.metrics.volumeRatio}x 20D Avg
                 </span>
               )}
-              {event.metrics.dayHigh && (
-                <span className="px-2 py-0.5 rounded-md bg-surface-subtle border border-border text-slate-300">
-                  High: {formatPrice(event.metrics.dayHigh, currency)}
+              {event.metrics?.dayHigh && (
+                <span className="px-2 py-0.5 rounded bg-surface border border-border text-slate-300">
+                  Day High: {currency}{formatPrice(event.metrics.dayHigh)}
                 </span>
               )}
-              {event.metrics.revenueSurprisePercent && (
-                <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-                  Revenue Beat: +{event.metrics.revenueSurprisePercent}%
-                </span>
-              )}
-              {event.metrics.dividendAmount && (
-                <span className="px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/20 text-amber-300">
-                  Dividend: ₹{event.metrics.dividendAmount}/sh
-                </span>
-              )}
-              {event.metrics.contractValue && (
-                <span className="px-2 py-0.5 rounded-md bg-cyan-500/10 border border-cyan-500/20 text-cyan-300">
-                  Deal Value: {event.metrics.contractValue}
+              {event.metrics?.dayLow && (
+                <span className="px-2 py-0.5 rounded bg-surface border border-border text-slate-300">
+                  Day Low: {currency}{formatPrice(event.metrics.dayLow)}
                 </span>
               )}
             </div>
           </section>
 
-          {/* 2. CONTEXT ENRICHMENT & POSSIBLE DRIVERS SECTION */}
-          <section className="p-4 rounded-xl bg-indigo-950/20 border border-indigo-500/25 space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-indigo-300">
-                <Compass className="w-4 h-4 text-indigo-400" />
-                <span>Possible Drivers</span>
-              </div>
+          {/* Why It Happened / Drivers */}
+          <section className="space-y-1.5">
+            <div className="text-[11px] font-mono font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+              <Compass className="w-3.5 h-3.5 text-slate-400" />
+              <span>Why It Happened</span>
+            </div>
+            {enrichment?.possibleDrivers && enrichment.possibleDrivers.length > 0 ? (
+              <ul className="space-y-1 text-slate-300">
+                {enrichment.possibleDrivers.map((driver, idx) => (
+                  <li key={idx} className="flex items-start gap-1.5">
+                    <span className="text-indigo-400 mt-1">•</span>
+                    <span>{driver}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-slate-300 leading-relaxed">{oneLineWhy}</p>
+            )}
+          </section>
 
-              {/* Confidence Score Badge */}
-              <div className="flex items-center gap-2">
-                <div
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-mono font-bold border ${
-                    confidenceScore >= 80
-                      ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
-                      : confidenceScore >= 60
-                      ? 'bg-indigo-500/10 text-indigo-300 border-indigo-500/30'
-                      : 'bg-amber-500/10 text-amber-300 border-amber-500/30'
-                  }`}
-                  title="Multi-factor confidence calculated across news, filings, volume, and price action"
-                >
-                  <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>Confidence: {confidenceScore}%</span>
-                </div>
+          {/* Why It Matters / Impact */}
+          {insight?.whyItMatters && (
+            <section className="space-y-1.5">
+              <div className="text-[11px] font-mono font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                <Lightbulb className="w-3.5 h-3.5 text-slate-400" />
+                <span>Why It Matters</span>
               </div>
+              <p className="text-slate-300 leading-relaxed">{insight.whyItMatters}</p>
+            </section>
+          )}
+
+          {/* Sources & Verification Evidence */}
+          <section className="space-y-2 pt-2 border-t border-border/60">
+            <div className="flex items-center justify-between text-[11px] font-mono text-slate-400">
+              <span className="flex items-center gap-1.5">
+                <FileText className="w-3.5 h-3.5 text-slate-400" />
+                <span>Sources & Evidence</span>
+              </span>
+              <span className="flex items-center gap-1 text-emerald-400">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Confidence: {confidenceScore}%</span>
+              </span>
             </div>
 
-            {/* Drivers Bullet List */}
-            {enrichment?.possibleDrivers && enrichment.possibleDrivers.length > 0 ? (
+            {hasEvidence ? (
               <div className="space-y-1.5">
-                <ul className="space-y-1.5 text-xs sm:text-sm text-slate-200">
-                  {enrichment.possibleDrivers.map((driver, idx) => (
-                    <li key={idx} className="flex items-start gap-2">
-                      <span className="text-indigo-400 font-bold leading-none mt-1">•</span>
-                      <span className="leading-relaxed">{driver}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : enrichment?.summary === 'Supporting evidence currently unavailable.' || !hasEvidence ? (
-              <div className="p-3 rounded-lg bg-surface-subtle/80 border border-border/80 text-xs text-slate-400 italic flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-slate-500 shrink-0" />
-                <span>Supporting evidence currently unavailable.</span>
-              </div>
-            ) : insight ? (
-              <p className="text-xs sm:text-sm text-slate-200 leading-relaxed font-normal">
-                {insight.explanation}
-              </p>
-            ) : (
-              <div className="p-3 rounded-lg bg-surface-subtle/80 border border-border/80 text-xs text-slate-400 italic flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-slate-500 shrink-0" />
-                <span>Supporting evidence currently unavailable.</span>
-              </div>
-            )}
-
-            {/* Supporting Evidence List */}
-            {hasEvidence && enrichment?.evidence && (
-              <div className="space-y-2 pt-2.5 border-t border-indigo-500/20">
-                <div className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between">
-                  <span className="flex items-center gap-1.5">
-                    <FileText className="w-3.5 h-3.5 text-indigo-400" />
-                    <span>Supporting Evidence:</span>
-                  </span>
-                  <span className="text-[10px] text-slate-500 lowercase font-normal font-mono">
-                    {enrichment.evidence.length} verified {enrichment.evidence.length === 1 ? 'source' : 'sources'}
-                  </span>
-                </div>
-                <div className="space-y-1.5">
-                  {enrichment.evidence.map((ev, idx) => (
-                    <div
-                      key={idx}
-                      className="p-2.5 rounded-lg bg-surface/80 border border-border/70 hover:border-indigo-500/40 transition-colors flex items-start justify-between gap-3 text-xs"
-                    >
-                      <div className="space-y-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span
-                            className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold uppercase ${
-                              ev.sourceType === 'FILING'
-                                ? 'bg-purple-500/10 text-purple-300 border border-purple-500/30'
-                                : ev.sourceType === 'ANNOUNCEMENT'
-                                ? 'bg-cyan-500/10 text-cyan-300 border border-cyan-500/30'
-                                : 'bg-blue-500/10 text-blue-300 border border-blue-500/30'
-                            }`}
-                          >
-                            {ev.sourceType}
-                          </span>
-                          <span className="font-semibold text-slate-200">{ev.source}</span>
-                          {ev.publishedAt && (
-                            <span className="text-slate-500 text-[11px] font-mono">
-                              • {new Date(ev.publishedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-slate-300 line-clamp-2 leading-relaxed font-normal">
-                          {ev.title}
-                        </p>
-                      </div>
+                {evidenceList.map((ev, idx) => (
+                  <div
+                    key={idx}
+                    className="p-2 rounded-lg bg-surface border border-border/80 flex items-center justify-between gap-2 text-xs"
+                  >
+                    <div className="min-w-0">
+                      <span className="font-medium text-slate-200 truncate block">{ev.title}</span>
+                      <span className="text-[11px] text-slate-400">{ev.source}</span>
+                    </div>
+                    {ev.url ? (
                       <a
                         href={ev.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="shrink-0 p-1.5 rounded-md hover:bg-surface-hover text-indigo-400 hover:text-indigo-200 transition-colors"
-                        title={`Inspect original source at ${ev.source}`}
+                        className="text-indigo-400 hover:text-indigo-300 shrink-0 p-1"
+                        title="View source"
                       >
                         <ExternalLink className="w-3.5 h-3.5" />
                       </a>
-                    </div>
-                  ))}
-                </div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="p-2 rounded-lg bg-surface/50 border border-border/60 text-xs text-slate-400 italic flex items-center gap-1.5">
+                <AlertCircle className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                <span>No source available</span>
               </div>
             )}
-
-            {/* Source Link & Verification Citation */}
-            <div className="pt-2.5 border-t border-indigo-500/15 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
-              <span className="font-mono text-[11px]">
-                Attributed Source:{' '}
-                <span className="text-slate-200 font-medium">
-                  {primaryVerifySource}
-                </span>
-              </span>
-              <a
-                href={primaryVerifyUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 hover:text-indigo-100 border border-indigo-500/40 text-xs font-mono font-medium transition-all shadow-sm"
-              >
-                <span>Verify Source</span>
-                <ExternalLink className="w-3.5 h-3.5 text-indigo-400" />
-              </a>
-            </div>
           </section>
-
-          {/* 3. WHY IT MATTERS SECTION */}
-          {insight && (
-            <section className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/20 space-y-1.5">
-              <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-amber-400">
-                <Lightbulb className="w-4 h-4 text-amber-400" />
-                <span>Why It Matters</span>
-              </div>
-              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-                {insight.whyItMatters}
-              </p>
-            </section>
-          )}
         </div>
-
-        {/* CARD FOOTER ACTIONS */}
-        <div className="p-4 bg-surface-subtle/80 border-t border-border flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            {/* Mark Read CTA */}
-            <button
-              onClick={() => markEventRead(event.id)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20"
-              title="Mark event as read and archive into Market Memory"
-            >
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>Mark Read</span>
-            </button>
-
-            {/* Save For Later CTA */}
-            <button
-              onClick={() => saveEventForLater(event.id)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors bg-indigo-500/10 text-indigo-300 border-indigo-500/30 hover:bg-indigo-500/20"
-              title="Save event for later review in Market Memory"
-            >
-              <Bookmark className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Save For Later</span>
-            </button>
-          </div>
-
-          {/* View Details CTA */}
-          <button
-            onClick={() => setIsDetailModalOpen(true)}
-            className="flex items-center gap-1 px-3.5 py-1.5 rounded-lg bg-surface hover:bg-surface-hover text-xs font-medium text-slate-200 hover:text-white border border-border transition-colors ml-auto"
-          >
-            <span>View Details</span>
-            <ArrowUpRight className="w-3.5 h-3.5 text-slate-400" />
-          </button>
-        </div>
-      </article>
-
-      {/* DETAIL MODAL FOR THIS EVENT */}
-      {isDetailModalOpen && (
-        <Modal
-          isOpen={isDetailModalOpen}
-          onClose={() => setIsDetailModalOpen(false)}
-          title={`${event.companyName} (${event.stockSymbol})`}
-          subtitle={`Detailed Event & Attention Scoring Breakdown • ID: ${event.id}`}
-          maxWidth="lg"
-          footer={
-            <div className="w-full flex items-center justify-between">
-              <span className="text-xs font-mono text-slate-400">
-                Timestamp: {event.timestamp}
-              </span>
-              <button
-                onClick={() => setIsDetailModalOpen(false)}
-                className="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white transition-colors"
-              >
-                Close
-              </button>
-            </div>
-          }
-        >
-          <div className="space-y-4 text-xs sm:text-sm">
-            {/* Header info */}
-            <div className="p-3.5 rounded-xl bg-surface-subtle border border-border flex items-center justify-between">
-              <div>
-                <div className="text-base font-bold text-slate-100">
-                  {event.headline}
-                </div>
-                <div className="text-xs text-slate-400 font-mono mt-0.5">
-                  Price: {formatPrice(event.price, currency)} (
-                  {event.changePercent >= 0 ? '+' : ''}
-                  {event.changePercent}%)
-                </div>
-              </div>
-              <PriorityBadge priority={event.priority} />
-            </div>
-
-            {/* Scoring Breakdown Grid */}
-            <div className="space-y-2">
-              <div className="text-xs font-semibold uppercase text-slate-400 tracking-wider font-mono flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Attention Scoring Breakdown (0–100 Scale)</span>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono text-xs">
-                <div className="p-2.5 rounded-lg bg-surface border border-border">
-                  <div className="text-[10px] text-slate-400">Event Base</div>
-                  <div className="font-bold text-slate-100 mt-0.5">
-                    {event.scoring.eventTypeScore}
-                  </div>
-                </div>
-                <div className="p-2.5 rounded-lg bg-surface border border-border">
-                  <div className="text-[10px] text-slate-400">Price Move</div>
-                  <div className="font-bold text-emerald-400 mt-0.5">
-                    {event.scoring.priceMagnitudeScore}
-                  </div>
-                </div>
-                <div className="p-2.5 rounded-lg bg-surface border border-border">
-                  <div className="text-[10px] text-slate-400">Volume Spike</div>
-                  <div className="font-bold text-cyan-400 mt-0.5">
-                    {event.scoring.volumeSpikeScore}
-                  </div>
-                </div>
-                <div className="p-2.5 rounded-lg bg-surface border border-border">
-                  <div className="text-[10px] text-slate-400">Catalyst Boost</div>
-                  <div className="font-bold text-indigo-400 mt-0.5">
-                    {event.scoring.catalystConfidenceScore}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Context Enrichment & Supporting Evidence in Modal */}
-            {enrichment && (
-              <div className="p-3.5 rounded-xl bg-indigo-950/20 border border-indigo-500/25 space-y-3">
-                <div className="flex items-center justify-between text-xs font-semibold text-indigo-300">
-                  <span className="flex items-center gap-1.5">
-                    <Compass className="w-3.5 h-3.5 text-indigo-400" />
-                    <span>Context Enrichment & Drivers</span>
-                  </span>
-                  <span className="font-mono text-[11px] px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-200 border border-indigo-500/30">
-                    Confidence: {confidenceScore}%
-                  </span>
-                </div>
-
-                {enrichment.possibleDrivers.length > 0 ? (
-                  <ul className="space-y-1 text-xs text-slate-200">
-                    {enrichment.possibleDrivers.map((driver, idx) => (
-                      <li key={idx} className="flex items-start gap-2">
-                        <span className="text-indigo-400 font-bold">•</span>
-                        <span>{driver}</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-xs text-slate-400 italic">
-                    Supporting evidence currently unavailable.
-                  </p>
-                )}
-
-                {/* Evidence Items in Modal */}
-                {enrichment.evidence.length > 0 && (
-                  <div className="pt-2 border-t border-indigo-500/20 space-y-1.5">
-                    <div className="text-[11px] font-mono font-bold uppercase text-slate-400">
-                      Verified Supporting Evidence:
-                    </div>
-                    {enrichment.evidence.map((ev, idx) => (
-                      <div
-                        key={idx}
-                        className="p-2 rounded-lg bg-surface border border-border flex items-center justify-between gap-2 text-xs"
-                      >
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <span className="px-1 py-0.2 rounded text-[9px] font-mono font-bold bg-indigo-500/20 text-indigo-300">
-                              {ev.sourceType}
-                            </span>
-                            <span className="font-medium text-slate-300">{ev.source}</span>
-                          </div>
-                          <p className="text-slate-200 truncate mt-0.5">{ev.title}</p>
-                        </div>
-                        <a
-                          href={ev.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="shrink-0 p-1 rounded hover:bg-surface-hover text-indigo-400 hover:text-indigo-200"
-                        >
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </a>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Possible explanation fallback if available and no enrichment */}
-            {!enrichment && insight && (
-              <div className="p-3.5 rounded-xl bg-indigo-950/20 border border-indigo-500/20 space-y-1.5">
-                <div className="flex items-center justify-between text-xs font-semibold text-indigo-300">
-                  <span>Causal Explanation</span>
-                  <ConfidenceBadge
-                    level={insight.confidenceLevel}
-                    score={insight.confidenceScore}
-                  />
-                </div>
-                <p className="text-xs text-slate-200 leading-relaxed">
-                  {insight.explanation}
-                </p>
-                <div className="pt-2 text-[11px] text-slate-400 flex items-center justify-between border-t border-indigo-500/20">
-                  <span>Source: {insight.sourceName}</span>
-                  <a
-                    href={insight.sourceUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-indigo-400 hover:text-indigo-300 flex items-center gap-1"
-                  >
-                    <span>Filing Link</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                </div>
-              </div>
-            )}
-
-            {/* Strategic Impact */}
-            {insight && (
-              <div className="p-3.5 rounded-xl bg-amber-500/5 border border-amber-500/20 space-y-1">
-                <div className="text-xs font-semibold text-amber-400 uppercase tracking-wider">
-                  Why It Matters
-                </div>
-                <p className="text-xs text-slate-300 leading-relaxed">
-                  {insight.whyItMatters}
-                </p>
-              </div>
-            )}
-          </div>
-        </Modal>
       )}
-    </>
+    </article>
   );
 };
+
+export default TriadEventCard;

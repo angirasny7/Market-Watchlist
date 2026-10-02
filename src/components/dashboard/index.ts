@@ -5,3 +5,4 @@ export * from './AttentionFeedPreview';
 export * from './QuickMarketOverview';
 export * from './MarketHighlightsPreview';
 export * from './MarketMemoryPreview';
+export * from './SimpleDashboard';
