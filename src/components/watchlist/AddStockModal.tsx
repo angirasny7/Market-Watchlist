@@ -18,7 +18,7 @@ export const AddStockModal: React.FC<AddStockModalProps> = ({
   onClose,
   targetWatchlistId,
 }) => {
-  const { watchlist, allStocks, watchlistOverview, userWatchlists, addStock, addStockToActiveWatchlist } = useMarketStore();
+  const { watchlist, allStocks, watchlistOverview, userWatchlists, addStockToActiveWatchlist } = useMarketStore();
   const { addToast } = useToastStore();
 
   const [catalog, setCatalog] = useState<StockQuote[]>([]);
@@ -134,7 +134,6 @@ export const AddStockModal: React.FC<AddStockModalProps> = ({
 
     const targetId = targetWatchlistId && targetWatchlistId !== 'all' ? targetWatchlistId : selectedTargetListId;
     addStockToActiveWatchlist(stock.symbol, targetId);
-    addStock(stock);
     setRecentlyAddedSymbol(stock.symbol);
 
     setTimeout(() => {

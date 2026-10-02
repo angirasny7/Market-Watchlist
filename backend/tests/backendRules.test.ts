@@ -389,4 +389,170 @@ describe('Backend Watchlist and Alert Rules Test Suite', () => {
       await prisma.alert.delete({ where: { id: alert.id } }).catch(() => {});
     });
   });
+
+  // =========================================================================
+  // 7. WATCHLIST STOCK ISOLATION (Item 2 bug fix)
+  // =========================================================================
+  describe('Watchlist Stock Isolation', () => {
+    it('adding a stock to non-default watchlist B does NOT add it to the default list', async () => {
+      // Create a non-default watchlist
+      const listB = await watchlistService.createWatchlist(testUserId, 'Isolation Test List');
+
+      // Add stock via the specific watchlist endpoint
+      await watchlistService.addStockToWatchlist(testUserId, listB.id, testStockSymbol);
+
+      // Stock must be in list B
+      const inB = await prisma.watchlistStock.findUnique({
+        where: {
+          watchlistId_stockSymbol: {
+            watchlistId: listB.id,
+            stockSymbol: testStockSymbol,
+          },
+        },
+      });
+      expect(inB).not.toBeNull();
+
+      // Stock must NOT be in the default list (unless it was added separately before)
+      // First remove any pre-existing entry in default to ensure clean test
+      await prisma.watchlistStock.deleteMany({
+        where: { watchlistId: defaultWatchlistId, stockSymbol: testStockSymbol },
+      });
+
+      // Add stock to B again (should be a no-op or error due to duplicate)
+      // Instead, add a fresh stock that definitely isn't in default
+      const isolationSymbol = 'TEST_ISOLATION';
+      await prisma.stock.upsert({
+        where: { symbol: isolationSymbol },
+        create: {
+          symbol: isolationSymbol,
+          companyName: 'Isolation Test Corp',
+          sector: 'Technology',
+          currentPrice: 999,
+          changeAmount: 0,
+          changePercent: 0,
+          marketCap: '10000Cr',
+          high52w: 1200,
+          low52w: 800,
+        },
+        update: {},
+      });
+
+      await watchlistService.addStockToWatchlist(testUserId, listB.id, isolationSymbol);
+
+      // Verify it's in list B
+      const inListB = await prisma.watchlistStock.findUnique({
+        where: {
+          watchlistId_stockSymbol: {
+            watchlistId: listB.id,
+            stockSymbol: isolationSymbol,
+          },
+        },
+      });
+      expect(inListB).not.toBeNull();
+
+      // Verify it is NOT in the default list
+      const inDefault = await prisma.watchlistStock.findUnique({
+        where: {
+          watchlistId_stockSymbol: {
+            watchlistId: defaultWatchlistId,
+            stockSymbol: isolationSymbol,
+          },
+        },
+      });
+      expect(inDefault).toBeNull();
+
+      // Clean up
+      await prisma.watchlist.delete({ where: { id: listB.id } }).catch(() => {});
+      await prisma.stock.delete({ where: { symbol: isolationSymbol } }).catch(() => {});
+    });
+
+    it('legacy addStock without watchlistId defaults to the default watchlist only', async () => {
+      const legacySymbol = 'TEST_LEGACY_ADD';
+      await prisma.stock.upsert({
+        where: { symbol: legacySymbol },
+        create: {
+          symbol: legacySymbol,
+          companyName: 'Legacy Add Test',
+          sector: 'Finance',
+          currentPrice: 500,
+          changeAmount: 0,
+          changePercent: 0,
+          marketCap: '5000Cr',
+          high52w: 600,
+          low52w: 400,
+        },
+        update: {},
+      });
+
+      // Create a non-default list to verify the stock does NOT end up there
+      const otherList = await watchlistService.createWatchlist(testUserId, 'Other Legacy Test');
+
+      // Call legacy addStock without a watchlistId
+      await watchlistService.addStock(testUserId, legacySymbol);
+
+      // Should be in the default list
+      const inDefault = await prisma.watchlistStock.findUnique({
+        where: {
+          watchlistId_stockSymbol: {
+            watchlistId: defaultWatchlistId,
+            stockSymbol: legacySymbol,
+          },
+        },
+      });
+      expect(inDefault).not.toBeNull();
+
+      // Should NOT be in the other list
+      const inOther = await prisma.watchlistStock.findUnique({
+        where: {
+          watchlistId_stockSymbol: {
+            watchlistId: otherList.id,
+            stockSymbol: legacySymbol,
+          },
+        },
+      });
+      expect(inOther).toBeNull();
+
+      // Clean up
+      await prisma.watchlistStock.deleteMany({ where: { stockSymbol: legacySymbol } });
+      await prisma.watchlist.delete({ where: { id: otherList.id } }).catch(() => {});
+      await prisma.stock.delete({ where: { symbol: legacySymbol } }).catch(() => {});
+    });
+  });
+
+  // =========================================================================
+  // 8. ONBOARDING STATUS (Item 2 bug fix)
+  // =========================================================================
+  describe('Onboarding Status', () => {
+    it('isUserOnboarded returns true when user has multiple watchlists even if all are empty', async () => {
+      // Import the function
+      const { isUserOnboarded } = await import('../src/utils/userOnboarding.js');
+
+      // Create a fresh user with only a default empty watchlist
+      const freshUser = await prisma.user.create({
+        data: {
+          email: `onboard_test_${Date.now()}@example.com`,
+          name: 'Onboard Test',
+          passwordHash: 'dummyhash',
+        },
+      });
+      await prisma.watchlist.create({
+        data: { userId: freshUser.id, name: 'Primary Watchlist', isDefault: true },
+      });
+
+      // Single empty default watchlist -> NOT onboarded
+      const before = await isUserOnboarded(freshUser.id);
+      expect(before).toBe(false);
+
+      // Create a second watchlist (empty) -> user IS onboarded
+      const secondWl = await prisma.watchlist.create({
+        data: { userId: freshUser.id, name: 'Custom List', isDefault: false },
+      });
+      const after = await isUserOnboarded(freshUser.id);
+      expect(after).toBe(true);
+
+      // Clean up
+      await prisma.watchlist.deleteMany({ where: { userId: freshUser.id } });
+      await prisma.user.delete({ where: { id: freshUser.id } }).catch(() => {});
+    });
+  });
 });

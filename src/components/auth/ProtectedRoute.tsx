@@ -34,7 +34,7 @@ export const ProtectedRoute: React.FC<{ children?: React.ReactNode }> = ({ child
 
   // 4. Onboarding checks
   // If user has not completed onboarding, force navigation to /onboarding
-  if (user && user.isOnboarded === false && location.pathname !== '/onboarding' && location.pathname !== '/highlights') {
+  if (user && user.isOnboarded === false && location.pathname !== '/onboarding' && location.pathname !== '/highlights' && location.pathname !== '/watchlist') {
     return <Navigate to="/onboarding" replace />;
   }
 

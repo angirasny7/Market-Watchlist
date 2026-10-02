@@ -41,6 +41,7 @@ export const WatchlistPage: React.FC = () => {
     // Store Actions
     fetchUserWatchlists,
     fetchWatchlistOverview,
+    setActiveWatchlistId,
     setWatchlistRange,
     setWatchlistQuickFilter,
     setWatchlistDropdownFilter,
@@ -67,7 +68,7 @@ export const WatchlistPage: React.FC = () => {
 
   // Combine live overview stocks or fallback to adapted store watchlist
   const rawStocks: WatchlistStockItem[] = useMemo(() => {
-    if (watchlistOverview?.stocks && watchlistOverview.stocks.length > 0) {
+    if (watchlistOverview?.stocks) {
       return watchlistOverview.stocks;
     }
 
@@ -125,12 +126,20 @@ export const WatchlistPage: React.FC = () => {
     setDetailStockSymbol(stock.symbol);
   };
 
+  const handleWatchlistCreated = (newId: string) => {
+    setActiveWatchlistId(newId);
+    setIsAddModalOpen(true);
+  };
+
   const isInitialLoading = isOverviewLoading && rawStocks.length === 0;
 
   return (
     <PageContainer>
       {/* 1. Multi-Watchlist Tabs Row */}
-      <WatchlistTabs totalStocksCount={summaryMetrics.totalStocks} />
+      <WatchlistTabs
+        totalStocksCount={summaryMetrics.totalStocks}
+        onWatchlistCreated={handleWatchlistCreated}
+      />
 
       {/* 2. Interactive Quick Filter Summary Cards */}
       <WatchlistSummaryCards

@@ -11,9 +11,13 @@ import {
 
 interface WatchlistTabsProps {
   totalStocksCount: number;
+  onWatchlistCreated?: (newWatchlistId: string) => void;
 }
 
-export const WatchlistTabs: React.FC<WatchlistTabsProps> = ({ totalStocksCount }) => {
+export const WatchlistTabs: React.FC<WatchlistTabsProps> = ({
+  totalStocksCount,
+  onWatchlistCreated,
+}) => {
   const {
     userWatchlists,
     activeWatchlistId,
@@ -143,6 +147,7 @@ export const WatchlistTabs: React.FC<WatchlistTabsProps> = ({ totalStocksCount }
       <CreateWatchlistModal
         isOpen={isCreateOpen}
         onClose={() => setIsCreateOpen(false)}
+        onCreated={onWatchlistCreated}
       />
 
       <RenameWatchlistModal

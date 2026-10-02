@@ -7,9 +7,14 @@ import { useMarketStore } from '../../store/useMarketStore';
 interface CreateWatchlistModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onCreated?: (newWatchlistId: string) => void;
 }
 
-export const CreateWatchlistModal: React.FC<CreateWatchlistModalProps> = ({ isOpen, onClose }) => {
+export const CreateWatchlistModal: React.FC<CreateWatchlistModalProps> = ({
+  isOpen,
+  onClose,
+  onCreated,
+}) => {
   const { createUserWatchlist, userWatchlists } = useMarketStore();
   const [name, setName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -48,6 +53,7 @@ export const CreateWatchlistModal: React.FC<CreateWatchlistModalProps> = ({ isOp
     setIsSubmitting(false);
     if (created) {
       onClose();
+      onCreated?.(created.id);
     }
   };
 
