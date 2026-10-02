@@ -267,6 +267,14 @@ export class AlertService {
       const stock = alert.stock;
       if (!stock) continue;
 
+      // Cooldown safeguard: If alert was triggered within the last 60 minutes, do not trigger again
+      if (alert.triggeredAt) {
+        const cooldownMs = 60 * 60 * 1000;
+        if (now.getTime() - new Date(alert.triggeredAt).getTime() < cooldownMs) {
+          continue;
+        }
+      }
+
       const currentPrice = Number(stock.currentPrice);
       const changePct = Number(stock.changePercent);
       const targetVal = Number(alert.targetValue);

@@ -13,7 +13,8 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:push": "prisma db push",
     "prisma:seed": "tsx prisma/seed.ts",
-    "prisma:seed-historical-demo": "tsx prisma/seedHistoricalDemoData.ts"
+    "prisma:seed-historical-demo": "tsx prisma/seedHistoricalDemoData.ts",
+    "test": "npx vitest run tests/backendRules.test.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.4.1",
