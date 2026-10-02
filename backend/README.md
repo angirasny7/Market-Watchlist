@@ -145,8 +145,34 @@ Aligned with `attentionScoringService.ts`:
 ### Stocks & News (`/api/stocks` & `/api/news`)
 - `GET /api/stocks` — Query canonical master stock catalog (`?sector=&exchange=&search=`).
 - `GET /api/stocks/:symbol` — Get detailed quote, 30-day historical prices, active news, and events.
+- `GET /api/stocks/:symbol/history?range=1D|1W|1M|1Y|ALL` — Historical OHLCV candlesticks for TradingView `lightweight-charts`. Cached in-memory with TTL (5m for intraday `1D`/`1W`, 1h for multi-day `1M`/`1Y`/`ALL`).
 - `GET /api/news` — Ingested regulatory disclosures and news articles (`?symbol=&limit=`).
 - `GET /api/news/:id` — Single news item detail.
+
+### Alerts (`/api/alerts`) (Phase 4)
+- `GET /api/alerts` — List authenticated user's price and attention alerts with associated stock quotes.
+- `POST /api/alerts` — Create alert:
+  ```json
+  {
+    "stockSymbol": "RELIANCE.NS",
+    "alertType": "PRICE_ABOVE", // 'PRICE_ABOVE' | 'PRICE_BELOW' | 'DAY_CHANGE_PCT' | 'ATTENTION_LEVEL'
+    "targetValue": 3100.00
+  }
+  ```
+- `PATCH /api/alerts/:id` — Update alert (`{ "isActive": true, "targetValue": 3150.00 }`).
+- `DELETE /api/alerts/:id` — Delete alert.
+
+### Notifications (`/api/notifications`) (Phase 4)
+- `GET /api/notifications?limit=20` — Retrieve user's recent notifications, unread first.
+- `GET /api/notifications/unread-count` — Count of unread notifications for badge display.
+- `PATCH /api/notifications/:id/read` — Mark a single notification as read.
+- `PATCH /api/notifications/read-all` — Mark all user notifications as read.
+
+### Corporate Events & Next Event Sync (Phase 5)
+- Stored in `corporate_events` table (`CorporateEvent` model: `stockSymbol`, `eventType` [EARNINGS, DIVIDEND, SPLIT, AGM], `eventDate`, `title`, `details`).
+- Automatically seeded for popular stocks in dev/demo if upcoming events < 3.
+- Populated into `GET /api/watchlists/:id/overview` and `all/overview` as `nextEvent: { type, date, label }`.
+- Events within 3 days are highlighted with an amber pulsating dot indicator in the UI.
 
 ### Events & Attention Feed (`/api/events`)
 - `GET /api/events` — Query market anomaly events (`?priority=&eventType=&sinceLastVisit=true&unreadOnly=false`).

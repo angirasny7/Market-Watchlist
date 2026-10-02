@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Pin,
@@ -26,25 +26,46 @@ export const WatchlistTable: React.FC<WatchlistTableProps> = ({
   onSelectStock,
   onOpenAlerts,
 }) => {
+  const rowRefs = useRef<(HTMLTableRowElement | null)[]>([]);
+
+  const handleRowKeyDown = (
+    e: React.KeyboardEvent,
+    index: number,
+    stock: WatchlistStockItem
+  ) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const nextIndex = Math.min(index + 1, stocks.length - 1);
+      rowRefs.current[nextIndex]?.focus();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      const prevIndex = Math.max(index - 1, 0);
+      rowRefs.current[prevIndex]?.focus();
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      onSelectStock(stock);
+    }
+  };
+
   return (
     <div className="w-full overflow-x-auto rounded-2xl border border-border bg-surface shadow-sm">
       <table className="w-full text-left border-collapse" role="table">
         <thead>
-          <tr className="border-b border-border bg-surface-subtle/70 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-            <th className="py-3 pl-4 pr-1 w-10 text-center">Pin</th>
-            <th className="py-3 px-3 min-w-[180px]">Company</th>
-            <th className="py-3 px-3 text-right min-w-[110px]">Market Price</th>
-            <th className="py-3 px-3 text-right min-w-[120px]">Day Change</th>
-            <th className="py-3 px-3 text-center min-w-[100px]">Attention</th>
-            <th className="py-3 px-3 text-center min-w-[80px]">Alerts</th>
-            <th className="py-3 px-3 text-center min-w-[100px]">Unseen Updates</th>
-            <th className="py-3 px-3 min-w-[130px]">Next Event</th>
-            <th className="py-3 px-3 text-center min-w-[110px]">Trend</th>
-            <th className="py-3 pl-3 pr-4 text-right min-w-[100px]">Actions</th>
+          <tr className="border-b border-border bg-surface-subtle/70 text-[11px] font-semibold text-slate-400 uppercase tracking-wider" role="row">
+            <th role="columnheader" className="py-3 pl-4 pr-1 w-10 text-center">Pin</th>
+            <th role="columnheader" className="py-3 px-3 min-w-[170px]">Company</th>
+            <th role="columnheader" className="py-3 px-3 text-right min-w-[110px]">Market Price</th>
+            <th role="columnheader" className="py-3 px-3 text-right min-w-[110px]">Day Change</th>
+            <th role="columnheader" className="py-3 px-3 text-center min-w-[95px]">Attention</th>
+            <th role="columnheader" className="py-3 px-3 text-center min-w-[85px]">Alerts</th>
+            <th role="columnheader" className="py-3 px-3 text-center min-w-[95px]">Updates</th>
+            <th role="columnheader" className="py-3 px-3 min-w-[130px] hidden md:table-cell">Next Event</th>
+            <th role="columnheader" className="py-3 px-3 text-center min-w-[100px] hidden sm:table-cell">Trend</th>
+            <th role="columnheader" className="py-3 pl-3 pr-4 text-right min-w-[100px]">Actions</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-border/60 text-xs">
-          {stocks.map((stock) => {
+          {stocks.map((stock, index) => {
             const isPositive = stock.changePercent >= 0;
             const changeGlyph = isPositive ? '▲ +' : '▼ ';
             const curr = stock.currency || '₹';
@@ -52,8 +73,15 @@ export const WatchlistTable: React.FC<WatchlistTableProps> = ({
             return (
               <tr
                 key={stock.symbol}
+                ref={(el) => {
+                  rowRefs.current[index] = el;
+                }}
+                tabIndex={0}
+                role="row"
+                aria-label={`${stock.symbol}, ${stock.companyName}, price ${curr}${stock.currentPrice.toFixed(2)}, day change ${stock.changePercent.toFixed(2)} percent`}
                 onClick={() => onSelectStock(stock)}
-                className="group hover:bg-surface-hover/80 transition-colors cursor-pointer"
+                onKeyDown={(e) => handleRowKeyDown(e, index, stock)}
+                className="group hover:bg-surface-hover/80 focus:bg-surface-hover/90 focus:outline-none focus:ring-1 focus:ring-indigo-500/60 transition-colors cursor-pointer"
               >
                 {/* 1. Pin Column */}
                 <td
@@ -205,7 +233,7 @@ export const WatchlistTable: React.FC<WatchlistTableProps> = ({
                 </td>
 
                 {/* 8. Next Event */}
-                <td className="py-3.5 px-3">
+                <td className="py-3.5 px-3 hidden md:table-cell">
                   {stock.nextEvent ? (() => {
                     const daysAway = Math.max(
                       0,
@@ -241,7 +269,7 @@ export const WatchlistTable: React.FC<WatchlistTableProps> = ({
                 </td>
 
                 {/* 9. Sparkline */}
-                <td className="py-3.5 px-3 text-center">
+                <td className="py-3.5 px-3 text-center hidden sm:table-cell">
                   <Sparkline
                     points={stock.sparkline}
                     isPositive={isPositive}
