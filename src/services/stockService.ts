@@ -1,7 +1,7 @@
 import { apiClient } from './apiClient';
 import { StockQuote } from '../types/stock';
 
-export type StockChartRange = '1D' | '1W' | '1M' | '1Y' | 'ALL';
+export type StockChartRange = '1D' | '1W' | '1M' | '3M' | '6M' | '1Y';
 
 export interface StockHistoryDataPoint {
   time: number; // Unix timestamp in seconds for lightweight-charts

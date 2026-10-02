@@ -252,9 +252,9 @@ export const StockDetailModal: React.FC<StockDetailModalProps> = ({
               </button>
             </div>
 
-            {/* Timeframe Switcher: 1D | 1W | 1M | 1Y | ALL */}
+            {/* Timeframe Switcher: 1D | 1W | 1M | 3M | 6M | 1Y */}
             <div className="flex items-center p-0.5 rounded-lg bg-surface border border-border">
-              {(['1D', '1W', '1M', '1Y', 'ALL'] as const).map((r) => (
+              {(['1D', '1W', '1M', '3M', '6M', '1Y'] as const).map((r) => (
                 <button
                   key={r}
                   type="button"

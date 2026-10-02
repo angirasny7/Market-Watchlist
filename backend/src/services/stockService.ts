@@ -2,7 +2,7 @@ import { prisma } from '../config/prisma.js';
 import { masterStockCatalog } from '../data/stockCatalogData.js';
 import { ProviderFactory } from '../providers/providerFactory.js';
 
-export type StockHistoryRange = '1D' | '1W' | '1M' | '1Y' | 'ALL';
+export type StockHistoryRange = '1D' | '1W' | '1M' | '3M' | '6M' | '1Y' | 'ALL';
 
 export interface StockHistoryBar {
   time: number; // Unix timestamp in seconds (for lightweight-charts)
@@ -213,6 +213,8 @@ export class StockService {
     if (range === '1D') days = 1;
     else if (range === '1W') days = 7;
     else if (range === '1M') days = 30;
+    else if (range === '3M') days = 90;
+    else if (range === '6M') days = 180;
     else if (range === '1Y') days = 365;
     else if (range === 'ALL') days = 730;
 
@@ -268,7 +270,12 @@ export class StockService {
 
       // Fallback: if provider returned no bars, synthesize mathematically consistent continuous bars
       if (bars.length === 0) {
-        const count = range === '1W' ? 7 : range === '1M' ? 22 : range === '1Y' ? 120 : 200;
+        const count =
+          range === '1W' ? 7 :
+          range === '1M' ? 22 :
+          range === '3M' ? 65 :
+          range === '6M' ? 130 :
+          range === '1Y' ? 250 : 300;
         const stepDays = days / count;
         let prevClose = +(currentPrice / (1 + (changePercent * (count > 20 ? 1.5 : 1)) / 100)).toFixed(2);
 

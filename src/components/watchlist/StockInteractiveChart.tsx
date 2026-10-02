@@ -8,7 +8,9 @@ import {
   ISeriesApi,
   Time,
 } from 'lightweight-charts';
-import { StockHistoryDataPoint } from '../../services/stockService';
+import { StockHistoryDataPoint, StockChartRange } from '../../services/stockService';
+
+export const STOCK_CHART_RANGES: StockChartRange[] = ['1D', '1W', '1M', '3M', '6M', '1Y'];
 
 interface StockInteractiveChartProps {
   dataPoints: StockHistoryDataPoint[];
@@ -16,6 +18,8 @@ interface StockInteractiveChartProps {
   chartType?: 'candlestick' | 'area';
   height?: number;
   isPositive?: boolean;
+  range?: StockChartRange;
+  onRangeChange?: (range: StockChartRange) => void;
 }
 
 export const StockInteractiveChart: React.FC<StockInteractiveChartProps> = ({
@@ -24,6 +28,8 @@ export const StockInteractiveChart: React.FC<StockInteractiveChartProps> = ({
   chartType = 'area',
   height = 320,
   isPositive = true,
+  range,
+  onRangeChange,
 }) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -148,6 +154,24 @@ export const StockInteractiveChart: React.FC<StockInteractiveChartProps> = ({
 
   return (
     <div className="relative w-full rounded-xl overflow-hidden bg-surface-subtle/50 border border-border/80 p-2">
+      {onRangeChange && (
+        <div className="flex items-center justify-end gap-1 mb-2">
+          {STOCK_CHART_RANGES.map((r) => (
+            <button
+              key={r}
+              type="button"
+              onClick={() => onRangeChange(r)}
+              className={`px-2 py-0.5 rounded text-xs font-mono font-medium transition-all ${
+                range === r
+                  ? 'bg-slate-700 text-emerald-400 font-semibold'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              {r}
+            </button>
+          ))}
+        </div>
+      )}
       <div
         ref={chartContainerRef}
         className="w-full relative min-h-[280px]"

@@ -39,7 +39,16 @@ export class StockController {
   async getStockHistory(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const symbol = req.params.symbol as string;
-      const range = (req.query.range as StockHistoryRange) || '1M';
+      const rawRange = ((req.query.range as string) || '1M').toUpperCase();
+      const validRanges: StockHistoryRange[] = ['1D', '1W', '1M', '3M', '6M', '1Y', 'ALL'];
+      if (!validRanges.includes(rawRange as StockHistoryRange)) {
+        res.status(400).json({
+          success: false,
+          error: `Invalid range. Allowed: 1D, 1W, 1M, 3M, 6M, 1Y`,
+        });
+        return;
+      }
+      const range = rawRange as StockHistoryRange;
       const history = await stockService.getStockHistory(symbol, range);
 
       res.status(200).json({
