@@ -12,6 +12,7 @@ import {
   AlertFormModal,
   RemovableStock,
 } from '../components/watchlist';
+import { MoveCopyStockModal } from '../components/watchlist/MoveCopyStockModal';
 import { useMarketStore } from '../store/useMarketStore';
 import { StockQuote } from '../types/stock';
 import {
@@ -56,6 +57,7 @@ export const WatchlistPage: React.FC = () => {
   const [stockToRemove, setStockToRemove] = useState<RemovableStock | null>(null);
   const [activeInsightStock, setActiveInsightStock] = useState<StockQuote | null>(null);
   const [detailStockSymbol, setDetailStockSymbol] = useState<string | null>(null);
+  const [moveCopySymbol, setMoveCopySymbol] = useState<string | null>(null);
 
   // Initial data loading
   useEffect(() => {
@@ -177,6 +179,7 @@ export const WatchlistPage: React.FC = () => {
               setAlertTargetSymbol(symbol);
               setIsAlertModalOpen(true);
             }}
+            onMoveCopyStock={(symbol) => setMoveCopySymbol(symbol)}
           />
         ) : (
           <WatchlistTable
@@ -188,6 +191,7 @@ export const WatchlistPage: React.FC = () => {
               setAlertTargetSymbol(symbol);
               setIsAlertModalOpen(true);
             }}
+            onMoveCopyStock={(symbol) => setMoveCopySymbol(symbol)}
           />
         )
       ) : (
@@ -272,6 +276,15 @@ export const WatchlistPage: React.FC = () => {
           setAlertTargetSymbol(symbol);
           setIsAlertModalOpen(true);
         }}
+        onMoveCopyStock={(symbol) => setMoveCopySymbol(symbol)}
+      />
+
+      {/* Move or Copy Stock Modal */}
+      <MoveCopyStockModal
+        isOpen={Boolean(moveCopySymbol)}
+        onClose={() => setMoveCopySymbol(null)}
+        stockSymbol={moveCopySymbol}
+        currentWatchlistId={activeWatchlistId === 'all' ? undefined : activeWatchlistId}
       />
 
       {/* 9. Set Price & Attention Alert Modal (Phase 4) */}

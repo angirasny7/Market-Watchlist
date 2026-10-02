@@ -37,6 +37,7 @@ model UserState {
   lastSeenAt               DateTime?
   lastDigestViewedId       String?
   lastDigestAcknowledgedId String?
+  preferences              Json?
   updatedAt                DateTime  @updatedAt
   currentDeviceName        String    @default("Laptop")
   currentDeviceType        String    @default("DESKTOP")

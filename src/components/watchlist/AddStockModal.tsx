@@ -18,7 +18,7 @@ export const AddStockModal: React.FC<AddStockModalProps> = ({
   onClose,
   targetWatchlistId,
 }) => {
-  const { watchlist, allStocks, watchlistOverview, addStock, addStockToActiveWatchlist } = useMarketStore();
+  const { watchlist, allStocks, watchlistOverview, userWatchlists, addStock, addStockToActiveWatchlist } = useMarketStore();
   const { addToast } = useToastStore();
 
   const [catalog, setCatalog] = useState<StockQuote[]>([]);
@@ -28,6 +28,17 @@ export const AddStockModal: React.FC<AddStockModalProps> = ({
   const [selectedSector, setSelectedSector] = useState('ALL');
   const [sortOrder, setSortOrder] = useState<'DEFAULT' | 'A-Z' | 'Z-A'>('DEFAULT');
   const [recentlyAddedSymbol, setRecentlyAddedSymbol] = useState<string | null>(null);
+
+  const defaultListId = userWatchlists.find((w) => w.isDefault)?.id || userWatchlists[0]?.id || '';
+  const [selectedTargetListId, setSelectedTargetListId] = useState<string>(targetWatchlistId || defaultListId);
+
+  useEffect(() => {
+    if (targetWatchlistId && targetWatchlistId !== 'all') {
+      setSelectedTargetListId(targetWatchlistId);
+    } else {
+      setSelectedTargetListId(userWatchlists.find((w) => w.isDefault)?.id || userWatchlists[0]?.id || '');
+    }
+  }, [targetWatchlistId, userWatchlists, isOpen]);
 
   // 1. Load full stock catalog whenever modal opens
   useEffect(() => {
@@ -121,7 +132,8 @@ export const AddStockModal: React.FC<AddStockModalProps> = ({
       return;
     }
 
-    addStockToActiveWatchlist(stock.symbol, targetWatchlistId);
+    const targetId = targetWatchlistId && targetWatchlistId !== 'all' ? targetWatchlistId : selectedTargetListId;
+    addStockToActiveWatchlist(stock.symbol, targetId);
     addStock(stock);
     setRecentlyAddedSymbol(stock.symbol);
 
@@ -158,6 +170,24 @@ export const AddStockModal: React.FC<AddStockModalProps> = ({
             </span>
           )}
         </div>
+
+        {/* Target Watchlist Picker for "All" view */}
+        {(!targetWatchlistId || targetWatchlistId === 'all') && userWatchlists.length > 0 && (
+          <div className="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-surface-subtle border border-border text-xs">
+            <span className="text-slate-300 font-medium">Add to Watchlist:</span>
+            <select
+              value={selectedTargetListId}
+              onChange={(e) => setSelectedTargetListId(e.target.value)}
+              className="px-3 py-1.5 rounded-lg bg-surface border border-border text-slate-200 text-xs font-semibold focus:outline-none focus:border-indigo-500"
+            >
+              {userWatchlists.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.name} {w.isDefault ? '(Default)' : ''} ({w.stockCount}/50)
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Search & Market Filter Row */}
         <div className="flex flex-col sm:flex-row items-center gap-2.5">

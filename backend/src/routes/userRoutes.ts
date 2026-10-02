@@ -115,6 +115,7 @@ router.get('/state', authenticateJwt, async (req: AuthenticatedRequest, res: Res
       archivedEventsCount,
       savedEventsCount,
       totalMemoryCount,
+      preferences: userState.preferences || null,
       data: {
         userId,
         userName: dbUser?.name || 'Investor',
@@ -134,7 +135,40 @@ router.get('/state', authenticateJwt, async (req: AuthenticatedRequest, res: Res
         totalMemoryCount,
         lastDigestViewedId: userState.lastDigestViewedId,
         lastDigestAcknowledgedId: userState.lastDigestAcknowledgedId,
+        preferences: userState.preferences || null,
       },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * PATCH /api/user/preferences
+ * Persists user watchlist preferences (selected watchlist, view mode, sort, filter, range).
+ */
+router.patch('/preferences', authenticateJwt, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.status(401).json({ success: false, message: 'Unauthorized' });
+      return;
+    }
+
+    const { preferences } = req.body;
+    if (!preferences || typeof preferences !== 'object') {
+      res.status(400).json({ success: false, message: 'Valid preferences object is required' });
+      return;
+    }
+
+    const updated = await prisma.userState.update({
+      where: { userId },
+      data: { preferences },
+    });
+
+    res.status(200).json({
+      success: true,
+      data: { preferences: updated.preferences },
     });
   } catch (err) {
     next(err);

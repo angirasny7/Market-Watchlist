@@ -34,6 +34,7 @@ import {
   WatchlistSortField,
 } from '../lib/watchlistFilters';
 import { useToastStore } from './useToastStore';
+import { apiClient } from '../services/apiClient';
 
 export type FeedFilterType = 'all' | 'critical' | 'high' | 'earnings' | 'dividend' | '52w' | 'unread';
 export type FeedScopeType = 'watchlist' | 'all';
@@ -87,6 +88,8 @@ interface MarketState {
   addStockToActiveWatchlist: (symbol: string, targetWatchlistId?: string) => Promise<boolean>;
   removeStockFromActiveWatchlist: (symbol: string, targetWatchlistId?: string) => Promise<boolean>;
   togglePinInActiveWatchlist: (symbol: string, targetWatchlistId?: string) => Promise<boolean>;
+  copyStockToWatchlist: (symbol: string, targetWatchlistId: string) => Promise<boolean>;
+  moveStockToWatchlist: (symbol: string, sourceWatchlistId: string, targetWatchlistId: string) => Promise<boolean>;
 
   // Attention Feed State
   feedFilter: FeedFilterType;
@@ -149,6 +152,25 @@ const SAVED_ACTIVE_WL_KEY = 'smw_active_watchlist_id';
 const SAVED_WL_RANGE_KEY = 'smw_watchlist_range';
 const SAVED_WL_VIEW_MODE_KEY = 'smw_watchlist_view_mode';
 const SAVED_WL_SORT_KEY = 'smw_watchlist_sort_field';
+const SAVED_WL_QUICK_FILTER_KEY = 'smw_watchlist_quick_filter';
+const SAVED_WL_DROPDOWN_FILTER_KEY = 'smw_watchlist_dropdown_filter';
+
+let syncTimer: any = null;
+function debouncedSyncPreferences(getState: () => MarketState) {
+  if (syncTimer) clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => {
+    const s = getState();
+    const prefs = {
+      selectedWatchlistId: s.activeWatchlistId,
+      viewMode: s.watchlistViewMode,
+      range: s.watchlistRange,
+      sortField: s.watchlistSortField,
+      quickFilter: s.watchlistQuickFilter,
+      dropdownFilter: s.watchlistDropdownFilter,
+    };
+    apiClient.patch('/user/preferences', { preferences: prefs }).catch(() => {});
+  }, 1000);
+}
 
 export const useMarketStore = create<MarketState>((set, get) => ({
   // Live State
@@ -175,16 +197,25 @@ export const useMarketStore = create<MarketState>((set, get) => ({
   activeWatchlistId: (typeof localStorage !== 'undefined' && localStorage.getItem(SAVED_ACTIVE_WL_KEY)) || 'all',
   watchlistOverview: null,
   watchlistRange: (typeof localStorage !== 'undefined' && (localStorage.getItem(SAVED_WL_RANGE_KEY) as '1D' | '1W' | '1M')) || '1D',
-  watchlistQuickFilter: 'ALL',
-  watchlistDropdownFilter: 'ALL',
+  watchlistQuickFilter: (typeof localStorage !== 'undefined' && (localStorage.getItem(SAVED_WL_QUICK_FILTER_KEY) as WatchlistQuickFilter)) || 'ALL',
+  watchlistDropdownFilter: (typeof localStorage !== 'undefined' && (localStorage.getItem(SAVED_WL_DROPDOWN_FILTER_KEY) as WatchlistDropdownFilter)) || 'ALL',
   watchlistSortField: (typeof localStorage !== 'undefined' && (localStorage.getItem(SAVED_WL_SORT_KEY) as WatchlistSortField)) || 'ATTENTION_SCORE',
   isOverviewLoading: false,
+
+  setWatchlistViewMode: (mode: 'grid' | 'table') => {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(SAVED_WL_VIEW_MODE_KEY, mode);
+    }
+    set({ watchlistViewMode: mode });
+    debouncedSyncPreferences(get);
+  },
 
   setActiveWatchlistId: (id: string | 'all') => {
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem(SAVED_ACTIVE_WL_KEY, id);
     }
     set({ activeWatchlistId: id });
+    debouncedSyncPreferences(get);
     get().fetchWatchlistOverview(id);
   },
 
@@ -193,15 +224,24 @@ export const useMarketStore = create<MarketState>((set, get) => ({
       localStorage.setItem(SAVED_WL_RANGE_KEY, range);
     }
     set({ watchlistRange: range });
+    debouncedSyncPreferences(get);
     get().fetchWatchlistOverview(undefined, range);
   },
 
   setWatchlistQuickFilter: (filter: WatchlistQuickFilter) => {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(SAVED_WL_QUICK_FILTER_KEY, filter);
+    }
     set({ watchlistQuickFilter: filter });
+    debouncedSyncPreferences(get);
   },
 
   setWatchlistDropdownFilter: (filter: WatchlistDropdownFilter) => {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(SAVED_WL_DROPDOWN_FILTER_KEY, filter);
+    }
     set({ watchlistDropdownFilter: filter });
+    debouncedSyncPreferences(get);
   },
 
   setWatchlistSortField: (sort: WatchlistSortField) => {
@@ -209,6 +249,7 @@ export const useMarketStore = create<MarketState>((set, get) => ({
       localStorage.setItem(SAVED_WL_SORT_KEY, sort);
     }
     set({ watchlistSortField: sort });
+    debouncedSyncPreferences(get);
   },
 
   fetchUserWatchlists: async () => {
@@ -428,6 +469,45 @@ export const useMarketStore = create<MarketState>((set, get) => ({
     }
   },
 
+  copyStockToWatchlist: async (symbol: string, targetWatchlistId: string) => {
+    try {
+      const target = get().userWatchlists.find((w) => w.id === targetWatchlistId);
+      const targetName = target ? target.name : 'watchlist';
+      const success = await watchlistService.addStockToWatchlist(targetWatchlistId, symbol);
+      if (success) {
+        useToastStore.getState().addToast(`Copied ${symbol} to "${targetName}"`, 'success');
+        await Promise.all([
+          get().fetchUserWatchlists(),
+          get().fetchWatchlistOverview(),
+        ]);
+        return true;
+      }
+      return false;
+    } catch (err: any) {
+      useToastStore.getState().addToast(err.message || `Failed to copy ${symbol}`, 'error');
+      return false;
+    }
+  },
+
+  moveStockToWatchlist: async (symbol: string, sourceWatchlistId: string, targetWatchlistId: string) => {
+    if (sourceWatchlistId === targetWatchlistId) return true;
+    try {
+      const target = get().userWatchlists.find((w) => w.id === targetWatchlistId);
+      const targetName = target ? target.name : 'watchlist';
+      await watchlistService.addStockToWatchlist(targetWatchlistId, symbol);
+      await watchlistService.removeStockFromWatchlist(sourceWatchlistId, symbol);
+      useToastStore.getState().addToast(`Moved ${symbol} to "${targetName}"`, 'success');
+      await Promise.all([
+        get().fetchUserWatchlists(),
+        get().fetchWatchlistOverview(),
+      ]);
+      return true;
+    } catch (err: any) {
+      useToastStore.getState().addToast(err.message || `Failed to move ${symbol}`, 'error');
+      return false;
+    }
+  },
+
   addStock: (stock: StockQuote) => {
     const prevWatchlist = get().watchlist;
     const exists = prevWatchlist.some((s) => s.symbol === stock.symbol);
@@ -468,13 +548,6 @@ export const useMarketStore = create<MarketState>((set, get) => ({
       set({ watchlist: prevWatchlist });
       useToastStore.getState().addToast(`Failed to update pin for ${symbol}. Reverted.`, 'error');
     });
-  },
-
-  setWatchlistViewMode: (mode: 'grid' | 'table') => {
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(SAVED_WL_VIEW_MODE_KEY, mode);
-    }
-    set({ watchlistViewMode: mode });
   },
 
   setStockSearchQuery: (query: string) => {
@@ -882,6 +955,35 @@ export const useMarketStore = create<MarketState>((set, get) => ({
           allDevices: allDevicesList,
         },
       });
+
+      // Hydrate backend UserState preferences if present (with localStorage fallback)
+      if (userStateRes && (userStateRes as any).preferences && typeof (userStateRes as any).preferences === 'object') {
+        const p = (userStateRes as any).preferences;
+        if (p.selectedWatchlistId) {
+          set({ activeWatchlistId: p.selectedWatchlistId });
+          if (typeof localStorage !== 'undefined') localStorage.setItem(SAVED_ACTIVE_WL_KEY, p.selectedWatchlistId);
+        }
+        if (p.viewMode) {
+          set({ watchlistViewMode: p.viewMode });
+          if (typeof localStorage !== 'undefined') localStorage.setItem(SAVED_WL_VIEW_MODE_KEY, p.viewMode);
+        }
+        if (p.range) {
+          set({ watchlistRange: p.range });
+          if (typeof localStorage !== 'undefined') localStorage.setItem(SAVED_WL_RANGE_KEY, p.range);
+        }
+        if (p.sortField) {
+          set({ watchlistSortField: p.sortField });
+          if (typeof localStorage !== 'undefined') localStorage.setItem(SAVED_WL_SORT_KEY, p.sortField);
+        }
+        if (p.quickFilter) {
+          set({ watchlistQuickFilter: p.quickFilter });
+          if (typeof localStorage !== 'undefined') localStorage.setItem(SAVED_WL_QUICK_FILTER_KEY, p.quickFilter);
+        }
+        if (p.dropdownFilter) {
+          set({ watchlistDropdownFilter: p.dropdownFilter });
+          if (typeof localStorage !== 'undefined') localStorage.setItem(SAVED_WL_DROPDOWN_FILTER_KEY, p.dropdownFilter);
+        }
+      }
 
       // Hydrate multi-watchlists and overview in parallel
       get().fetchUserWatchlists().catch(() => {});

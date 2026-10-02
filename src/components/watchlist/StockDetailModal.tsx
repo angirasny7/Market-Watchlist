@@ -10,6 +10,7 @@ import {
   ExternalLink,
   CandlestickChart,
   AreaChart as AreaChartIcon,
+  FolderInput,
 } from 'lucide-react';
 import { Modal } from '../common';
 import { useMarketStore } from '../../store/useMarketStore';
@@ -26,6 +27,7 @@ interface StockDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   onOpenAlertModal?: (symbol: string) => void;
+  onMoveCopyStock?: (symbol: string) => void;
 }
 
 export const StockDetailModal: React.FC<StockDetailModalProps> = ({
@@ -33,6 +35,7 @@ export const StockDetailModal: React.FC<StockDetailModalProps> = ({
   isOpen,
   onClose,
   onOpenAlertModal,
+  onMoveCopyStock,
 }) => {
   const navigate = useNavigate();
   const {
@@ -183,6 +186,18 @@ export const StockDetailModal: React.FC<StockDetailModalProps> = ({
             >
               <Pin className={`w-4 h-4 ${isPinned ? 'fill-amber-400 rotate-45' : ''}`} />
             </button>
+
+            {isInWatchlist && onMoveCopyStock && (
+              <button
+                type="button"
+                onClick={() => onMoveCopyStock(symbol)}
+                title="Move or copy to another watchlist"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border text-xs font-semibold text-slate-300 hover:text-white hover:bg-surface-hover transition-all shadow-sm"
+              >
+                <FolderInput className="w-3.5 h-3.5 text-slate-400" />
+                <span>Move/Copy</span>
+              </button>
+            )}
 
             <button
               type="button"

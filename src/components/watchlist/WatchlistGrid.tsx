@@ -7,6 +7,7 @@ import {
   Bell,
   Sparkles,
   Calendar,
+  FolderInput,
 } from 'lucide-react';
 import { WatchlistStockItem } from '../../lib/watchlistFilters';
 import { Sparkline } from './Sparkline';
@@ -17,6 +18,7 @@ interface WatchlistGridProps {
   onRemoveStock: (stock: WatchlistStockItem) => void;
   onSelectStock: (stock: WatchlistStockItem) => void;
   onOpenAlerts?: (symbol: string) => void;
+  onMoveCopyStock?: (symbol: string) => void;
 }
 
 export const WatchlistGrid: React.FC<WatchlistGridProps> = ({
@@ -25,6 +27,7 @@ export const WatchlistGrid: React.FC<WatchlistGridProps> = ({
   onRemoveStock,
   onSelectStock,
   onOpenAlerts,
+  onMoveCopyStock,
 }) => {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
@@ -222,6 +225,19 @@ export const WatchlistGrid: React.FC<WatchlistGridProps> = ({
                   <Bell className="w-3 h-3" />
                   <span>Alert</span>
                 </button>
+
+                {onMoveCopyStock && (
+                  <button
+                    type="button"
+                    onClick={() => onMoveCopyStock(stock.symbol)}
+                    title="Move or copy to another watchlist"
+                    aria-label={`Move or copy ${stock.symbol} to another watchlist`}
+                    className="text-slate-400 hover:text-indigo-400 font-medium flex items-center gap-0.5 transition-colors"
+                  >
+                    <FolderInput className="w-3 h-3" />
+                    <span>Move</span>
+                  </button>
+                )}
               </div>
 
               <button

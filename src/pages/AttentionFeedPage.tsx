@@ -11,7 +11,7 @@ import {
   StatusFilter,
 } from '../components/feed';
 import { useMarketStore } from '../store/useMarketStore';
-import { CheckCircle2, RotateCcw, ShieldAlert, FilterX, ChevronDown, PlusCircle, Database } from 'lucide-react';
+import { CheckCircle2, RotateCcw, ShieldAlert, FilterX, ChevronDown, PlusCircle, Database, X } from 'lucide-react';
 
 import { PageContainer, FeedSkeleton, ErrorState } from '../components/common';
 
@@ -19,7 +19,7 @@ const PAGE_SIZE = 8;
 
 export const AttentionFeedPage: React.FC = () => {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const {
     watchlist,
     events,
@@ -44,13 +44,14 @@ export const AttentionFeedPage: React.FC = () => {
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   // Sync ?symbol= URL query param (e.g. from Watchlist or StockDetailModal)
+  const symbolParam = searchParams.get('symbol');
+
   useEffect(() => {
-    const symbolParam = searchParams.get('symbol');
     if (symbolParam) {
       setSearchQuery(symbolParam);
       setFeedScope('all');
     }
-  }, [searchParams, setFeedScope]);
+  }, [symbolParam, setFeedScope]);
 
   // Sync store feedFilter (e.g. from Dashboard summary card navigation)
   useEffect(() => {
@@ -69,7 +70,19 @@ export const AttentionFeedPage: React.FC = () => {
     }
   }, [storeFeedFilter]);
 
+  const handleClearSymbolFilter = () => {
+    const newParams = new URLSearchParams(searchParams);
+    newParams.delete('symbol');
+    setSearchParams(newParams, { replace: true });
+    setSearchQuery('');
+  };
+
   const handleResetFilters = () => {
+    if (searchParams.get('symbol')) {
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete('symbol');
+      setSearchParams(newParams, { replace: true });
+    }
     setSearchQuery('');
     setPriorityFilter('ALL');
     setCategoryFilter('ALL');
@@ -205,6 +218,24 @@ export const AttentionFeedPage: React.FC = () => {
         onResetFilters={handleResetFilters}
         isFiltered={isFiltered}
       />
+
+      {/* Dismissible Symbol Filter Chip */}
+      {symbolParam && (
+        <div className="flex items-center gap-2 -mt-2 mb-1">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-indigo-500/15 border border-indigo-500/30 text-xs text-indigo-300">
+            <span className="text-slate-400">Stock filter:</span>
+            <span className="font-bold font-mono text-indigo-200">{symbolParam}</span>
+            <button
+              type="button"
+              onClick={handleClearSymbolFilter}
+              aria-label={`Clear ${symbolParam} filter`}
+              className="p-0.5 rounded hover:bg-indigo-500/25 text-indigo-300 hover:text-white transition-colors"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 4. Confidence Distribution Visualizer */}
       <ConfidenceIndicator insights={visibleInsights} />
