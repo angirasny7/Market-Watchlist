@@ -1,7 +1,8 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Plus, MoreVertical, Edit2, Trash2, Layers } from 'lucide-react';
 import { useMarketStore } from '../../store/useMarketStore';
 import { UserWatchlist } from '../../services/watchlistService';
+import { PopoverMenu } from '../common';
 import {
   CreateWatchlistModal,
   RenameWatchlistModal,
@@ -23,24 +24,6 @@ export const WatchlistTabs: React.FC<WatchlistTabsProps> = ({ totalStocksCount }
   const [renamingWatchlist, setRenamingWatchlist] = useState<UserWatchlist | null>(null);
   const [deletingWatchlist, setDeletingWatchlist] = useState<UserWatchlist | null>(null);
 
-  // Active dropdown menu for "..."
-  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleOutsideClick = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpenId(null);
-      }
-    };
-    if (menuOpenId) {
-      document.addEventListener('mousedown', handleOutsideClick);
-    }
-    return () => {
-      document.removeEventListener('mousedown', handleOutsideClick);
-    };
-  }, [menuOpenId]);
-
   return (
     <>
       <div className="flex items-center justify-between gap-3 border-b border-border/80 pb-2 mb-4 overflow-x-auto no-scrollbar">
@@ -48,6 +31,7 @@ export const WatchlistTabs: React.FC<WatchlistTabsProps> = ({ totalStocksCount }
         <div className="flex items-center gap-1.5 sm:gap-2 min-w-max">
           {/* 1. All Stocks Union Tab */}
           <button
+            type="button"
             onClick={() => setActiveWatchlistId('all')}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all ${
               activeWatchlistId === 'all'
@@ -71,19 +55,37 @@ export const WatchlistTabs: React.FC<WatchlistTabsProps> = ({ totalStocksCount }
           {/* 2. Individual Watchlist Tabs */}
           {userWatchlists.map((wl) => {
             const isActive = activeWatchlistId === wl.id;
-            const isMenuOpen = menuOpenId === wl.id;
+            const menuItems = [
+              {
+                label: 'Rename',
+                icon: <Edit2 className="w-3.5 h-3.5 text-slate-400" />,
+                onClick: () => setRenamingWatchlist(wl),
+              },
+              ...(!wl.isDefault && userWatchlists.length > 1
+                ? [
+                    {
+                      label: 'Delete',
+                      icon: <Trash2 className="w-3.5 h-3.5 text-rose-400" />,
+                      onClick: () => setDeletingWatchlist(wl),
+                      variant: 'danger' as const,
+                    },
+                  ]
+                : []),
+            ];
 
             return (
-              <div key={wl.id} className="relative flex items-center group">
+              <div
+                key={wl.id}
+                className={`flex items-center gap-1.5 pl-3 pr-1 py-1 rounded-lg text-xs sm:text-sm font-medium transition-all ${
+                  isActive
+                    ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-surface-hover border border-transparent'
+                }`}
+              >
                 <button
+                  type="button"
                   onClick={() => setActiveWatchlistId(wl.id)}
-                  className={`flex items-center gap-1.5 sm:gap-2 pl-3 ${
-                    !wl.isDefault && userWatchlists.length > 1 ? 'pr-1.5' : 'pr-3'
-                  } py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all ${
-                    isActive
-                      ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-surface-hover border border-transparent'
-                  }`}
+                  className="flex items-center gap-1.5 sm:gap-2 text-left outline-none"
                 >
                   <span className="max-w-[130px] sm:max-w-[180px] truncate">{wl.name}</span>
                   <span
@@ -95,52 +97,29 @@ export const WatchlistTabs: React.FC<WatchlistTabsProps> = ({ totalStocksCount }
                   >
                     {wl.stockCount}
                   </span>
-
-                  {/* Actions ⋯ Button */}
-                  {(!wl.isDefault || userWatchlists.length > 0) && (
-                    <span
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setMenuOpenId(isMenuOpen ? null : wl.id);
-                      }}
-                      title="Watchlist settings"
-                      className="p-1 rounded hover:bg-surface-active text-slate-400 hover:text-slate-200 transition-colors"
-                    >
-                      <MoreVertical className="w-3.5 h-3.5" />
-                    </span>
-                  )}
                 </button>
 
-                {/* Dropdown Menu */}
-                {isMenuOpen && (
-                  <div
-                    ref={menuRef}
-                    className="absolute left-0 top-full mt-1.5 w-40 rounded-xl bg-surface border border-border shadow-xl backdrop-blur-md p-1 z-30 animate-fade-in"
-                  >
-                    <button
-                      onClick={() => {
-                        setMenuOpenId(null);
-                        setRenamingWatchlist(wl);
-                      }}
-                      className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs text-slate-300 hover:text-white hover:bg-surface-hover transition-colors text-left"
-                    >
-                      <Edit2 className="w-3 h-3 text-slate-400" />
-                      <span>Rename</span>
-                    </button>
-
-                    {!wl.isDefault && userWatchlists.length > 1 && (
+                {/* Actions ⋯ Button via PopoverMenu Portal */}
+                {(!wl.isDefault || userWatchlists.length > 0) && (
+                  <PopoverMenu
+                    ariaLabel={`Settings for ${wl.name}`}
+                    align="left"
+                    trigger={({ ref, onClick, 'aria-haspopup': ariaHasPopup, 'aria-expanded': ariaExpanded }) => (
                       <button
-                        onClick={() => {
-                          setMenuOpenId(null);
-                          setDeletingWatchlist(wl);
-                        }}
-                        className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 transition-colors text-left"
+                        ref={ref}
+                        type="button"
+                        onClick={onClick}
+                        aria-haspopup={ariaHasPopup}
+                        aria-expanded={ariaExpanded}
+                        aria-label={`Settings for ${wl.name}`}
+                        title="Watchlist settings"
+                        className="p-1 rounded hover:bg-surface-active text-slate-400 hover:text-slate-200 transition-colors shrink-0"
                       >
-                        <Trash2 className="w-3 h-3 text-rose-400" />
-                        <span>Delete</span>
+                        <MoreVertical className="w-3.5 h-3.5" />
                       </button>
                     )}
-                  </div>
+                    items={menuItems}
+                  />
                 )}
               </div>
             );
