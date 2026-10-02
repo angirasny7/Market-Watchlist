@@ -290,18 +290,6 @@ export const WatchlistTable: React.FC<WatchlistTableProps> = ({
                   onClick={(e) => e.stopPropagation()}
                 >
                   <div className="flex items-center justify-end gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (onOpenAlerts) onOpenAlerts(stock.symbol);
-                      }}
-                      aria-label={`Set alert for ${stock.symbol}`}
-                      title="Set Alert"
-                      className="p-1 rounded-lg text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 transition-colors"
-                    >
-                      <Bell className="w-3.5 h-3.5" />
-                    </button>
-
                     {onMoveCopyStock && (
                       <button
                         type="button"

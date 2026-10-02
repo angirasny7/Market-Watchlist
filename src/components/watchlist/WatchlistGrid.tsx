@@ -137,7 +137,7 @@ export const WatchlistGrid: React.FC<WatchlistGridProps> = ({
               )}
 
               {/* Active Alerts */}
-              {stock.activeAlertCount > 0 ? (
+              {stock.activeAlertCount > 0 && (
                 <button
                   type="button"
                   onClick={(e) => {
@@ -149,19 +149,6 @@ export const WatchlistGrid: React.FC<WatchlistGridProps> = ({
                 >
                   <Bell className="w-3 h-3 text-indigo-400 fill-indigo-400/30" />
                   <span>{stock.activeAlertCount}</span>
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (onOpenAlerts) onOpenAlerts(stock.symbol);
-                  }}
-                  title="Set Alert"
-                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-surface-subtle border border-border/80 text-slate-500 hover:text-indigo-400 hover:border-indigo-500/30 transition-colors"
-                >
-                  <Bell className="w-3 h-3" />
-                  <span>+</span>
                 </button>
               )}
 
@@ -212,18 +199,6 @@ export const WatchlistGrid: React.FC<WatchlistGridProps> = ({
                 >
                   <span>Details</span>
                   <ExternalLink className="w-3 h-3 text-slate-400" />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (onOpenAlerts) onOpenAlerts(stock.symbol);
-                  }}
-                  title="Set Alert"
-                  className="text-slate-400 hover:text-indigo-400 font-medium flex items-center gap-0.5 transition-colors"
-                >
-                  <Bell className="w-3 h-3" />
-                  <span>Alert</span>
                 </button>
 
                 {onMoveCopyStock && (
