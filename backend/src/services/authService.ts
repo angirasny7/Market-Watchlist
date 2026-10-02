@@ -4,6 +4,7 @@ import { prisma } from '../config/prisma.js';
 import { config } from '../config/env.js';
 import { isUserOnboarded } from '../utils/userOnboarding.js';
 import { parseDeviceInfo } from '../utils/deviceParser.js';
+import { catchUpService } from './catchUpService.js';
 
 export class AuthService {
   /**
@@ -214,6 +215,13 @@ export class AuthService {
     );
 
     const onboarded = await isUserOnboarded(user.id);
+
+    // Trigger non-blocking catch-up if user was away > 30 min
+    if (previousSessionTime && now.getTime() - new Date(previousSessionTime).getTime() > 30 * 60 * 1000) {
+      catchUpService.catchUpForUser(user.id).catch((err) => {
+        console.warn('[AuthService] Asynchronous catch-up on login failed:', err.message);
+      });
+    }
 
     return {
       token,

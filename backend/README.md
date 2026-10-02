@@ -146,3 +146,24 @@ The server will start at `http://localhost:5000`.
 npm run build
 ```
 Emits clean, strictly-typed JavaScript into `backend/dist/`.
+
+---
+
+## 6. External Pipeline Trigger & "While You Were Away" Catch-Up
+
+### Automated Pipeline Trigger (`POST /api/internal/run-pipeline`)
+Render free tier instances sleep after inactivity. To guarantee continuous synchronization regardless of idle sleep:
+- An external cron worker or GitHub Action invokes `POST /api/internal/run-pipeline` every 15 minutes.
+- Protected by the `x-cron-secret` HTTP header which must match the `CRON_SECRET` environment variable. Returns `401 Unauthorized` on mismatch and `503 Service Unavailable` if `CRON_SECRET` is unset.
+- Concurrency protected: if an execution cycle is currently running, subsequent calls return `409 Conflict`.
+- Internal node-cron can be toggled using `ENABLE_INTERNAL_CRON=false`.
+
+### "While You Were Away" Catch-Up Engine (`catchUpService.ts`)
+When a user logs in or views their dashboard after an absence (> 30 minutes since their last session cursor):
+1. **Lightweight Quote Refresh**: If the last global quote sync is older than 30 minutes, real-time quotes are immediately updated for the user's tracked watchlist stocks.
+2. **Historical Bar Reconstruction**: Historical daily price bars covering the absence period (`min(daysSince + 25, 365)`) are evaluated against anomaly thresholds (±5% day price change, 2x 20D volume spikes, 52-week high/low proximity).
+3. **Cumulative Absence Returns**: Detects total drift since the last visit; if `|price now vs price at since| >= 8%`, a cumulative event is synthesized (`"TCS is +12% since your last visit"`).
+4. **Calendar-Day Deduplication**: All reconstructed events deduplicate idempotently on `(stockSymbol, eventType, calendarDate)`.
+5. **Gap Digests**: Synthesizes one digest per missed trading day (if gap $\le$ 7 days) or a consolidated summary dossier (if gap > 7 days), with no minimum event threshold.
+6. **Non-blocking Execution**: The dashboard caps reconciliation at ~8 seconds; if historical data takes longer, current data returns with `dataFreshness: { isStale: true }` and background completion updates on the next refresh.
+

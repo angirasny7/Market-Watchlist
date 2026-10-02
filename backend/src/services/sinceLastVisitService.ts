@@ -1,6 +1,11 @@
 import { prisma } from '../config/prisma.js';
 import { Priority } from '@prisma/client';
 
+export interface DataFreshness {
+  lastSyncedAt: string | null;
+  isStale: boolean;
+}
+
 export interface SinceLastVisitSummary {
   awayDuration: string;
   awayDurationMs: number;
@@ -14,6 +19,7 @@ export interface SinceLastVisitSummary {
   criticalEvents: any[];
   newInsights: any[];
   latestDigest: any | null;
+  dataFreshness: DataFreshness;
 }
 
 export function computeUserSinceTimestamp(userState?: {
@@ -30,15 +36,58 @@ export function computeUserSinceTimestamp(userState?: {
   );
 }
 
+export async function computeDataFreshness(overrideStale = false): Promise<DataFreshness> {
+  const lastSyncRun = await prisma.systemJobRun.findFirst({
+    where: { jobName: 'syncStocksJob', status: 'SUCCESS' },
+    orderBy: { completedAt: 'desc' },
+  });
+
+  const lastStock = await prisma.stock.findFirst({
+    orderBy: { updatedAt: 'desc' },
+    select: { updatedAt: true },
+  });
+
+  const lastSyncedDate = lastSyncRun?.completedAt || lastStock?.updatedAt || null;
+  const lastSyncedAt = lastSyncedDate ? lastSyncedDate.toISOString() : null;
+
+  if (overrideStale) {
+    return { lastSyncedAt, isStale: true };
+  }
+
+  if (!lastSyncedDate) {
+    return { lastSyncedAt: null, isStale: true };
+  }
+
+  const now = new Date();
+  const dayOfWeek = now.getDay(); // 0 is Sunday, 6 is Saturday
+  const isMarketDay = dayOfWeek >= 1 && dayOfWeek <= 5; // Monday to Friday
+  const hoursSinceSync = (now.getTime() - lastSyncedDate.getTime()) / (1000 * 60 * 60);
+
+  let isStale = false;
+  if (isMarketDay) {
+    isStale = hoursSinceSync > 6;
+  } else {
+    isStale = hoursSinceSync > 72;
+  }
+
+  return { lastSyncedAt, isStale };
+}
+
 export class SinceLastVisitService {
   /**
    * Generates intelligence deltas that occurred since the user was last active,
    * prioritizing the user's tracked watchlist stocks.
    */
-  async getIntelligenceSinceLastVisit(userId: string): Promise<SinceLastVisitSummary> {
+  async getIntelligenceSinceLastVisit(userId: string, overrideStale = false): Promise<SinceLastVisitSummary> {
+    const dataFreshness = await computeDataFreshness(overrideStale);
+
     // 1. Resolve UserState
     const userState = await prisma.userState.findUnique({
       where: { userId },
+    });
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { lastLoginAt: true },
     });
 
     // 2. Resolve User's Watchlist Stocks
@@ -49,12 +98,11 @@ export class SinceLastVisitService {
     const watchlistSymbols = new Set(watchlistStocks.map((w) => w.stockSymbol));
     const watchlistArray = Array.from(watchlistSymbols);
 
-    const defaultSince = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000); // 5 days default
-    const lastActivity =
-      userState?.previousSessionAt ||
-      userState?.lastSeenAt ||
-      userState?.lastLoginAt ||
-      defaultSince;
+    const lastActivity = computeUserSinceTimestamp({
+      previousSessionAt: userState?.previousSessionAt,
+      lastSeenAt: userState?.lastSeenAt,
+      lastLoginAt: userState?.lastLoginAt || user?.lastLoginAt,
+    });
 
     // 3. Format away duration
     const elapsedMs = Math.max(0, Date.now() - lastActivity.getTime());
@@ -75,36 +123,27 @@ export class SinceLastVisitService {
         criticalEvents: [],
         newInsights: [],
         latestDigest: null,
+        dataFreshness,
       };
     }
 
     // 4. Find events created while away strictly for user's tracked watchlist stocks
-    let rawEvents = await prisma.event.findMany({
+    // REMOVED fallbacks to historical events to avoid hiding staleness
+    const rawEvents = await prisma.event.findMany({
       where: {
         stockSymbol: { in: watchlistArray },
-        createdAt: { gte: lastActivity },
+        OR: [
+          { timestamp: { gte: lastActivity } },
+          { createdAt: { gte: lastActivity } },
+        ],
       },
       include: {
         stock: true,
         insights: true,
       },
       orderBy: { timestamp: 'desc' },
-      take: 15,
+      take: 25,
     });
-
-    if (rawEvents.length === 0) {
-      rawEvents = await prisma.event.findMany({
-        where: {
-          stockSymbol: { in: watchlistArray },
-        },
-        include: {
-          stock: true,
-          insights: true,
-        },
-        orderBy: { timestamp: 'desc' },
-        take: 8,
-      });
-    }
 
     // Fetch user reads for accurate isolation
     const reads = await prisma.userEventRead.findMany({
@@ -135,10 +174,14 @@ export class SinceLastVisitService {
     const watchlistCritical = criticalEvents;
 
     // 5. Find insights generated strictly for user's tracked watchlist stocks
-    let rawInsights = await prisma.insight.findMany({
+    // REMOVED fallbacks to historical insights to avoid hiding staleness
+    const rawInsights = await prisma.insight.findMany({
       where: {
         stockSymbol: { in: watchlistArray },
-        createdAt: { gte: lastActivity },
+        OR: [
+          { createdAt: { gte: lastActivity } },
+          { event: { timestamp: { gte: lastActivity } } },
+        ],
       },
       include: {
         event: {
@@ -149,21 +192,6 @@ export class SinceLastVisitService {
       take: 20,
     });
 
-    if (rawInsights.length === 0) {
-      rawInsights = await prisma.insight.findMany({
-        where: {
-          stockSymbol: { in: watchlistArray },
-        },
-        include: {
-          event: {
-            include: { stock: true },
-          },
-        },
-        orderBy: { confidenceScore: 'desc' },
-        take: 20,
-      });
-    }
-
     const priorityWeights: Record<string, number> = {
       CRITICAL: 4,
       HIGH: 3,
@@ -171,14 +199,10 @@ export class SinceLastVisitService {
       LOW: 1,
     };
 
-    // Sort candidates by:
-    // 1. Event Priority (CRITICAL > HIGH > MEDIUM > LOW)
-    // 2. Event Attention Score (higher is better)
-    // 3. Insight Confidence Score (higher is better)
-    // 4. Recency (newer is better)
+    // Sort candidates
     const sortedInsights = [...rawInsights].sort((a, b) => {
-      const pA = a.event?.priority ? (priorityWeights[a.event.priority] || 1) : 1;
-      const pB = b.event?.priority ? (priorityWeights[b.event.priority] || 1) : 1;
+      const pA = a.event?.priority ? priorityWeights[a.event.priority] || 1 : 1;
+      const pB = b.event?.priority ? priorityWeights[b.event.priority] || 1 : 1;
       if (pB !== pA) return pB - pA;
 
       const scoreA = Number((a.event?.metricsDelta as any)?.attentionScore ?? 0);
@@ -263,6 +287,7 @@ export class SinceLastVisitService {
       criticalEvents,
       newInsights,
       latestDigest,
+      dataFreshness,
     };
   }
 

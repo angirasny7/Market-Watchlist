@@ -35,6 +35,10 @@ export interface DashboardIntelligence {
     eventsCount: number;
     criticalCount: number;
   };
+  dataFreshness?: {
+    lastSyncedAt: string | null;
+    isStale: boolean;
+  };
 }
 
 export interface UserStateResponse {

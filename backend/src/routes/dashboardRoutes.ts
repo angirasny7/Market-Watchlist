@@ -1,6 +1,7 @@
 import { Router, Response, NextFunction } from 'express';
 import { authenticateJwt, AuthenticatedRequest } from '../middleware/auth.js';
-import { sinceLastVisitService } from '../services/sinceLastVisitService.js';
+import { sinceLastVisitService, computeUserSinceTimestamp } from '../services/sinceLastVisitService.js';
+import { catchUpService } from '../services/catchUpService.js';
 import { serializeBigInt } from '../utils/json.js';
 import { prisma } from '../config/prisma.js';
 import { MarketMood } from '@prisma/client';
@@ -15,7 +16,8 @@ const router = Router();
  * 2. Why did it change?
  * 3. Why should I care?
  * 
- * Strictly requires valid JWT. Returns 401 Unauthorized for anonymous requests.
+ * Automatically performs catch-up reconciliation when returning after absence (>30m),
+ * capped at ~8s to ensure responsive delivery.
  */
 router.get('/', authenticateJwt, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
@@ -25,11 +27,48 @@ router.get('/', authenticateJwt, async (req: AuthenticatedRequest, res: Response
       return;
     }
 
-    // 1. Generate Since-Last-Visit Intelligence for authenticated user
-    const summary = await sinceLastVisitService.getIntelligenceSinceLastVisit(userId);
+    // 1. Resolve user and session state
+    const [dbUser, userState] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, name: true, email: true, lastLoginAt: true, previousLoginAt: true },
+      }),
+      prisma.userState.findUnique({
+        where: { userId },
+      }),
+    ]);
+
+    const since = computeUserSinceTimestamp({
+      previousSessionAt: userState?.previousSessionAt,
+      lastSeenAt: userState?.lastSeenAt,
+      lastLoginAt: userState?.lastLoginAt || dbUser?.lastLoginAt,
+    });
+
+    const isAwayOver30m = Date.now() - since.getTime() > 30 * 60 * 1000;
+    let catchUpTimedOut = false;
+
+    // 2. Trigger non-blocking catchUp capped at ~8 seconds
+    if (isAwayOver30m) {
+      try {
+        const timeoutPromise = new Promise<{ timedOut: boolean }>((resolve) =>
+          setTimeout(() => resolve({ timedOut: true }), 8000)
+        );
+        const catchUpPromise = catchUpService.catchUpForUser(userId).then(() => ({ timedOut: false }));
+        const result = await Promise.race([catchUpPromise, timeoutPromise]);
+        if (result.timedOut) {
+          catchUpTimedOut = true;
+          catchUpPromise.catch((e) => console.warn('[CatchUp background error]', e));
+        }
+      } catch (err: any) {
+        console.warn('[Dashboard] catchUpForUser error:', err.message);
+      }
+    }
+
+    // 3. Generate Since-Last-Visit Intelligence
+    const summary = await sinceLastVisitService.getIntelligenceSinceLastVisit(userId, catchUpTimedOut);
     const isOnboarded = summary.watchlistSymbols.length > 0;
 
-    // 2. Compute Market Mood
+    // 4. Compute Market Mood
     let marketMood: MarketMood = summary.latestDigest?.marketMood || MarketMood.NEUTRAL;
     if (!summary.latestDigest) {
       const stocks = await prisma.stock.findMany({ select: { changePercent: true } });
@@ -37,7 +76,7 @@ router.get('/', authenticateJwt, async (req: AuthenticatedRequest, res: Response
       marketMood = avgChange >= 0.5 ? MarketMood.BULLISH : avgChange <= -0.5 ? MarketMood.BEARISH : MarketMood.NEUTRAL;
     }
 
-    // 3. Construct Attention Summary (Strictly watchlist scoped)
+    // 5. Construct Attention Summary (Strictly watchlist scoped)
     let attentionSummary: string;
     if (!isOnboarded) {
       attentionSummary = 'No watchlist found. Create your first watchlist to start receiving personalized market intelligence.';
@@ -48,17 +87,6 @@ router.get('/', authenticateJwt, async (req: AuthenticatedRequest, res: Response
         ? `${wlCritical} high-priority developments detected in your tracked watchlist (${trackedList}) while you were away (${summary.awayDuration}).`
         : `Market conditions remained balanced across your tracked stocks (${trackedList}) over the past ${summary.awayDuration}.`;
     }
-
-    // 4. Resolve authenticated user and userState from database for dynamic greeting & session timestamps
-    const [dbUser, userState] = await Promise.all([
-      prisma.user.findUnique({
-        where: { id: userId },
-        select: { id: true, name: true, email: true, lastLoginAt: true, previousLoginAt: true },
-      }),
-      prisma.userState.findUnique({
-        where: { userId },
-      }),
-    ]);
 
     const hour = new Date().getHours();
     const timeOfDay = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening';
@@ -108,6 +136,7 @@ router.get('/', authenticateJwt, async (req: AuthenticatedRequest, res: Response
         eventsCount: summary.watchlistEventsCount,
         criticalCount: summary.watchlistCriticalCount,
       },
+      dataFreshness: summary.dataFreshness,
     };
 
     res.status(200).json({
