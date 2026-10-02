@@ -257,7 +257,7 @@ export const WatchlistTable: React.FC<WatchlistTableProps> = ({
                         }`}
                       >
                         {isSoon ? (
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0" />
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
                         ) : (
                           <Calendar className="w-3 h-3 shrink-0" />
                         )}
