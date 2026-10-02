@@ -749,7 +749,7 @@ export const useMarketStore = create<MarketState>((set, get) => ({
         userStateRes,
       ] = await Promise.all([
         stockService.getAllStocks().catch(() => null),
-        watchlistService.fetchWatchlist().catch(() => null),
+        watchlistService.fetchWatchlist('all').catch(() => null),
         eventService.fetchEvents().catch(() => null),
         insightService.fetchInsights().catch(() => null),
         digestService.fetchDigests().catch(() => null),

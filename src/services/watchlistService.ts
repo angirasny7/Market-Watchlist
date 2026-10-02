@@ -140,6 +140,30 @@ export class WatchlistService {
   // ==========================================
 
   async fetchWatchlist(watchlistId?: string): Promise<StockQuote[] | null> {
+    if (!watchlistId || watchlistId === 'all') {
+      const overview = await this.fetchOverview('all');
+      if (overview && Array.isArray(overview.stocks)) {
+        return overview.stocks.map((item) => ({
+          symbol: item.symbol,
+          name: item.companyName,
+          companyName: item.companyName,
+          sector: item.sector,
+          exchange: item.exchange,
+          currency: item.currency,
+          currentPrice: item.currentPrice,
+          changeAmount: item.changeAmount,
+          changePercent: item.changePercent,
+          isPinned: item.isPinned,
+          volume: 0,
+          avgVolume20D: 0,
+          marketCap: 'N/A',
+          high52w: 0,
+          low52w: 0,
+          sparkline: item.sparkline,
+          updatedAt: item.addedAt,
+        } as unknown as StockQuote));
+      }
+    }
     const qs = watchlistId ? `?watchlistId=${watchlistId}` : '';
     const res = await apiClient.get<WatchlistApiResponse>(`/watchlist${qs}`);
 
