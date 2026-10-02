@@ -71,14 +71,18 @@ export class EventService {
       };
     }
 
-    // Filter events that occurred since user's last activity cursor
+    // Filter events that occurred since user's last visit cursor
     if (options?.sinceLastVisit && options?.userId) {
       const userState = await prisma.userState.findUnique({
         where: { userId: options.userId },
       });
-      if (userState?.lastActivityAt) {
-        where.timestamp = { gte: userState.lastActivityAt };
-      }
+      const defaultSince = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
+      const since =
+        userState?.previousSessionAt ||
+        userState?.lastSeenAt ||
+        userState?.lastLoginAt ||
+        defaultSince;
+      where.timestamp = { gte: since };
     }
 
     const events = await prisma.event.findMany({
@@ -217,7 +221,10 @@ export class EventService {
 
       await prisma.userState.updateMany({
         where: { userId },
-        data: { lastActivityAt: new Date() },
+        data: {
+          lastActivityAt: new Date(),
+          lastSeenAt: new Date(),
+        },
       });
 
       return { count: unhandledEvents.length };
@@ -240,6 +247,14 @@ export class EventService {
         },
         create: { userId, eventId: id },
         update: { readAt: new Date() },
+      });
+
+      await prisma.userState.updateMany({
+        where: { userId },
+        data: {
+          lastActivityAt: new Date(),
+          lastSeenAt: new Date(),
+        },
       });
     }
 

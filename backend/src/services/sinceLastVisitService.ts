@@ -16,6 +16,20 @@ export interface SinceLastVisitSummary {
   latestDigest: any | null;
 }
 
+export function computeUserSinceTimestamp(userState?: {
+  previousSessionAt?: Date | null;
+  lastSeenAt?: Date | null;
+  lastLoginAt?: Date | null;
+} | null): Date {
+  const defaultSince = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
+  return (
+    userState?.previousSessionAt ||
+    userState?.lastSeenAt ||
+    userState?.lastLoginAt ||
+    defaultSince
+  );
+}
+
 export class SinceLastVisitService {
   /**
    * Generates intelligence deltas that occurred since the user was last active,
@@ -38,8 +52,8 @@ export class SinceLastVisitService {
     const defaultSince = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000); // 5 days default
     const lastActivity =
       userState?.previousSessionAt ||
-      userState?.lastLogoutAt ||
-      userState?.lastActivityAt ||
+      userState?.lastSeenAt ||
+      userState?.lastLoginAt ||
       defaultSince;
 
     // 3. Format away duration

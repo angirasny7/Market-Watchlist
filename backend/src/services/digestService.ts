@@ -159,6 +159,8 @@ export class DigestService {
         where: { userId },
         data: {
           lastDigestViewedId: id,
+          lastDigestAcknowledgedId: id,
+          lastSeenAt: new Date(),
           lastActivityAt: new Date(),
         },
       });
@@ -188,6 +190,7 @@ export class DigestService {
       where: { userId },
       data: {
         lastDigestViewedId: id,
+        lastSeenAt: new Date(),
         lastActivityAt: new Date(),
       },
     });

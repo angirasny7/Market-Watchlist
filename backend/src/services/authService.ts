@@ -165,11 +165,12 @@ export class AuthService {
     // Compute previous session timestamp:
     // Prioritize lastLogoutAt (if logged out), else lastActivityAt, else user.lastLoginAt
     const existingState = user.userState;
+    const oldLastActivity = existingState?.lastActivityAt;
+    const lastSeen = existingState?.lastSeenAt;
     const previousSessionTime =
-      existingState?.lastLogoutAt ||
-      existingState?.lastActivityAt ||
-      user.lastLoginAt ||
-      null;
+      (lastSeen && oldLastActivity && lastSeen.getTime() > oldLastActivity.getTime())
+        ? lastSeen
+        : oldLastActivity || existingState?.lastLogoutAt || user.lastLoginAt || null;
 
     const previousDeviceType = existingState?.currentDeviceType || null;
     const previousDeviceName = existingState?.currentDeviceName || null;

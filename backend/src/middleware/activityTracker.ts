@@ -61,28 +61,65 @@ export async function activityTracker(
     return next();
   }
 
-  // 4. Check throttle interval (60s)
+  // 4. Session & Activity Tracking
+  const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
   const now = Date.now();
   const lastRecorded = lastActivityRecorded.get(userId) || 0;
 
-  if (now - lastRecorded >= MIN_UPDATE_INTERVAL_MS) {
-    lastActivityRecorded.set(userId, now);
+  try {
+    const existingState = await prisma.userState.findUnique({
+      where: { userId },
+    });
 
-    // Asynchronous non-blocking update to UserState
-    prisma.userState
-      .upsert({
-        where: { userId },
-        create: {
+    if (existingState) {
+      const lastActivityTime = existingState.lastActivityAt
+        ? new Date(existingState.lastActivityAt).getTime()
+        : 0;
+      const isNewSession = now - lastActivityTime > SESSION_TIMEOUT_MS;
+
+      if (isNewSession) {
+        // When a new session starts: previousSessionAt = old lastActivityAt (or lastSeenAt if later)
+        const oldLastActivity = existingState.lastActivityAt;
+        const lastSeen = existingState.lastSeenAt;
+        let previousSessionAt = oldLastActivity;
+        if (lastSeen && (!oldLastActivity || lastSeen.getTime() > oldLastActivity.getTime())) {
+          previousSessionAt = lastSeen;
+        }
+
+        await prisma.userState.update({
+          where: { userId },
+          data: {
+            previousSessionAt,
+            lastActivityAt: new Date(now),
+          },
+        });
+        lastActivityRecorded.set(userId, now);
+      } else if (now - lastRecorded >= MIN_UPDATE_INTERVAL_MS) {
+        lastActivityRecorded.set(userId, now);
+        // Routine non-blocking update within active session
+        prisma.userState
+          .update({
+            where: { userId },
+            data: {
+              lastActivityAt: new Date(now),
+            },
+          })
+          .catch((err) => {
+            console.warn(`[ActivityTracker] Failed to update lastActivityAt for ${userId}: ${err.message}`);
+          });
+      }
+    } else {
+      await prisma.userState.create({
+        data: {
           userId,
           lastActivityAt: new Date(now),
+          lastLoginAt: new Date(now),
         },
-        update: {
-          lastActivityAt: new Date(now),
-        },
-      })
-      .catch((err) => {
-        console.warn(`[ActivityTracker] Failed to update lastActivityAt for ${userId}: ${err.message}`);
       });
+      lastActivityRecorded.set(userId, now);
+    }
+  } catch (err: any) {
+    console.warn(`[ActivityTracker] Session tracking error for ${userId}: ${err.message}`);
   }
 
   next();

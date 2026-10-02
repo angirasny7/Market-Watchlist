@@ -32,6 +32,7 @@ model UserState {
   userId                   String    @unique
   lastLoginAt              DateTime  @default(now())
   lastActivityAt           DateTime  @default(now())
+  lastSeenAt               DateTime?
   lastDigestViewedId       String?
   lastDigestAcknowledgedId String?
   updatedAt                DateTime  @updatedAt
