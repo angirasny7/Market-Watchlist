@@ -8,6 +8,7 @@ import {
   AddStockModal,
   RemoveStockModal,
   StockInsightDrawer,
+  StockDetailModal,
   RemovableStock,
 } from '../components/watchlist';
 import { useMarketStore } from '../store/useMarketStore';
@@ -51,6 +52,7 @@ export const WatchlistPage: React.FC = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [stockToRemove, setStockToRemove] = useState<RemovableStock | null>(null);
   const [activeInsightStock, setActiveInsightStock] = useState<StockQuote | null>(null);
+  const [detailStockSymbol, setDetailStockSymbol] = useState<string | null>(null);
 
   // Initial data loading
   useEffect(() => {
@@ -113,34 +115,9 @@ export const WatchlistPage: React.FC = () => {
     });
   }, [rawStocks, searchQuery, watchlistQuickFilter, watchlistDropdownFilter, watchlistSortField]);
 
-  // Map selected WatchlistStockItem to StockQuote for drawer compatibility
+  // Open stock details and interactive TradingView chart modal
   const handleSelectStock = (stock: WatchlistStockItem) => {
-    const existing = watchlist.find((s) => s.symbol === stock.symbol);
-    if (existing) {
-      setActiveInsightStock(existing);
-    } else {
-      setActiveInsightStock({
-        symbol: stock.symbol,
-        name: stock.companyName,
-        currency: stock.currency,
-        currentPrice: stock.currentPrice,
-        changeAmount: stock.changeAmount,
-        changePercent: stock.changePercent,
-        dailyChangePercent: stock.changePercent,
-        lastUpdated: 'Live',
-        sector: stock.sector,
-        exchange: stock.exchange,
-        volume: 0,
-        avgVolume20D: 0,
-        marketCap: 'N/A',
-        peRatio: 0,
-        high52w: stock.currentPrice * 1.2,
-        low52w: stock.currentPrice * 0.8,
-        sparkline: stock.sparkline.map((price, idx) => ({ date: `p-${idx}`, price })),
-        tags: [],
-        isPinned: stock.isPinned,
-      });
-    }
+    setDetailStockSymbol(stock.symbol);
   };
 
   const isInitialLoading = isOverviewLoading && rawStocks.length === 0;
@@ -275,7 +252,14 @@ export const WatchlistPage: React.FC = () => {
         onClose={() => setStockToRemove(null)}
       />
 
-      {/* 8. Stock Causal Insight Drawer */}
+      {/* 8. Stock Details & Interactive Chart Modal (Phase 3) */}
+      <StockDetailModal
+        symbol={detailStockSymbol}
+        isOpen={Boolean(detailStockSymbol)}
+        onClose={() => setDetailStockSymbol(null)}
+      />
+
+      {/* 9. Stock Causal Insight Drawer */}
       <StockInsightDrawer
         stock={activeInsightStock}
         onClose={() => setActiveInsightStock(null)}

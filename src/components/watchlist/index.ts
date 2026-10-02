@@ -8,6 +8,8 @@ export * from './WatchlistManageModals';
 export * from './AddStockModal';
 export * from './RemoveStockModal';
 export * from './StockInsightDrawer';
+export * from './StockInteractiveChart';
+export * from './StockDetailModal';
 export * from './WatchlistHeader';
 export * from './StockCard';
 export * from './StockTable';

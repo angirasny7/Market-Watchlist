@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { stockService } from '../services/stockService.js';
+import { stockService, StockHistoryRange } from '../services/stockService.js';
 import { serializeBigInt } from '../utils/json.js';
 
 export class StockController {
@@ -32,6 +32,25 @@ export class StockController {
         data: serializeBigInt(stock),
       });
     } catch (err) {
+      next(err);
+    }
+  }
+
+  async getStockHistory(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const symbol = req.params.symbol as string;
+      const range = (req.query.range as StockHistoryRange) || '1M';
+      const history = await stockService.getStockHistory(symbol, range);
+
+      res.status(200).json({
+        success: true,
+        data: history,
+      });
+    } catch (err: any) {
+      if (err.statusCode) {
+        res.status(err.statusCode).json({ success: false, error: err.message });
+        return;
+      }
       next(err);
     }
   }

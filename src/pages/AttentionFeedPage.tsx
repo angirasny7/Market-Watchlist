@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   FeedHeader,
   FeedFilterBar,
@@ -19,6 +19,7 @@ const PAGE_SIZE = 8;
 
 export const AttentionFeedPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const {
     watchlist,
     events,
@@ -41,6 +42,15 @@ export const AttentionFeedPage: React.FC = () => {
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('ALL');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+
+  // Sync ?symbol= URL query param (e.g. from Watchlist or StockDetailModal)
+  useEffect(() => {
+    const symbolParam = searchParams.get('symbol');
+    if (symbolParam) {
+      setSearchQuery(symbolParam);
+      setFeedScope('all');
+    }
+  }, [searchParams, setFeedScope]);
 
   // Sync store feedFilter (e.g. from Dashboard summary card navigation)
   useEffect(() => {
