@@ -33,6 +33,7 @@ router.use('/user', userRoutes);
 router.use('/dashboard', dashboardRoutes);
 router.use('/stocks', stockRoutes);
 router.use('/watchlist', watchlistRoutes);
+router.use('/watchlists', watchlistRoutes);
 router.use('/events', eventRoutes);
 router.use('/insights', insightRoutes);
 router.use('/digests', digestRoutes);

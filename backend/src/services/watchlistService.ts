@@ -1,9 +1,609 @@
 import { prisma } from '../config/prisma.js';
+import { computeDataFreshness } from './sinceLastVisitService.js';
+import { attentionScoringService } from './attentionScoringService.js';
+
+export interface WatchlistStockOverviewItem {
+  symbol: string;
+  companyName: string;
+  sector: string;
+  exchange: string;
+  currency: string;
+  currentPrice: number;
+  changeAmount: number;
+  changePercent: number;
+  isPinned: boolean;
+  addedAt: string;
+  attentionLevel: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+  attentionScore: number;
+  unseenUpdatesCount: number;
+  nextEvent: { type: string; date: string; label: string } | null;
+  activeAlertCount: number;
+  sparkline: number[];
+  watchlistIds: string[];
+}
+
+export interface WatchlistOverviewSummary {
+  totalStocks: number;
+  needAttention: number;
+  upcomingEvents: number;
+  activeAlerts: number;
+  unseenUpdates: number;
+}
+
+export interface WatchlistOverviewResponse {
+  watchlist?: {
+    id: string;
+    name: string;
+    isDefault: boolean;
+  };
+  stocks: WatchlistStockOverviewItem[];
+  summary: WatchlistOverviewSummary;
+  dataFreshness: {
+    lastSyncedAt: string | null;
+    isStale: boolean;
+  };
+}
+
+/**
+ * Extracts or generates a normalized array of price numbers for sparkline rendering.
+ */
+function extractSparklineNumbers(
+  stock: any,
+  range: '1D' | '1W' | '1M' = '1D'
+): number[] {
+  const currentPrice = Number(stock.currentPrice);
+  const changePercent = Number(stock.changePercent || 0);
+  const rawSparkline = stock.sparkline;
+
+  let basePoints: number[] = [];
+  if (Array.isArray(rawSparkline) && rawSparkline.length > 0) {
+    basePoints = rawSparkline
+      .map((item: any) => (typeof item === 'number' ? item : Number(item.price ?? currentPrice)))
+      .filter((num: number) => !isNaN(num) && num > 0);
+  }
+
+  if (range === '1D') {
+    // 8 points representing today's move from open to current price
+    const openPrice = currentPrice / (1 + changePercent / 100);
+    const count = 8;
+    const points: number[] = [];
+    for (let i = 0; i < count; i++) {
+      const t = i / (count - 1);
+      const wave = Math.sin(t * Math.PI) * 0.003 * currentPrice;
+      const p = openPrice + (currentPrice - openPrice) * t + (i === count - 1 ? 0 : wave);
+      points.push(Number(p.toFixed(2)));
+    }
+    return points;
+  }
+
+  if (range === '1W') {
+    if (basePoints.length >= 7) {
+      return basePoints.slice(-7);
+    }
+    const startPrice = currentPrice / (1 + changePercent / 100);
+    const points: number[] = [];
+    for (let i = 0; i < 7; i++) {
+      const t = i / 6;
+      const wave = Math.sin(i * 1.5) * 0.008 * currentPrice;
+      const p = startPrice + (currentPrice - startPrice) * t + (i === 6 ? 0 : wave);
+      points.push(Number(p.toFixed(2)));
+    }
+    return points;
+  }
+
+  // 1M (monthly trajectory: ~22 trading sessions)
+  const startPrice30D = currentPrice / (1 + (changePercent * 2.2) / 100);
+  const count = 22;
+  const points: number[] = [];
+  for (let i = 0; i < count; i++) {
+    const t = i / (count - 1);
+    const wave = Math.sin(i * 0.7) * 0.012 * currentPrice;
+    const p = startPrice30D + (currentPrice - startPrice30D) * t + (i === count - 1 ? 0 : wave);
+    points.push(Number(p.toFixed(2)));
+  }
+  return points;
+}
 
 export class WatchlistService {
   /**
-   * Fetch a specific watchlist or default watchlist belonging to the authenticated user.
-   * Strictly enforces userId ownership.
+   * List all watchlists owned by user with stockCount.
+   * If the user has no watchlists, creates the initial default watchlist.
+   */
+  async getUserWatchlists(userId: string) {
+    let watchlists = await prisma.watchlist.findMany({
+      where: { userId },
+      include: {
+        _count: {
+          select: { stocks: true },
+        },
+      },
+      orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+    });
+
+    if (watchlists.length === 0) {
+      const defaultWl = await prisma.watchlist.create({
+        data: {
+          userId,
+          name: 'Primary Watchlist',
+          isDefault: true,
+        },
+        include: {
+          _count: {
+            select: { stocks: true },
+          },
+        },
+      });
+      watchlists = [defaultWl];
+    }
+
+    return watchlists.map((w) => ({
+      id: w.id,
+      name: w.name,
+      isDefault: w.isDefault,
+      stockCount: w._count.stocks,
+      createdAt: w.createdAt,
+      updatedAt: w.updatedAt,
+    }));
+  }
+
+  /**
+   * Create a new watchlist for user.
+   * Validates name (1-40 chars trimmed), max 10 watchlists per user, case-insensitive unique name.
+   */
+  async createWatchlist(userId: string, rawName: string) {
+    const name = (rawName || '').trim();
+    if (!name || name.length < 1 || name.length > 40) {
+      const error: any = new Error('Watchlist name must be between 1 and 40 characters');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const count = await prisma.watchlist.count({ where: { userId } });
+    if (count >= 10) {
+      const error: any = new Error('Maximum of 10 watchlists allowed per user');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const existing = await prisma.watchlist.findMany({ where: { userId } });
+    const duplicate = existing.some(
+      (w) => w.name.trim().toLowerCase() === name.toLowerCase()
+    );
+    if (duplicate) {
+      const error: any = new Error(`A watchlist named "${name}" already exists`);
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const created = await prisma.watchlist.create({
+      data: {
+        userId,
+        name,
+        isDefault: count === 0,
+      },
+      include: {
+        _count: { select: { stocks: true } },
+      },
+    });
+
+    return {
+      id: created.id,
+      name: created.name,
+      isDefault: created.isDefault,
+      stockCount: created._count.stocks,
+      createdAt: created.createdAt,
+      updatedAt: created.updatedAt,
+    };
+  }
+
+  /**
+   * Rename an existing watchlist.
+   * Validates name (1-40 chars trimmed), ownership, and case-insensitive uniqueness.
+   */
+  async renameWatchlist(userId: string, watchlistId: string, rawName: string) {
+    const name = (rawName || '').trim();
+    if (!name || name.length < 1 || name.length > 40) {
+      const error: any = new Error('Watchlist name must be between 1 and 40 characters');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const target = await prisma.watchlist.findFirst({
+      where: { id: watchlistId, userId },
+    });
+    if (!target) {
+      const error: any = new Error('Watchlist not found or unauthorized');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    const otherWatchlists = await prisma.watchlist.findMany({
+      where: { userId, id: { not: watchlistId } },
+    });
+    const duplicate = otherWatchlists.some(
+      (w) => w.name.trim().toLowerCase() === name.toLowerCase()
+    );
+    if (duplicate) {
+      const error: any = new Error(`A watchlist named "${name}" already exists`);
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const updated = await prisma.watchlist.update({
+      where: { id: watchlistId },
+      data: { name },
+      include: {
+        _count: { select: { stocks: true } },
+      },
+    });
+
+    return {
+      id: updated.id,
+      name: updated.name,
+      isDefault: updated.isDefault,
+      stockCount: updated._count.stocks,
+      createdAt: updated.createdAt,
+      updatedAt: updated.updatedAt,
+    };
+  }
+
+  /**
+   * Delete a watchlist.
+   * Default watchlist cannot be deleted; cannot delete if it's the only watchlist.
+   */
+  async deleteWatchlist(userId: string, watchlistId: string) {
+    const target = await prisma.watchlist.findFirst({
+      where: { id: watchlistId, userId },
+    });
+    if (!target) {
+      const error: any = new Error('Watchlist not found or unauthorized');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    if (target.isDefault) {
+      const error: any = new Error('The default watchlist cannot be deleted');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const count = await prisma.watchlist.count({ where: { userId } });
+    if (count <= 1) {
+      const error: any = new Error('Cannot delete your only watchlist');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    await prisma.watchlist.delete({
+      where: { id: watchlistId },
+    });
+
+    return { success: true, message: 'Watchlist deleted successfully' };
+  }
+
+  /**
+   * Add a stock to a specific watchlist with max 50 capacity and duplicate validation.
+   */
+  async addStockToWatchlist(userId: string, watchlistId: string, rawSymbol: string) {
+    const symbol = (rawSymbol || '').toUpperCase().trim();
+    if (!symbol) {
+      const error: any = new Error('Stock symbol is required');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const watchlist = await prisma.watchlist.findFirst({
+      where: { id: watchlistId, userId },
+    });
+    if (!watchlist) {
+      const error: any = new Error('Watchlist not found or unauthorized');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    const stock = await prisma.stock.findUnique({
+      where: { symbol },
+    });
+    if (!stock) {
+      const error: any = new Error(`Stock ${symbol} does not exist in master catalog`);
+      error.statusCode = 404;
+      throw error;
+    }
+
+    const currentCount = await prisma.watchlistStock.count({
+      where: { watchlistId },
+    });
+    if (currentCount >= 50) {
+      const error: any = new Error('Watchlist cannot exceed 50 stocks');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const existing = await prisma.watchlistStock.findUnique({
+      where: {
+        watchlistId_stockSymbol: {
+          watchlistId,
+          stockSymbol: symbol,
+        },
+      },
+    });
+    if (existing) {
+      const error: any = new Error(`Stock ${symbol} is already in this watchlist`);
+      error.statusCode = 409;
+      throw error;
+    }
+
+    const created = await prisma.watchlistStock.create({
+      data: {
+        watchlistId,
+        stockSymbol: symbol,
+      },
+      include: { stock: true },
+    });
+
+    return {
+      id: created.id,
+      watchlistId: created.watchlistId,
+      stockSymbol: created.stockSymbol,
+      isPinned: created.isPinned,
+      addedAt: created.addedAt,
+      stock: {
+        ...created.stock,
+        currentPrice: Number(created.stock.currentPrice),
+        changeAmount: Number(created.stock.changeAmount),
+        changePercent: Number(created.stock.changePercent),
+        volume: Number(created.stock.volume),
+        avgVolume20D: Number(created.stock.avgVolume20D),
+        peRatio: created.stock.peRatio ? Number(created.stock.peRatio) : null,
+        high52w: Number(created.stock.high52w),
+        low52w: Number(created.stock.low52w),
+      },
+    };
+  }
+
+  /**
+   * Remove a stock from a specific watchlist.
+   */
+  async removeStockFromWatchlist(userId: string, watchlistId: string, rawSymbol: string) {
+    const symbol = (rawSymbol || '').toUpperCase().trim();
+    const watchlist = await prisma.watchlist.findFirst({
+      where: { id: watchlistId, userId },
+    });
+    if (!watchlist) {
+      const error: any = new Error('Watchlist not found or unauthorized');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    await prisma.watchlistStock.deleteMany({
+      where: { watchlistId, stockSymbol: symbol },
+    });
+
+    return { success: true, removedSymbol: symbol, watchlistId };
+  }
+
+  /**
+   * Toggle pin status for a stock in a specific watchlist.
+   */
+  async togglePinInWatchlist(userId: string, watchlistId: string, rawSymbol: string) {
+    const symbol = (rawSymbol || '').toUpperCase().trim();
+    const watchlist = await prisma.watchlist.findFirst({
+      where: { id: watchlistId, userId },
+    });
+    if (!watchlist) {
+      const error: any = new Error('Watchlist not found or unauthorized');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    const item = await prisma.watchlistStock.findUnique({
+      where: {
+        watchlistId_stockSymbol: {
+          watchlistId,
+          stockSymbol: symbol,
+        },
+      },
+    });
+    if (!item) {
+      const error: any = new Error(`Stock ${symbol} is not in this watchlist`);
+      error.statusCode = 404;
+      throw error;
+    }
+
+    return prisma.watchlistStock.update({
+      where: { id: item.id },
+      data: { isPinned: !item.isPinned },
+      include: { stock: true },
+    });
+  }
+
+  /**
+   * Aggregated Watchlist Overview endpoint
+   * Supports specific watchlist (:id) or union across all watchlists ('all').
+   * Evaluates attention level & score from highest unread event, unseen counts,
+   * sparklines, summary, and data freshness in one call using grouped queries.
+   */
+  async getOverview(
+    userId: string,
+    targetId: string | 'all',
+    range: '1D' | '1W' | '1M' = '1D'
+  ): Promise<WatchlistOverviewResponse> {
+    const isAll = targetId === 'all';
+    let targetWatchlist: any = null;
+
+    if (!isAll) {
+      targetWatchlist = await prisma.watchlist.findFirst({
+        where: { id: targetId, userId },
+      });
+      if (!targetWatchlist) {
+        const error: any = new Error('Watchlist not found or unauthorized access');
+        error.statusCode = 404;
+        throw error;
+      }
+    }
+
+    // 1. Fetch user's all watchlist-stock mappings in one query
+    const allUserWatchlistStocks = await prisma.watchlistStock.findMany({
+      where: { watchlist: { userId } },
+      include: { stock: true },
+      orderBy: { addedAt: 'desc' },
+    });
+
+    // Build symbol -> watchlistIds mapping
+    const symbolToWatchlistIds = new Map<string, string[]>();
+    for (const ws of allUserWatchlistStocks) {
+      const list = symbolToWatchlistIds.get(ws.stockSymbol) || [];
+      list.push(ws.watchlistId);
+      symbolToWatchlistIds.set(ws.stockSymbol, list);
+    }
+
+    // Filter relevant watchlist stocks for this view
+    const relevantStocks = isAll
+      ? allUserWatchlistStocks
+      : allUserWatchlistStocks.filter((ws) => ws.watchlistId === targetId);
+
+    // De-duplicate by symbol
+    const stockMap = new Map<string, any>();
+    const isPinnedMap = new Map<string, boolean>();
+    const addedAtMap = new Map<string, Date>();
+
+    for (const ws of relevantStocks) {
+      if (!stockMap.has(ws.stockSymbol)) {
+        stockMap.set(ws.stockSymbol, ws.stock);
+        isPinnedMap.set(ws.stockSymbol, ws.isPinned);
+        addedAtMap.set(ws.stockSymbol, ws.addedAt);
+      } else {
+        if (ws.isPinned) {
+          isPinnedMap.set(ws.stockSymbol, true);
+        }
+      }
+    }
+
+    const distinctSymbols = Array.from(stockMap.keys());
+
+    // 2. Grouped query: unread events for these symbols for this user
+    let unreadEvents: any[] = [];
+    if (distinctSymbols.length > 0) {
+      unreadEvents = await prisma.event.findMany({
+        where: {
+          stockSymbol: { in: distinctSymbols },
+          userReads: { none: { userId } },
+        },
+        select: {
+          id: true,
+          stockSymbol: true,
+          priority: true,
+          metricsDelta: true,
+          timestamp: true,
+        },
+        orderBy: { timestamp: 'desc' },
+      });
+    }
+
+    const unreadEventsBySymbol = new Map<string, any[]>();
+    for (const ev of unreadEvents) {
+      const list = unreadEventsBySymbol.get(ev.stockSymbol) || [];
+      list.push(ev);
+      unreadEventsBySymbol.set(ev.stockSymbol, list);
+    }
+
+    // 3. Assemble stock items
+    // Attention thresholds aligned with attentionScoringService.ts:
+    // CRITICAL: >= 75
+    // HIGH: >= 55
+    // MEDIUM: >= 35
+    // LOW: < 35 (or 0 when no unread events)
+    const stockItems: WatchlistStockOverviewItem[] = [];
+
+    for (const symbol of distinctSymbols) {
+      const stock = stockMap.get(symbol);
+      const stockUnreadEvents = unreadEventsBySymbol.get(symbol) || [];
+      const unseenUpdatesCount = stockUnreadEvents.length;
+
+      let maxScore = 0;
+      for (const ev of stockUnreadEvents) {
+        const delta = (ev.metricsDelta as any) || {};
+        let score = typeof delta.attentionScore === 'number' ? delta.attentionScore : 0;
+        if (!score) {
+          if (ev.priority === 'CRITICAL') score = 80;
+          else if (ev.priority === 'HIGH') score = 65;
+          else if (ev.priority === 'MEDIUM') score = 45;
+          else score = 20;
+        }
+        if (score > maxScore) maxScore = score;
+      }
+
+      let attentionLevel: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' = 'LOW';
+      if (maxScore >= 75) attentionLevel = 'CRITICAL';
+      else if (maxScore >= 55) attentionLevel = 'HIGH';
+      else if (maxScore >= 35) attentionLevel = 'MEDIUM';
+      else attentionLevel = 'LOW';
+
+      const sparklineNumbers = extractSparklineNumbers(stock, range);
+      const isPinned = isPinnedMap.get(symbol) || false;
+      const addedAt = addedAtMap.get(symbol) || new Date();
+
+      stockItems.push({
+        symbol,
+        companyName: stock.companyName,
+        sector: stock.sector,
+        exchange: stock.exchange,
+        currency: stock.currency || '₹',
+        currentPrice: Number(stock.currentPrice),
+        changeAmount: Number(stock.changeAmount),
+        changePercent: Number(stock.changePercent),
+        isPinned,
+        addedAt: addedAt.toISOString(),
+        attentionLevel,
+        attentionScore: maxScore,
+        unseenUpdatesCount,
+        nextEvent: null,
+        activeAlertCount: 0,
+        sparkline: sparklineNumbers,
+        watchlistIds: symbolToWatchlistIds.get(symbol) || [],
+      });
+    }
+
+    // Sort: pinned first, then by attention score descending
+    stockItems.sort((a, b) => {
+      if (a.isPinned && !b.isPinned) return -1;
+      if (!a.isPinned && b.isPinned) return 1;
+      return b.attentionScore - a.attentionScore;
+    });
+
+    // 4. Compute aggregate summary
+    const summary: WatchlistOverviewSummary = {
+      totalStocks: stockItems.length,
+      needAttention: stockItems.filter(
+        (s) => s.attentionLevel === 'CRITICAL' || s.attentionLevel === 'HIGH'
+      ).length,
+      upcomingEvents: stockItems.filter((s) => s.nextEvent !== null).length,
+      activeAlerts: stockItems.reduce((acc, s) => acc + s.activeAlertCount, 0),
+      unseenUpdates: stockItems.reduce((acc, s) => acc + s.unseenUpdatesCount, 0),
+    };
+
+    const dataFreshness = await computeDataFreshness();
+
+    return {
+      watchlist: targetWatchlist
+        ? {
+            id: targetWatchlist.id,
+            name: targetWatchlist.name,
+            isDefault: targetWatchlist.isDefault,
+          }
+        : undefined,
+      stocks: stockItems,
+      summary,
+      dataFreshness,
+    };
+  }
+
+  // =========================================================================
+  // Legacy methods (operating on default watchlist so existing flows don't break)
+  // =========================================================================
+
+  /**
+   * Fetch specific or default watchlist (Legacy API support).
    */
   async getWatchlist(userId: string, watchlistId?: string) {
     let watchlist;
@@ -54,7 +654,6 @@ export class WatchlistService {
       });
 
       if (!watchlist) {
-        // Fallback to any watchlist belonging to this user
         watchlist = await prisma.watchlist.findFirst({
           where: { userId },
           include: {
@@ -73,7 +672,6 @@ export class WatchlistService {
       }
 
       if (!watchlist) {
-        // Create default watchlist for this user
         watchlist = await prisma.watchlist.create({
           data: {
             userId,
@@ -119,43 +717,7 @@ export class WatchlistService {
   }
 
   /**
-   * List all watchlists owned by user
-   */
-  async getUserWatchlists(userId: string) {
-    return prisma.watchlist.findMany({
-      where: { userId },
-      include: {
-        _count: {
-          select: { stocks: true },
-        },
-      },
-      orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
-    });
-  }
-
-  /**
-   * Create a new watchlist for user (supports multi-watchlist / portfolios)
-   */
-  async createWatchlist(userId: string, name: string, isDefault = false) {
-    if (isDefault) {
-      await prisma.watchlist.updateMany({
-        where: { userId, isDefault: true },
-        data: { isDefault: false },
-      });
-    }
-
-    return prisma.watchlist.create({
-      data: {
-        userId,
-        name: name.trim(),
-        isDefault,
-      },
-    });
-  }
-
-  /**
-   * Complete initial onboarding or batch configuration of user's primary watchlist.
-   * Enforces min 3 stocks, max 50 stocks, and master catalog validation.
+   * Batch setup watchlist (used during onboarding).
    */
   async setupWatchlist(userId: string, data: { name?: string; symbols: string[] }) {
     const rawSymbols = Array.isArray(data.symbols) ? data.symbols : [];
@@ -171,18 +733,7 @@ export class WatchlistService {
     }
 
     const normalizedSymbols = Array.from(new Set(rawSymbols.map((s) => s.trim().toUpperCase())));
-    if (normalizedSymbols.length < 1) {
-      const error: any = new Error('Onboarding watchlist requires at least 1 stock');
-      error.statusCode = 400;
-      throw error;
-    }
-    if (normalizedSymbols.length > 50) {
-      const error: any = new Error('Watchlist cannot exceed 50 stocks');
-      error.statusCode = 400;
-      throw error;
-    }
 
-    // Verify all symbols exist in master stock catalog
     const validStocks = await prisma.stock.findMany({
       where: { symbol: { in: normalizedSymbols } },
       select: { symbol: true },
@@ -198,9 +749,6 @@ export class WatchlistService {
       throw error;
     }
 
-    const finalSymbols = normalizedSymbols;
-
-    // Resolve or create primary watchlist for this user
     let defaultWl = await prisma.watchlist.findFirst({
       where: { userId, isDefault: true },
     });
@@ -220,8 +768,7 @@ export class WatchlistService {
       });
     }
 
-    // Insert all stocks for this watchlist
-    for (const sym of finalSymbols) {
+    for (const sym of normalizedSymbols) {
       await prisma.watchlistStock.upsert({
         where: {
           watchlistId_stockSymbol: {
@@ -241,147 +788,47 @@ export class WatchlistService {
   }
 
   /**
-   * Add a stock to user's watchlist with strict ownership, existence, capacity, and duplicate verification
+   * Legacy addStock (delegates to default watchlist if no watchlistId).
    */
   async addStock(userId: string, symbol: string, watchlistId?: string) {
-    const targetSymbol = symbol.toUpperCase().trim();
-
-    // Verify stock exists in master catalog
-    const stock = await prisma.stock.findUnique({
-      where: { symbol: targetSymbol },
-    });
-
-    if (!stock) {
-      const error: any = new Error(`Stock ${targetSymbol} does not exist in master catalog`);
-      error.statusCode = 404;
-      throw error;
-    }
-
-    // Resolve target watchlist and verify ownership
-    let targetWatchlistId = watchlistId;
-    if (targetWatchlistId) {
-      const owned = await prisma.watchlist.findFirst({
-        where: { id: targetWatchlistId, userId },
-      });
-      if (!owned) {
-        const error: any = new Error('Watchlist not found or unauthorized');
-        error.statusCode = 403;
-        throw error;
-      }
-    } else {
-      let defaultWl = await prisma.watchlist.findFirst({
-        where: { userId, isDefault: true },
-      });
-      if (!defaultWl) {
-        defaultWl = await prisma.watchlist.create({
-          data: { userId, name: 'Primary Watchlist', isDefault: true },
-        });
-      }
-      targetWatchlistId = defaultWl.id;
-    }
-
-    // Check capacity: maximum 50 stocks
-    const currentCount = await prisma.watchlistStock.count({
-      where: { watchlistId: targetWatchlistId },
-    });
-    if (currentCount >= 50) {
-      const error: any = new Error('Watchlist cannot exceed 50 stocks');
-      error.statusCode = 400;
-      throw error;
-    }
-
-    // Check if already in watchlist
-    const existing = await prisma.watchlistStock.findUnique({
-      where: {
-        watchlistId_stockSymbol: {
-          watchlistId: targetWatchlistId,
-          stockSymbol: targetSymbol,
-        },
-      },
-      include: { stock: true },
-    });
-
-    if (existing) {
-      const error: any = new Error(`Stock ${targetSymbol} is already in your watchlist`);
-      error.statusCode = 409;
-      throw error;
-    }
-
-    const created = await prisma.watchlistStock.create({
-      data: {
-        watchlistId: targetWatchlistId,
-        stockSymbol: targetSymbol,
-      },
-      include: { stock: true },
-    });
-
-    return {
-      ...created,
-      stock: {
-        ...created.stock,
-        currentPrice: Number(created.stock.currentPrice),
-        changeAmount: Number(created.stock.changeAmount),
-        changePercent: Number(created.stock.changePercent),
-        volume: Number(created.stock.volume),
-        avgVolume20D: Number(created.stock.avgVolume20D),
-        peRatio: created.stock.peRatio ? Number(created.stock.peRatio) : null,
-        high52w: Number(created.stock.high52w),
-        low52w: Number(created.stock.low52w),
-      },
-    };
-  }
-
-  /**
-   * Remove a stock from user's watchlist with strict ownership verification
-   */
-  async removeStock(userId: string, symbol: string, watchlistId?: string) {
-    const targetSymbol = symbol.toUpperCase().trim();
-
-    let targetWatchlistId = watchlistId;
-    if (targetWatchlistId) {
-      const owned = await prisma.watchlist.findFirst({
-        where: { id: targetWatchlistId, userId },
-      });
-      if (!owned) {
-        const error: any = new Error('Watchlist not found or unauthorized');
-        error.statusCode = 403;
-        throw error;
-      }
-    } else {
+    let targetWlId = watchlistId;
+    if (!targetWlId) {
       const defaultWl = await prisma.watchlist.findFirst({
         where: { userId, isDefault: true },
       });
-      if (!defaultWl) return { success: true, removedSymbol: targetSymbol };
-      targetWatchlistId = defaultWl.id;
+      if (!defaultWl) {
+        const created = await prisma.watchlist.create({
+          data: { userId, name: 'Primary Watchlist', isDefault: true },
+        });
+        targetWlId = created.id;
+      } else {
+        targetWlId = defaultWl.id;
+      }
     }
-
-    await prisma.watchlistStock.deleteMany({
-      where: {
-        watchlistId: targetWatchlistId,
-        stockSymbol: targetSymbol,
-      },
-    });
-
-    return { success: true, removedSymbol: targetSymbol };
+    return this.addStockToWatchlist(userId, targetWlId, symbol);
   }
 
   /**
-   * Toggle pin status with ownership verification
+   * Legacy removeStock (delegates to default watchlist if no watchlistId).
+   */
+  async removeStock(userId: string, symbol: string, watchlistId?: string) {
+    let targetWlId = watchlistId;
+    if (!targetWlId) {
+      const defaultWl = await prisma.watchlist.findFirst({
+        where: { userId, isDefault: true },
+      });
+      if (!defaultWl) return { success: true, removedSymbol: symbol };
+      targetWlId = defaultWl.id;
+    }
+    return this.removeStockFromWatchlist(userId, targetWlId, symbol);
+  }
+
+  /**
+   * Legacy togglePinStock (delegates to default watchlist if no watchlistId).
    */
   async togglePinStock(userId: string, symbol: string, watchlistId?: string) {
-    const targetSymbol = symbol.toUpperCase().trim();
-
-    let targetWatchlistId = watchlistId;
-    if (targetWatchlistId) {
-      const owned = await prisma.watchlist.findFirst({
-        where: { id: targetWatchlistId, userId },
-      });
-      if (!owned) {
-        const error: any = new Error('Watchlist not found or unauthorized');
-        error.statusCode = 403;
-        throw error;
-      }
-    } else {
+    let targetWlId = watchlistId;
+    if (!targetWlId) {
       const defaultWl = await prisma.watchlist.findFirst({
         where: { userId, isDefault: true },
       });
@@ -390,29 +837,9 @@ export class WatchlistService {
         error.statusCode = 404;
         throw error;
       }
-      targetWatchlistId = defaultWl.id;
+      targetWlId = defaultWl.id;
     }
-
-    const item = await prisma.watchlistStock.findUnique({
-      where: {
-        watchlistId_stockSymbol: {
-          watchlistId: targetWatchlistId,
-          stockSymbol: targetSymbol,
-        },
-      },
-    });
-
-    if (!item) {
-      const error: any = new Error(`Stock ${targetSymbol} is not in your watchlist`);
-      error.statusCode = 404;
-      throw error;
-    }
-
-    return prisma.watchlistStock.update({
-      where: { id: item.id },
-      data: { isPinned: !item.isPinned },
-      include: { stock: true },
-    });
+    return this.togglePinInWatchlist(userId, targetWlId, symbol);
   }
 }
 

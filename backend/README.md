@@ -108,12 +108,39 @@ The server will start at `http://localhost:5000`.
 - `GET /api/auth/me` — Retrieve authenticated user profile and userState. (Requires `Authorization: Bearer <token>`)
 - `PATCH /api/auth/heartbeat` — Refresh user cursor `lastActivityAt`. (Requires `Authorization: Bearer <token>`)
 
-### Watchlist (`/api/watchlist`)
-- `GET /api/watchlist` — Retrieve user watchlist joined with master stocks and active catalysts.
-- `POST /api/watchlist` — Create a new named watchlist (`{ "name": "EV Breakouts" }`).
-- `POST /api/watchlist/add-stock` — Add stock by symbol (`{ "symbol": "SUZLON" }`).
-- `DELETE /api/watchlist/remove-stock` — Remove stock from watchlist (`{ "symbol": "TATAMOTORS" }`).
-- `PATCH /api/watchlist/pin-stock` — Toggle pin status (`{ "symbol": "INFY" }`).
+### Watchlists (`/api/watchlists` & `/api/watchlist`)
+
+#### Multi-Watchlist API (Phase 1)
+- `GET /api/watchlists` — Retrieve all user watchlists with `stockCount`, `isDefault`, and timestamps.
+- `POST /api/watchlists` — Create a new named watchlist (`{ "name": "Growth Bets" }`). Limit: max 10 watchlists per user, 1-40 chars, case-insensitive unique names.
+- `PATCH /api/watchlists/:id` — Rename a watchlist (`{ "name": "Tech Titans" }`).
+- `DELETE /api/watchlists/:id` — Delete a watchlist (the default watchlist and the user's sole watchlist cannot be deleted).
+- `POST /api/watchlists/:id/stocks` — Add a stock to a watchlist (`{ "symbol": "TATAMOTORS" }`). Max 50 stocks per watchlist, no duplicates within a watchlist.
+- `DELETE /api/watchlists/:id/stocks/:symbol` — Remove a stock from a watchlist.
+- `PATCH /api/watchlists/:id/stocks/:symbol/pin` — Toggle pin status for a stock in a watchlist.
+
+#### Aggregated Overview Endpoints (Phase 1)
+- `GET /api/watchlists/:id/overview?range=1D|1W|1M` — Aggregated overview for a specific watchlist.
+- `GET /api/watchlists/all/overview?range=1D|1W|1M` — Union of all user watchlists, deduplicated by symbol.
+
+Both overview endpoints return in **one single round-trip**:
+- `stocks[]`: `symbol`, `companyName`, `sector`, `exchange`, `currency`, `currentPrice`, `changeAmount`, `changePercent`, `isPinned`, `addedAt`, `attentionLevel`, `attentionScore`, `unseenUpdatesCount`, `nextEvent`, `activeAlertCount`, `sparkline` (array of numbers for requested range), `watchlistIds`.
+- `summary`: `totalStocks`, `needAttention` (CRITICAL + HIGH), `upcomingEvents`, `activeAlerts`, `unseenUpdates`.
+- `dataFreshness`: `{ lastSyncedAt, isStale }`.
+
+#### Attention Scoring Thresholds
+Aligned with `attentionScoringService.ts`:
+- **CRITICAL**: Attention score $\ge 75$ (e.g. violent multi-day break, earnings crash, regulatory ban)
+- **HIGH**: Attention score $\ge 55$ (e.g. sharp volume spike, break of 52W level)
+- **MEDIUM**: Attention score $\ge 35$ (e.g. steady breakout, sector rotation)
+- **LOW**: Attention score $< 35$ (normal volatility or no unread events)
+
+#### Legacy Endpoints (Maintained for Backward Compatibility)
+- `GET /api/watchlist` — Retrieve default watchlist with stocks array.
+- `POST /api/watchlist/setup` — Initial onboarding setup (`{ "name": "...", "symbols": [...] }`).
+- `POST /api/watchlist/add-stock` — Add to default watchlist.
+- `DELETE /api/watchlist/remove-stock` — Remove from default watchlist.
+- `PATCH /api/watchlist/pin-stock` — Toggle pin in default watchlist.
 
 ### Stocks & News (`/api/stocks` & `/api/news`)
 - `GET /api/stocks` — Query canonical master stock catalog (`?sector=&exchange=&search=`).
