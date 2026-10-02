@@ -1,6 +1,14 @@
 import { apiClient } from './apiClient';
 
-export type AlertType = 'PRICE_ABOVE' | 'PRICE_BELOW' | 'DAY_CHANGE_PCT' | 'ATTENTION_LEVEL';
+export type AlertType =
+  | 'PRICE_ABOVE'
+  | 'PRICE_BELOW'
+  | 'DAY_CHANGE_PCT'
+  | 'ATTENTION_LEVEL'
+  | 'ATTENTION_SCORE'
+  | 'EARNINGS'
+  | 'DIVIDEND'
+  | 'AGM';
 
 export interface AlertItem {
   id: string;

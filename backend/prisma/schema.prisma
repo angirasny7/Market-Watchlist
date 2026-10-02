@@ -345,6 +345,10 @@ enum AlertType {
   PRICE_BELOW
   DAY_CHANGE_PCT
   ATTENTION_LEVEL
+  ATTENTION_SCORE
+  EARNINGS
+  DIVIDEND
+  AGM
 }
 
 enum NotificationType {

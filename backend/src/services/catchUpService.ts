@@ -123,11 +123,15 @@ export class CatchUpService {
     // 3. For each symbol, fetch historical bars min(daysSince + 25, 365) and evaluate thresholds
     let eventsCreated = 0;
     const daysToFetch = Math.min(daysSince + 25, 365);
+    const barsBySymbol = new Map<string, any[]>();
 
     for (const symbol of watchlistSymbols) {
       let bars: any[] = [];
       try {
         bars = await marketProvider.getHistoricalBars(symbol, daysToFetch);
+        if (bars && bars.length > 0) {
+          barsBySymbol.set(symbol, bars);
+        }
       } catch (err: any) {
         console.warn(`[CatchUpService] Historical bars fetch failed for ${symbol}: ${err.message}`);
         await prisma.systemJobRun.create({
@@ -478,9 +482,12 @@ export class CatchUpService {
       }
     }
 
-    // Evaluate active alerts for the user's watchlist symbols
+    // Evaluate active alerts for the user's watchlist symbols with historical crossing detection
     try {
-      await alertService.evaluateAlerts(watchlistSymbols);
+      await alertService.evaluateAlerts(watchlistSymbols, {
+        historicalBars: barsBySymbol,
+        since,
+      });
     } catch (e: any) {
       console.error('[CatchUp] Alert evaluation warning:', e.message);
     }

@@ -86,8 +86,10 @@ export const AlertFormModal: React.FC<AlertFormModalProps> = ({
         setTargetValue((stock.currentPrice * 0.98).toFixed(2));
       } else if (alertType === 'DAY_CHANGE_PCT') {
         setTargetValue('5.0');
-      } else if (alertType === 'ATTENTION_LEVEL') {
+      } else if (alertType === 'ATTENTION_LEVEL' || alertType === 'ATTENTION_SCORE') {
         setTargetValue('65');
+      } else if (alertType === 'EARNINGS' || alertType === 'DIVIDEND' || alertType === 'AGM') {
+        setTargetValue('3');
       }
     }
   };
@@ -101,8 +103,10 @@ export const AlertFormModal: React.FC<AlertFormModalProps> = ({
       setTargetValue((activeStock.currentPrice * 0.98).toFixed(2));
     } else if (type === 'DAY_CHANGE_PCT') {
       setTargetValue('5.0');
-    } else if (type === 'ATTENTION_LEVEL') {
+    } else if (type === 'ATTENTION_LEVEL' || type === 'ATTENTION_SCORE') {
       setTargetValue('65');
+    } else if (type === 'EARNINGS' || type === 'DIVIDEND' || type === 'AGM') {
+      setTargetValue('3');
     }
   };
 
@@ -117,8 +121,19 @@ export const AlertFormModal: React.FC<AlertFormModalProps> = ({
       return;
     }
 
-    if (alertType === 'ATTENTION_LEVEL' && (val < 1 || val > 100)) {
+    if (
+      (alertType === 'ATTENTION_LEVEL' || alertType === 'ATTENTION_SCORE') &&
+      (val < 1 || val > 100)
+    ) {
       setError('Attention score must be between 1 and 100.');
+      return;
+    }
+
+    if (
+      (alertType === 'EARNINGS' || alertType === 'DIVIDEND' || alertType === 'AGM') &&
+      (!Number.isInteger(val) || val < 1)
+    ) {
+      setError('Event notice days must be a whole number (e.g. 1, 3, or 7 days prior).');
       return;
     }
 
@@ -170,7 +185,14 @@ export const AlertFormModal: React.FC<AlertFormModalProps> = ({
       case 'DAY_CHANGE_PCT':
         return `Day change ≥ ±${a.targetValue}%`;
       case 'ATTENTION_LEVEL':
+      case 'ATTENTION_SCORE':
         return `Attention score ≥ ${a.targetValue}`;
+      case 'EARNINGS':
+        return `Earnings ${a.targetValue}d before`;
+      case 'DIVIDEND':
+        return `Dividend ${a.targetValue}d before`;
+      case 'AGM':
+        return `AGM ${a.targetValue}d before`;
       default:
         return `${a.alertType} ${a.targetValue}`;
     }
@@ -272,12 +294,15 @@ export const AlertFormModal: React.FC<AlertFormModalProps> = ({
             <label className="block text-xs font-medium text-text-secondary mb-1.5">
               Alert Condition
             </label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {[
                 { type: 'PRICE_ABOVE', label: 'Price rises above' },
                 { type: 'PRICE_BELOW', label: 'Price falls below' },
                 { type: 'DAY_CHANGE_PCT', label: 'Day change ≥ ±%' },
-                { type: 'ATTENTION_LEVEL', label: 'Attention score ≥' },
+                { type: 'ATTENTION_SCORE', label: 'Attention score ≥' },
+                { type: 'EARNINGS', label: 'Earnings notice' },
+                { type: 'DIVIDEND', label: 'Dividend notice' },
+                { type: 'AGM', label: 'AGM notice' },
               ].map((item) => (
                 <button
                   key={item.type}
@@ -306,23 +331,56 @@ export const AlertFormModal: React.FC<AlertFormModalProps> = ({
                   ? currency
                   : alertType === 'DAY_CHANGE_PCT'
                   ? '%'
-                  : 'Score'}
+                  : alertType === 'ATTENTION_LEVEL' || alertType === 'ATTENTION_SCORE'
+                  ? 'Score'
+                  : 'Days'}
               </span>
               <input
                 type="number"
-                step={alertType === 'DAY_CHANGE_PCT' || alertType === 'ATTENTION_LEVEL' ? '1' : '0.05'}
+                step={
+                  alertType === 'DAY_CHANGE_PCT' ||
+                  alertType === 'ATTENTION_LEVEL' ||
+                  alertType === 'ATTENTION_SCORE' ||
+                  alertType === 'EARNINGS' ||
+                  alertType === 'DIVIDEND' ||
+                  alertType === 'AGM'
+                    ? '1'
+                    : '0.05'
+                }
                 value={targetValue}
                 onChange={(e) => setTargetValue(e.target.value)}
                 placeholder="Enter value"
                 required
-                className="w-full pl-12 pr-4 py-2.5 rounded-lg bg-surface-hover border border-border text-text-primary text-sm focus:outline-none focus:border-indigo-500"
+                className="w-full pl-14 pr-4 py-2.5 rounded-lg bg-surface-hover border border-border text-text-primary text-sm focus:outline-none focus:border-indigo-500"
               />
             </div>
+            {(alertType === 'EARNINGS' || alertType === 'DIVIDEND' || alertType === 'AGM') && (
+              <div className="flex items-center gap-2 mt-2">
+                <span className="text-[11px] text-text-muted">Notice:</span>
+                {[1, 3, 7].map((days) => (
+                  <button
+                    key={days}
+                    type="button"
+                    onClick={() => setTargetValue(String(days))}
+                    className={`px-2 py-0.5 text-xs rounded border transition-colors ${
+                      targetValue === String(days)
+                        ? 'border-indigo-500 bg-indigo-500/10 text-indigo-400 font-medium'
+                        : 'border-border text-text-muted hover:text-text-primary hover:bg-surface-hover'
+                    }`}
+                  >
+                    {days} day{days === 1 ? '' : 's'} prior
+                  </button>
+                ))}
+              </div>
+            )}
             <p className="mt-1 text-[11px] text-text-muted">
               {alertType === 'PRICE_ABOVE' && `Triggers when ${selectedSymbol} price reaches or crosses above target.`}
               {alertType === 'PRICE_BELOW' && `Triggers when ${selectedSymbol} price reaches or falls below target.`}
               {alertType === 'DAY_CHANGE_PCT' && `Triggers when absolute intraday move reaches ${targetValue || '0'}%.`}
-              {alertType === 'ATTENTION_LEVEL' && `Triggers when high attention score is detected (e.g., 55 for High, 75 for Critical).`}
+              {(alertType === 'ATTENTION_LEVEL' || alertType === 'ATTENTION_SCORE') && `Triggers when composite attention score reaches ${targetValue || '65'} (0-100 scale).`}
+              {alertType === 'EARNINGS' && `Notifies ${targetValue || '3'} day(s) before scheduled quarterly earnings release.`}
+              {alertType === 'DIVIDEND' && `Notifies ${targetValue || '3'} day(s) before dividend or ex-dividend date.`}
+              {alertType === 'AGM' && `Notifies ${targetValue || '3'} day(s) before Annual General Meeting.`}
             </p>
           </div>
 
