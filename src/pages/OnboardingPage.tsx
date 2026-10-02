@@ -4,39 +4,26 @@ import { stockService } from '../services/stockService';
 import { watchlistService } from '../services/watchlistService';
 import { useAuthStore } from '../store/useAuthStore';
 import { useMarketStore } from '../store/useMarketStore';
-import { filterAndRankStocks, getStockAvatarDetails } from '../lib/stockSearch';
 import { STARTER_TEMPLATES, StarterWatchlistTemplate } from '../data/starterTemplates';
+import { formatPrice } from '../lib/utils';
 import {
-  Sparkles,
   Search,
   Check,
-  TrendingUp,
-  TrendingDown,
-  ArrowRight,
-  RefreshCw,
-  SlidersHorizontal,
-  LogOut,
-  Globe,
-  Layers,
   X,
-  BarChart3,
-  Crown,
-  Cpu,
-  Landmark,
-  Zap,
-  Car,
-  HeartPulse,
+  ArrowRight,
+  ArrowLeft,
+  RefreshCw,
+  LogOut,
+  Sparkles,
 } from 'lucide-react';
 
 interface CatalogStock {
   symbol: string;
   companyName: string;
   sector: string;
-  exchange: string;
   currency: string;
   currentPrice: number;
   changePercent: number;
-  dailyChangePercent?: number;
 }
 
 export const OnboardingPage: React.FC = () => {
@@ -44,32 +31,14 @@ export const OnboardingPage: React.FC = () => {
   const { setOnboarded, logout } = useAuthStore();
   const { fetchMarketData } = useMarketStore();
 
+  const [step, setStep] = useState<1 | 2>(1);
   const [stocks, setStocks] = useState<CatalogStock[]>([]);
   const [loadingStocks, setLoadingStocks] = useState(true);
-  const [manualSelectedSymbols, setManualSelectedSymbols] = useState<Set<string>>(new Set());
-  const [activeTemplateIds, setActiveTemplateIds] = useState<Set<string>>(new Set());
-  const [templateContributions, setTemplateContributions] = useState<Record<string, Set<string>>>({});
+  const [selectedSymbols, setSelectedSymbols] = useState<Set<string>>(new Set());
   const [watchlistName, setWatchlistName] = useState('Primary Watchlist');
-  const [isCustomWatchlistName, setIsCustomWatchlistName] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedMarket, setSelectedMarket] = useState<'ALL' | 'IN' | 'US'>('ALL');
-  const [selectedSector, setSelectedSector] = useState('ALL');
-  const [sortOrder, setSortOrder] = useState<'DEFAULT' | 'A-Z' | 'CHANGE_DESC' | 'PRICE_DESC'>('DEFAULT');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  const selectedSymbols = useMemo(() => {
-    const set = new Set(manualSelectedSymbols);
-    for (const templateId of activeTemplateIds) {
-      const contribs = templateContributions[templateId];
-      if (contribs) {
-        for (const sym of contribs) {
-          set.add(sym);
-        }
-      }
-    }
-    return set;
-  }, [manualSelectedSymbols, activeTemplateIds, templateContributions]);
 
   useEffect(() => {
     let isMounted = true;
@@ -82,11 +51,9 @@ export const OnboardingPage: React.FC = () => {
               symbol: s.symbol,
               companyName: s.companyName || s.name || s.symbol,
               sector: s.sector || 'General',
-              exchange: s.exchange || (s.currency === '$' ? 'NASDAQ' : 'NSE'),
               currency: s.currency || (s.exchange === 'NASDAQ' || s.exchange === 'NYSE' ? '$' : '₹'),
               currentPrice: Number(s.currentPrice) || 0,
               changePercent: Number(s.dailyChangePercent ?? s.changePercent) || 0,
-              dailyChangePercent: Number(s.dailyChangePercent ?? s.changePercent) || 0,
             }))
           );
         }
@@ -103,154 +70,53 @@ export const OnboardingPage: React.FC = () => {
     };
   }, []);
 
-  const sectors = useMemo(() => {
-    const set = new Set(stocks.map((s) => s.sector));
-    return ['ALL', ...Array.from(set)];
-  }, [stocks]);
-
+  // Filter catalog stocks
   const filteredStocks = useMemo(() => {
-    let list = filterAndRankStocks(stocks, {
-      query: searchQuery,
-      market: selectedMarket,
-      sector: selectedSector,
-      sortOrder: sortOrder === 'A-Z' ? 'A-Z' : 'DEFAULT',
-    });
+    if (!searchQuery.trim()) return stocks.slice(0, 24);
+    const q = searchQuery.toLowerCase().trim();
+    return stocks.filter(
+      (s) =>
+        s.symbol.toLowerCase().includes(q) ||
+        s.companyName.toLowerCase().includes(q) ||
+        s.sector.toLowerCase().includes(q)
+    );
+  }, [stocks, searchQuery]);
 
-    if (!searchQuery) {
-      if (sortOrder === 'CHANGE_DESC') {
-        list = [...list].sort((a, b) => (b.changePercent || 0) - (a.changePercent || 0));
-      } else if (sortOrder === 'PRICE_DESC') {
-        list = [...list].sort((a, b) => (b.currentPrice || 0) - (a.currentPrice || 0));
-      }
-    }
-    return list;
-  }, [stocks, searchQuery, selectedMarket, selectedSector, sortOrder]);
+  // Toggle template
+  const handleToggleTemplate = (template: StarterWatchlistTemplate) => {
+    const templateHasAll = template.symbols.every((sym) => selectedSymbols.has(sym));
+    const next = new Set(selectedSymbols);
 
-  const toggleTemplate = (template: StarterWatchlistTemplate) => {
-    const isActive = activeTemplateIds.has(template.id);
-
-    if (isActive) {
-      const nextActiveIds = new Set(activeTemplateIds);
-      nextActiveIds.delete(template.id);
-      setActiveTemplateIds(nextActiveIds);
-
-      setTemplateContributions((prev) => {
-        const next = { ...prev };
-        delete next[template.id];
-        return next;
-      });
-
-      if (!isCustomWatchlistName) {
-        if (nextActiveIds.size === 0) {
-          setWatchlistName('Primary Watchlist');
-        } else if (nextActiveIds.size === 1) {
-          const activeTmpl = STARTER_TEMPLATES.find((t) => nextActiveIds.has(t.id));
-          if (activeTmpl) setWatchlistName(`${activeTmpl.name} Watchlist`);
-        } else {
-          const names = STARTER_TEMPLATES.filter((t) => nextActiveIds.has(t.id)).map((t) => t.name);
-          setWatchlistName(`${names.join(' & ')} Watchlist`);
-        }
-      }
-
-      setErrorMessage(null);
+    if (templateHasAll) {
+      template.symbols.forEach((sym) => next.delete(sym));
     } else {
-      const newSymbols = template.symbols.filter((sym) => !selectedSymbols.has(sym));
-      if (selectedSymbols.size + newSymbols.length > 50) {
-        setErrorMessage(
-          `Adding "${template.name}" (${newSymbols.length} new stocks) would exceed the 50 stock maximum (${50 - selectedSymbols.size} slots remaining).`
-        );
-        return;
-      }
-
-      const contribs = new Set(template.symbols.filter((sym) => !manualSelectedSymbols.has(sym)));
-
-      const nextActiveIds = new Set(activeTemplateIds);
-      nextActiveIds.add(template.id);
-      setActiveTemplateIds(nextActiveIds);
-
-      setTemplateContributions((prev) => ({
-        ...prev,
-        [template.id]: contribs,
-      }));
-
-      if (!isCustomWatchlistName) {
-        if (nextActiveIds.size === 1) {
-          setWatchlistName(`${template.name} Watchlist`);
-        } else {
-          const names = STARTER_TEMPLATES.filter((t) => nextActiveIds.has(t.id)).map((t) => t.name);
-          setWatchlistName(`${names.join(' & ')} Watchlist`);
-        }
-      }
-
-      setErrorMessage(null);
+      template.symbols.forEach((sym) => {
+        if (next.size < 50) next.add(sym);
+      });
     }
-  };
 
-  const clearAllTemplates = () => {
-    setActiveTemplateIds(new Set());
-    setTemplateContributions({});
-    if (!isCustomWatchlistName) {
-      setWatchlistName('Primary Watchlist');
-    }
+    setSelectedSymbols(next);
     setErrorMessage(null);
   };
 
-  const toggleStock = (symbol: string) => {
-    if (selectedSymbols.has(symbol)) {
-      setManualSelectedSymbols((prev) => {
-        const next = new Set(prev);
-        next.delete(symbol);
-        return next;
-      });
-
-      setTemplateContributions((prev) => {
-        const next = { ...prev };
-        let updated = false;
-        for (const tId of Object.keys(next)) {
-          if (next[tId].has(symbol)) {
-            const nextSet = new Set(next[tId]);
-            nextSet.delete(symbol);
-            next[tId] = nextSet;
-            updated = true;
-          }
-        }
-        return updated ? next : prev;
-      });
-
-      setActiveTemplateIds((prev) => {
-        const next = new Set(prev);
-        for (const tId of prev) {
-          const tmpl = STARTER_TEMPLATES.find((t) => t.id === tId);
-          if (tmpl) {
-            const hasAnyRemaining = tmpl.symbols.some(
-              (s) => s !== symbol && selectedSymbols.has(s)
-            );
-            if (!hasAnyRemaining) {
-              next.delete(tId);
-            }
-          }
-        }
-        return next;
-      });
-
-      setErrorMessage(null);
+  const handleToggleStock = (symbol: string) => {
+    const next = new Set(selectedSymbols);
+    if (next.has(symbol)) {
+      next.delete(symbol);
     } else {
-      if (selectedSymbols.size >= 50) {
-        setErrorMessage('Choose up to 50 stocks.');
+      if (next.size >= 50) {
+        setErrorMessage('You can track up to 50 stocks.');
         return;
       }
-      setManualSelectedSymbols((prev) => new Set(prev).add(symbol));
-      setErrorMessage(null);
+      next.add(symbol);
     }
+    setSelectedSymbols(next);
+    setErrorMessage(null);
   };
 
   const handleCompleteSetup = async () => {
     if (selectedSymbols.size < 1) {
-      setErrorMessage('Select at least 1 stock.');
-      return;
-    }
-    if (selectedSymbols.size > 50) {
-      setErrorMessage('Choose up to 50 stocks.');
+      setErrorMessage('Please select at least 1 stock to track.');
       return;
     }
 
@@ -264,7 +130,7 @@ export const OnboardingPage: React.FC = () => {
       });
 
       if (!success) {
-        throw new Error('Failed to save watchlist configuration');
+        throw new Error('Failed to save watchlist');
       }
 
       setOnboarded(true);
@@ -276,406 +142,175 @@ export const OnboardingPage: React.FC = () => {
     }
   };
 
-  const isSelectionValid = selectedSymbols.size >= 1 && selectedSymbols.size <= 50;
-
-  const selectedStockObjects = useMemo(() => {
-    return stocks.filter((s) => selectedSymbols.has(s.symbol));
-  }, [stocks, selectedSymbols]);
-
-  const coveredSectorsCount = useMemo(() => {
-    const set = new Set(selectedStockObjects.map((s) => s.sector));
-    return set.size;
-  }, [selectedStockObjects]);
-
-  const coveragePercent = useMemo(() => {
-    if (stocks.length === 0) return 0;
-    return Math.min(100, Math.round((selectedSymbols.size / stocks.length) * 100));
-  }, [selectedSymbols.size, stocks.length]);
-
-  const counterStyle = useMemo(() => {
-    const count = selectedSymbols.size;
-    if (count === 0) {
-      return {
-        badge: 'bg-slate-800/90 text-slate-400 border-slate-700',
-        text: 'Select at least 1 stock',
-        textColor: 'text-slate-400',
-      };
-    }
-    if (count >= 45) {
-      return {
-        badge: 'bg-amber-500/10 text-amber-400 border-amber-500/30',
-        text: count > 50 ? 'Exceeds 50 stock maximum' : 'Approaching 50 stock limit',
-        textColor: 'text-amber-400',
-      };
-    }
-    return {
-      badge: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
-      text: 'Ready to launch',
-      textColor: 'text-emerald-400',
-    };
-  }, [selectedSymbols.size]);
-
-  const renderTemplateIcon = (iconName: string) => {
-    switch (iconName) {
-      case 'Crown':
-        return <Crown className="w-4 h-4" />;
-      case 'Cpu':
-        return <Cpu className="w-4 h-4" />;
-      case 'Landmark':
-        return <Landmark className="w-4 h-4" />;
-      case 'Zap':
-        return <Zap className="w-4 h-4" />;
-      case 'Car':
-        return <Car className="w-4 h-4" />;
-      case 'HeartPulse':
-        return <HeartPulse className="w-4 h-4" />;
-      case 'Globe':
-        return <Globe className="w-4 h-4" />;
-      default:
-        return <Layers className="w-4 h-4" />;
-    }
-  };
-
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-start py-4 sm:py-6 px-3 sm:px-6 lg:px-8 pb-32">
-      <div className="w-full max-w-[1560px] space-y-4 sm:space-y-5">
-        <div className="flex items-center justify-between pb-1 border-b border-slate-800/60">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center font-bold text-white text-xs shadow-md shadow-indigo-600/30">
-                AI
-              </div>
-              <span className="font-bold text-sm tracking-tight text-white hidden sm:inline">
-                Smart Market Watchlist
-              </span>
-            </div>
-            <span className="text-slate-700 hidden sm:inline">•</span>
-            <div className="flex items-center gap-2 text-xs font-mono text-slate-400">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span>Account Setup</span>
-            </div>
-          </div>
-
-          <button
-            onClick={async () => {
-              await logout();
-              navigate('/login', { replace: true });
-            }}
-            title="Sign out of account"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-400 hover:text-rose-400 hover:border-rose-500/30 hover:bg-rose-500/10 transition-colors"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            <span>Sign Out</span>
-          </button>
+    <div className="min-h-screen bg-background flex flex-col justify-between p-4 sm:p-6 lg:p-8 max-w-4xl mx-auto">
+      {/* Top Header */}
+      <div className="flex items-center justify-between pb-6 border-b border-border/80">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-100">
+            Welcome to Smart Market Watchlist
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
+            Set up your monitored stocks in two quick steps.
+          </p>
         </div>
 
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-1">
-          <div className="space-y-1.5 max-w-3xl">
-            <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-[11px] font-mono font-semibold tracking-wider uppercase">
-              <Sparkles className="w-3 h-3" />
-              <span>GET STARTED</span>
-            </div>
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-white">
-              Build Your Personalized{' '}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">
-                Watchlist
-              </span>
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
-              Select at least 1 stock or choose a curated template (up to 50 stocks). Your dashboard,
-              anomaly feed, and market intelligence will be personalized to your selection.
-            </p>
+        <button
+          onClick={async () => {
+            await logout();
+            navigate('/login', { replace: true });
+          }}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs text-slate-400 hover:text-rose-400 transition-colors"
+        >
+          <LogOut className="w-3.5 h-3.5" />
+          <span>Sign Out</span>
+        </button>
+      </div>
+
+      {/* Progress Indicator */}
+      <div className="py-6">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <span
+              className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold ${
+                step === 1
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+              }`}
+            >
+              {step > 1 ? <Check className="w-3.5 h-3.5" /> : '1'}
+            </span>
+            <span
+              className={`text-xs sm:text-sm font-medium ${
+                step === 1 ? 'text-slate-100' : 'text-slate-400'
+              }`}
+            >
+              Select Stocks
+            </span>
           </div>
 
-          <div className="hidden md:flex items-center gap-3.5 p-3.5 rounded-2xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-sm shrink-0 max-w-sm">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500/20 to-indigo-500/20 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shrink-0">
-              <BarChart3 className="w-5 h-5" />
-            </div>
-            <div className="space-y-0.5">
-              <div className="text-xs font-semibold text-white">Track what matters</div>
-              <div className="text-[11px] text-slate-400 leading-tight">
-                Get real-time alerts, AI-powered insights, and personalized market intelligence.
-              </div>
-            </div>
+          <div className="flex-1 h-0.5 bg-border rounded-full" />
+
+          <div className="flex items-center gap-2">
+            <span
+              className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold ${
+                step === 2
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-surface-subtle text-slate-500 border border-border'
+              }`}
+            >
+              2
+            </span>
+            <span
+              className={`text-xs sm:text-sm font-medium ${
+                step === 2 ? 'text-slate-100' : 'text-slate-400'
+              }`}
+            >
+              Name & Confirm
+            </span>
           </div>
         </div>
+      </div>
 
-        <div className="rounded-2xl bg-slate-900/70 border border-slate-800 shadow-2xl backdrop-blur-sm overflow-hidden divide-y divide-slate-800/80">
-          <div className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900/40">
-            <div className="flex-1 max-w-md">
-              <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                Watchlist Name
-              </label>
-              <input
-                type="text"
-                value={watchlistName}
-                onChange={(e) => {
-                  setWatchlistName(e.target.value);
-                  setIsCustomWatchlistName(true);
-                }}
-                placeholder="e.g., Primary Watchlist or Core Equities"
-                className="w-full px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-700 text-sm font-semibold text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
-              />
-            </div>
+      {/* Error alert */}
+      {errorMessage && (
+        <div className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs sm:text-sm text-rose-300">
+          {errorMessage}
+        </div>
+      )}
 
-            <div className="flex flex-col sm:items-end">
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-400">Selected:</span>
-                <span
-                  className={`text-sm font-bold font-mono px-3 py-1 rounded-lg border transition-colors ${counterStyle.badge}`}
-                >
-                  {selectedSymbols.size} / 50
-                </span>
-              </div>
-              <span className={`text-[11px] mt-1 ${counterStyle.textColor}`}>
-                {counterStyle.text}
-              </span>
-            </div>
-          </div>
-
-          <div className="p-4 sm:p-5 space-y-3 bg-slate-900/30">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-xs font-semibold text-slate-300">
-                <Layers className="w-4 h-4 text-indigo-400" />
-                <span>Popular Starter Templates</span>
-                <span className="text-slate-500 font-normal hidden sm:inline">
-                  — Click to toggle template stocks on or off
-                </span>
-              </div>
-              {activeTemplateIds.size > 0 && (
-                <button
-                  onClick={clearAllTemplates}
-                  className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors flex items-center gap-1 font-medium"
-                >
-                  <X className="w-3.5 h-3.5" />
-                  <span>Clear Templates ({activeTemplateIds.size})</span>
-                </button>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-2.5">
+      {/* STEP 1: SELECT STOCKS */}
+      {step === 1 && (
+        <div className="space-y-6 flex-1">
+          {/* Starter Packs */}
+          <div className="space-y-2.5">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Quick Starter Packs</span>
+            </h3>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
               {STARTER_TEMPLATES.map((tmpl) => {
-                const isSelected = activeTemplateIds.has(tmpl.id);
+                const isSelected = tmpl.symbols.every((sym) => selectedSymbols.has(sym));
                 return (
                   <button
                     key={tmpl.id}
-                    onClick={() => toggleTemplate(tmpl)}
-                    className={`p-3 rounded-xl text-left border transition-all duration-150 flex flex-col justify-between gap-2 select-none group ${
+                    onClick={() => handleToggleTemplate(tmpl)}
+                    className={`p-3 rounded-xl border text-left transition-all ${
                       isSelected
-                        ? 'bg-indigo-600/20 border-indigo-500 text-white shadow-lg shadow-indigo-600/20 ring-1 ring-indigo-500/40'
-                        : 'bg-slate-950/70 border-slate-800 text-slate-300 hover:border-slate-700 hover:bg-slate-950/90'
+                        ? 'bg-indigo-600/15 border-indigo-500 text-slate-100 shadow-sm'
+                        : 'bg-surface border-border hover:border-slate-700 text-slate-300'
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-1.5 w-full">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div
-                          className={`p-1.5 rounded-lg shrink-0 transition-colors ${
-                            isSelected
-                              ? 'bg-indigo-600 text-white'
-                              : 'bg-slate-800 text-indigo-400 group-hover:bg-slate-700'
-                          }`}
-                        >
-                          {renderTemplateIcon(tmpl.iconName)}
-                        </div>
-                        <span className="font-bold text-xs text-white truncate leading-tight">
-                          {tmpl.name}
-                        </span>
-                      </div>
-                      <span
-                        className={`text-[10px] font-mono px-1.5 py-0.5 rounded-md font-semibold shrink-0 flex items-center gap-1 ${
-                          isSelected
-                            ? 'bg-indigo-600 text-white shadow-sm'
-                            : 'bg-slate-800 text-slate-400 border border-slate-700/60'
-                        }`}
-                      >
-                        {isSelected ? (
-                          <>
-                            <Check className="w-3 h-3 stroke-[2.5]" />
-                            <span>Applied</span>
-                          </>
-                        ) : (
-                          <span>{tmpl.symbols.length}</span>
-                        )}
-                      </span>
+                    <div className="font-semibold text-xs sm:text-sm">{tmpl.name}</div>
+                    <div className="text-[11px] text-slate-400 mt-0.5">
+                      {tmpl.symbols.length} stocks
                     </div>
-
-                    <p className="text-[11px] text-slate-400 truncate w-full">
-                      {tmpl.sampleConstituents || tmpl.symbols.slice(0, 3).join(', ') + ' & more'}
-                    </p>
                   </button>
                 );
               })}
             </div>
           </div>
 
-          <div className="p-4 sm:p-5 space-y-3 bg-slate-900/50">
-            <div className="flex flex-col sm:flex-row items-center gap-3">
-              <div className="relative w-full">
-                <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search by symbol (e.g. TCS, NVDA, INFY) or company name..."
-                  className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs sm:text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
-                />
-                {searchQuery && (
-                  <button
-                    onClick={() => setSearchQuery('')}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
-                    title="Clear search"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-
-              <div className="flex items-center gap-1 shrink-0 bg-slate-950 p-1 rounded-xl border border-slate-800 w-full sm:w-auto justify-center">
-                <Globe className="w-3.5 h-3.5 text-slate-500 ml-1.5 mr-0.5 shrink-0" />
-                {(
-                  [
-                    { id: 'ALL', label: 'All Markets' },
-                    { id: 'IN', label: 'India (NSE)' },
-                    { id: 'US', label: 'US (NASDAQ/NYSE)' },
-                  ] as const
-                ).map((m) => (
-                  <button
-                    key={m.id}
-                    onClick={() => setSelectedMarket(m.id)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors shrink-0 ${
-                      selectedMarket === m.id
-                        ? 'bg-indigo-600 text-white shadow-sm'
-                        : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    {m.label}
-                  </button>
-                ))}
-              </div>
+          {/* Search & Stock Catalog */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                Browse Stock Catalog
+              </h3>
+              <span className="text-xs font-mono text-slate-400">
+                {selectedSymbols.size} of 50 selected
+              </span>
             </div>
 
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none pt-1">
-              <SlidersHorizontal className="w-3.5 h-3.5 text-slate-500 shrink-0 mr-1" />
-              {sectors.map((sec) => (
-                <button
-                  key={sec}
-                  onClick={() => setSelectedSector(sec)}
-                  className={`px-3 py-1 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
-                    selectedSector === sec
-                      ? 'bg-indigo-600 text-white font-semibold shadow-sm'
-                      : 'bg-slate-950 text-slate-400 hover:text-slate-200 border border-slate-800 hover:border-slate-700'
-                  }`}
-                >
-                  {sec === 'ALL' ? 'All Sectors' : sec}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="p-4 sm:p-5 space-y-3 bg-slate-900/60">
-            <div className="flex items-center justify-between text-xs text-slate-400 pb-1">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-bold text-white">All Stocks</span>
-                <span className="text-xs text-slate-400 font-mono">
-                  {filteredStocks.length} available {selectedSector !== 'ALL' ? `• ${selectedSector}` : ''}
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <span className="text-slate-500 hidden sm:inline">Sort by:</span>
-                <select
-                  value={sortOrder}
-                  onChange={(e) => setSortOrder(e.target.value as any)}
-                  className="bg-slate-950 border border-slate-800 text-slate-300 rounded-lg px-2.5 py-1 text-xs focus:outline-none focus:border-indigo-500 transition-colors"
-                >
-                  <option value="DEFAULT">Market Cap / Relevance</option>
-                  <option value="A-Z">Symbol (A - Z)</option>
-                  <option value="CHANGE_DESC">Highest Gainers (%)</option>
-                  <option value="PRICE_DESC">Highest Price</option>
-                </select>
-              </div>
+            <div className="relative">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search stocks by name or ticker (e.g. TCS, RELIANCE, INFY)..."
+                className="w-full pl-9 pr-4 py-2 bg-surface border border-border rounded-xl text-xs sm:text-sm text-slate-100 placeholder-slate-400 focus:outline-none focus:border-indigo-500 transition-colors"
+              />
             </div>
 
             {loadingStocks ? (
-              <div className="py-20 flex flex-col items-center justify-center gap-3 text-slate-400">
-                <RefreshCw className="w-6 h-6 animate-spin text-indigo-500" />
-                <p className="text-xs">Loading complete stock universe (130+ equities)...</p>
-              </div>
-            ) : filteredStocks.length === 0 ? (
-              <div className="py-16 text-center text-slate-400 space-y-2">
-                <p className="text-sm font-semibold">No stocks found matching "{searchQuery}"</p>
-                <p className="text-xs text-slate-500">
-                  Try adjusting your search query, market, or sector filters.
-                </p>
+              <div className="p-8 text-center text-xs text-slate-400">
+                <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-indigo-400" />
+                Loading stocks...
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 max-h-[560px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-800">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-72 overflow-y-auto pr-1">
                 {filteredStocks.map((stock) => {
-                  const isSelected = selectedSymbols.has(stock.symbol);
-                  const { initials, style } = getStockAvatarDetails(stock.symbol, stock.sector);
-                  const isPositive = stock.changePercent >= 0;
-
+                  const isChecked = selectedSymbols.has(stock.symbol);
                   return (
                     <div
                       key={stock.symbol}
-                      onClick={() => toggleStock(stock.symbol)}
-                      className={`p-3 sm:p-3.5 rounded-xl border cursor-pointer transition-all duration-150 flex items-center justify-between gap-3 select-none group ${
-                        isSelected
-                          ? 'bg-indigo-600/15 border-indigo-500 ring-1 ring-indigo-500/30 text-white shadow-md shadow-indigo-950/40'
-                          : 'bg-slate-950/70 border-slate-800/90 hover:border-slate-700 hover:bg-slate-900/60 text-slate-300'
+                      onClick={() => handleToggleStock(stock.symbol)}
+                      className={`p-2.5 rounded-xl border flex items-center justify-between cursor-pointer transition-colors ${
+                        isChecked
+                          ? 'bg-indigo-600/10 border-indigo-500/50 text-slate-100'
+                          : 'bg-surface border-border hover:border-slate-700 text-slate-300'
                       }`}
                     >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div
-                          className={`w-10 h-10 rounded-full flex items-center justify-center font-bold font-mono text-xs border shrink-0 shadow-sm ${style.bg} ${style.text} ${style.border}`}
-                        >
-                          {initials}
-                        </div>
-                        <div className="space-y-0.5 min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-bold text-sm tracking-wide text-white font-mono">
-                              {stock.symbol}
-                            </span>
-                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 font-mono border border-slate-700/50">
-                              {stock.exchange}
-                            </span>
-                          </div>
-                          <p className="text-xs text-slate-400 truncate max-w-[125px] sm:max-w-[145px] lg:max-w-[160px]">
-                            {stock.companyName}
-                          </p>
-                          <div className="flex items-center gap-2 pt-0.5">
-                            <span className="text-xs font-semibold text-slate-200 font-mono">
-                              {stock.currency}
-                              {stock.currentPrice.toLocaleString(undefined, {
-                                minimumFractionDigits: 2,
-                                maximumFractionDigits: 2,
-                              })}
-                            </span>
-                            <span
-                              className={`text-[11px] font-semibold flex items-center font-mono ${
-                                isPositive ? 'text-emerald-400' : 'text-rose-400'
-                              }`}
-                            >
-                              {isPositive ? (
-                                <TrendingUp className="w-3 h-3 mr-0.5" />
-                              ) : (
-                                <TrendingDown className="w-3 h-3 mr-0.5" />
-                              )}
-                              {isPositive ? '+' : ''}
-                              {stock.changePercent.toFixed(2)}%
-                            </span>
-                          </div>
+                      <div className="min-w-0 pr-2">
+                        <div className="font-semibold text-xs truncate">{stock.symbol}</div>
+                        <div className="text-[11px] text-slate-400 truncate">
+                          {stock.companyName}
                         </div>
                       </div>
-
-                      <div
-                        className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 border transition-all ${
-                          isSelected
-                            ? 'bg-indigo-600 border-indigo-500 text-white shadow-sm'
-                            : 'border-slate-700 bg-slate-900/80 text-transparent group-hover:border-slate-600'
-                        }`}
-                      >
-                        <Check className="w-3 h-3 stroke-[2.5]" />
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="font-mono text-xs font-medium text-slate-200">
+                          {formatPrice(stock.currentPrice, stock.currency)}
+                        </span>
+                        <div
+                          className={`w-5 h-5 rounded-md flex items-center justify-center border transition-colors ${
+                            isChecked
+                              ? 'bg-indigo-600 border-indigo-500 text-white'
+                              : 'bg-surface-subtle border-border text-transparent'
+                          }`}
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                        </div>
                       </div>
                     </div>
                   );
@@ -684,40 +319,48 @@ export const OnboardingPage: React.FC = () => {
             )}
           </div>
         </div>
+      )}
 
-        {errorMessage && (
-          <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex items-center gap-2">
-            <span>{errorMessage}</span>
+      {/* STEP 2: NAME & CONFIRM */}
+      {step === 2 && (
+        <div className="space-y-6 flex-1">
+          <div className="space-y-2">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400">
+              Watchlist Name
+            </label>
+            <input
+              type="text"
+              value={watchlistName}
+              onChange={(e) => setWatchlistName(e.target.value)}
+              placeholder="e.g. Primary Watchlist"
+              className="w-full max-w-md px-3.5 py-2.5 bg-surface border border-border rounded-xl text-sm font-semibold text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
+            />
           </div>
-        )}
-      </div>
 
-      <div className="fixed bottom-0 inset-x-0 z-40 bg-slate-950/95 backdrop-blur-md border-t border-slate-800/90 py-3 px-4 sm:px-6 lg:px-8 shadow-2xl">
-        <div className="max-w-[1560px] mx-auto flex flex-col md:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-3 w-full md:w-auto overflow-hidden">
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="text-xs text-slate-400">Selected:</span>
-              <span
-                className={`text-xs font-bold font-mono px-2 py-0.5 rounded-lg border ${counterStyle.badge}`}
-              >
-                {selectedSymbols.size} / 50
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                Selected Stocks ({selectedSymbols.size})
               </span>
+              <button
+                onClick={() => setStep(1)}
+                className="text-xs text-indigo-400 hover:text-indigo-300 font-medium"
+              >
+                + Add or remove stocks
+              </button>
             </div>
 
-            <div className="flex items-center gap-1.5 overflow-x-auto py-1 scrollbar-none max-w-md lg:max-w-lg">
+            <div className="flex flex-wrap gap-2 p-4 rounded-xl bg-surface border border-border max-h-60 overflow-y-auto">
               {Array.from(selectedSymbols).map((sym) => (
                 <span
                   key={sym}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 text-xs font-mono font-medium shrink-0 group hover:border-indigo-400 transition-colors"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-surface-subtle border border-border text-xs text-slate-200 font-mono"
                 >
                   <span>{sym}</span>
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleStock(sym);
-                    }}
-                    className="hover:text-white transition-colors"
-                    title={`Remove ${sym}`}
+                    onClick={() => handleToggleStock(sym)}
+                    className="text-slate-400 hover:text-rose-400"
+                    aria-label={`Remove ${sym}`}
                   >
                     <X className="w-3 h-3" />
                   </button>
@@ -725,51 +368,58 @@ export const OnboardingPage: React.FC = () => {
               ))}
             </div>
           </div>
-
-          <div className="hidden lg:flex items-center gap-4 text-xs text-slate-400">
-            <div className="flex items-center gap-1.5">
-              <span className="text-slate-500">Watchlist:</span>
-              <span className="font-semibold text-slate-200">
-                {watchlistName.trim() || 'Primary Watchlist'}
-              </span>
-            </div>
-            <span className="text-slate-700">•</span>
-            <div className="flex items-center gap-1.5">
-              <span className="text-slate-500">Estimated Coverage:</span>
-              <span className="text-slate-300 font-medium font-mono">
-                {coveredSectorsCount} {coveredSectorsCount === 1 ? 'Sector' : 'Sectors'} ({coveragePercent}% catalog)
-              </span>
-            </div>
-            <span className="text-slate-700">•</span>
-            <span className="text-[11px] text-slate-500">Edit anytime in dashboard</span>
-          </div>
-
-          <div className="w-full md:w-auto flex items-center justify-end shrink-0">
-            <button
-              onClick={handleCompleteSetup}
-              disabled={isSubmitting || !isSelectionValid}
-              className={`w-full md:w-auto px-6 py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all duration-200 ${
-                !isSelectionValid || isSubmitting
-                  ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/80'
-                  : 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-lg shadow-indigo-600/30 active:scale-[0.98]'
-              }`}
-            >
-              {isSubmitting ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  <span>Configuring Intelligence Pipeline...</span>
-                </>
-              ) : selectedSymbols.size === 0 ? (
-                <span>Select At Least 1 Stock</span>
-              ) : (
-                <>
-                  <span>Launch Dashboard ({selectedSymbols.size} Stocks Selected)</span>
-                  <ArrowRight className="w-4 h-4" />
-                </>
-              )}
-            </button>
-          </div>
         </div>
+      )}
+
+      {/* Bottom Navigation Actions */}
+      <div className="pt-6 border-t border-border flex items-center justify-between gap-3 mt-6">
+        {step === 2 ? (
+          <button
+            onClick={() => setStep(1)}
+            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-border bg-surface text-slate-300 hover:text-white text-xs sm:text-sm font-medium transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Back</span>
+          </button>
+        ) : (
+          <div />
+        )}
+
+        {step === 1 ? (
+          <button
+            onClick={() => {
+              if (selectedSymbols.size === 0) {
+                setErrorMessage('Please select at least 1 stock to continue.');
+                return;
+              }
+              setErrorMessage(null);
+              setStep(2);
+            }}
+            disabled={selectedSymbols.size === 0}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-semibold transition-colors disabled:opacity-50"
+          >
+            <span>Continue ({selectedSymbols.size} selected)</span>
+            <ArrowRight className="w-4 h-4" />
+          </button>
+        ) : (
+          <button
+            onClick={handleCompleteSetup}
+            disabled={isSubmitting || selectedSymbols.size === 0}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-semibold transition-colors disabled:opacity-50"
+          >
+            {isSubmitting ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                <span>Saving watchlist...</span>
+              </>
+            ) : (
+              <>
+                <span>Complete Setup</span>
+                <Check className="w-4 h-4" />
+              </>
+            )}
+          </button>
+        )}
       </div>
     </div>
   );

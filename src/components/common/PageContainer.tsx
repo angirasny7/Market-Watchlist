@@ -12,7 +12,7 @@ export interface PageContainerProps {
  */
 export const PageContainer: React.FC<PageContainerProps> = ({ children, className }) => {
   return (
-    <div className={cn('max-w-7xl mx-auto space-y-8 pb-16 animate-fade-in', className)}>
+    <div className={cn('max-w-5xl mx-auto space-y-8 pb-16 animate-fade-in', className)}>
       {children}
     </div>
   );
