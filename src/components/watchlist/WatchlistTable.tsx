@@ -1,0 +1,253 @@
+import React from 'react';
+import { Link } from 'react-router-dom';
+import {
+  Pin,
+  Trash2,
+  ExternalLink,
+  Bell,
+  Sparkles,
+  Calendar,
+} from 'lucide-react';
+import { WatchlistStockItem } from '../../lib/watchlistFilters';
+import { Sparkline } from './Sparkline';
+
+interface WatchlistTableProps {
+  stocks: WatchlistStockItem[];
+  onTogglePin: (symbol: string) => void;
+  onRemoveStock: (stock: WatchlistStockItem) => void;
+  onSelectStock: (stock: WatchlistStockItem) => void;
+  onOpenAlerts?: (symbol: string) => void;
+}
+
+export const WatchlistTable: React.FC<WatchlistTableProps> = ({
+  stocks,
+  onTogglePin,
+  onRemoveStock,
+  onSelectStock,
+  onOpenAlerts,
+}) => {
+  return (
+    <div className="w-full overflow-x-auto rounded-2xl border border-border bg-surface shadow-sm">
+      <table className="w-full text-left border-collapse" role="table">
+        <thead>
+          <tr className="border-b border-border bg-surface-subtle/70 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+            <th className="py-3 pl-4 pr-1 w-10 text-center">Pin</th>
+            <th className="py-3 px-3 min-w-[180px]">Company</th>
+            <th className="py-3 px-3 text-right min-w-[110px]">Market Price</th>
+            <th className="py-3 px-3 text-right min-w-[120px]">Day Change</th>
+            <th className="py-3 px-3 text-center min-w-[100px]">Attention</th>
+            <th className="py-3 px-3 text-center min-w-[80px]">Alerts</th>
+            <th className="py-3 px-3 text-center min-w-[100px]">Unseen Updates</th>
+            <th className="py-3 px-3 min-w-[130px]">Next Event</th>
+            <th className="py-3 px-3 text-center min-w-[110px]">Trend</th>
+            <th className="py-3 pl-3 pr-4 text-right min-w-[100px]">Actions</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border/60 text-xs">
+          {stocks.map((stock) => {
+            const isPositive = stock.changePercent >= 0;
+            const changeGlyph = isPositive ? '▲ +' : '▼ ';
+            const curr = stock.currency || '₹';
+
+            return (
+              <tr
+                key={stock.symbol}
+                onClick={() => onSelectStock(stock)}
+                className="group hover:bg-surface-hover/80 transition-colors cursor-pointer"
+              >
+                {/* 1. Pin Column */}
+                <td
+                  className="py-3.5 pl-4 pr-1 text-center"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onTogglePin(stock.symbol);
+                  }}
+                >
+                  <button
+                    type="button"
+                    aria-label={stock.isPinned ? `Unpin ${stock.symbol}` : `Pin ${stock.symbol}`}
+                    className={`p-1 rounded-md transition-colors ${
+                      stock.isPinned
+                        ? 'text-amber-400 hover:text-amber-300'
+                        : 'text-slate-600 hover:text-slate-400 opacity-60 group-hover:opacity-100'
+                    }`}
+                  >
+                    <Pin
+                      className={`w-3.5 h-3.5 ${
+                        stock.isPinned ? 'fill-amber-400 rotate-45' : ''
+                      }`}
+                    />
+                  </button>
+                </td>
+
+                {/* 2. Company Column */}
+                <td className="py-3.5 px-3">
+                  <div className="flex flex-col">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-bold text-sm text-slate-100 group-hover:text-emerald-400 transition-colors">
+                        {stock.symbol}
+                      </span>
+                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-surface-subtle border border-border/80 text-slate-400">
+                        {stock.exchange}
+                      </span>
+                    </div>
+                    <span className="text-xs text-slate-400 truncate max-w-[180px]">
+                      {stock.companyName}
+                    </span>
+                  </div>
+                </td>
+
+                {/* 3. Market Price */}
+                <td className="py-3.5 px-3 text-right">
+                  <div className="font-semibold text-sm text-slate-100 font-mono">
+                    {curr}
+                    {stock.currentPrice.toLocaleString('en-IN', {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </div>
+                  <span className="text-[10px] text-slate-500 font-mono">
+                    {stock.sector}
+                  </span>
+                </td>
+
+                {/* 4. Day Change */}
+                <td className="py-3.5 px-3 text-right">
+                  <div
+                    className={`font-semibold font-mono text-xs flex items-center justify-end gap-1 ${
+                      isPositive ? 'text-emerald-400' : 'text-rose-400'
+                    }`}
+                  >
+                    <span>{changeGlyph}</span>
+                    <span>
+                      {Math.abs(stock.changePercent).toFixed(2)}%
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-slate-500 font-mono">
+                    {isPositive ? '+' : '-'}
+                    {curr}
+                    {Math.abs(stock.changeAmount).toFixed(2)}
+                  </div>
+                </td>
+
+                {/* 5. Attention Badge */}
+                <td className="py-3.5 px-3 text-center">
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                      stock.attentionLevel === 'CRITICAL'
+                        ? 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                        : stock.attentionLevel === 'HIGH'
+                        ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                        : stock.attentionLevel === 'MEDIUM'
+                        ? 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30'
+                        : 'bg-zinc-800 text-zinc-400 border-zinc-700/60'
+                    }`}
+                  >
+                    {stock.attentionLevel}
+                  </span>
+                </td>
+
+                {/* 6. Alerts */}
+                <td
+                  className="py-3.5 px-3 text-center"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (onOpenAlerts) onOpenAlerts(stock.symbol);
+                  }}
+                >
+                  {stock.activeAlertCount > 0 ? (
+                    <span
+                      title={`${stock.activeAlertCount} active alert triggers`}
+                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 text-[10px] font-mono font-medium hover:bg-indigo-500/25 transition-colors"
+                    >
+                      <Bell className="w-3 h-3 text-indigo-400" />
+                      <span>{stock.activeAlertCount}</span>
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      aria-label={`Set alert for ${stock.symbol}`}
+                      className="p-1 rounded text-slate-600 hover:text-slate-400 opacity-40 group-hover:opacity-100 transition-opacity"
+                    >
+                      <Bell className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </td>
+
+                {/* 7. Unseen Updates */}
+                <td
+                  className="py-3.5 px-3 text-center"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {stock.unseenUpdatesCount > 0 ? (
+                    <Link
+                      to={`/feed?symbol=${encodeURIComponent(stock.symbol)}`}
+                      title={`View ${stock.unseenUpdatesCount} unread events in feed`}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-[10px] font-medium hover:bg-emerald-500/25 hover:text-emerald-300 transition-all"
+                    >
+                      <Sparkles className="w-3 h-3 text-emerald-400" />
+                      <span>{stock.unseenUpdatesCount} new</span>
+                    </Link>
+                  ) : (
+                    <span className="text-slate-600 font-mono text-[11px]">—</span>
+                  )}
+                </td>
+
+                {/* 8. Next Event */}
+                <td className="py-3.5 px-3">
+                  {stock.nextEvent ? (
+                    <div className="flex items-center gap-1.5 text-[11px] text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 px-2 py-0.5 rounded-md w-max">
+                      <Calendar className="w-3 h-3 shrink-0" />
+                      <span className="truncate max-w-[120px] font-medium">
+                        {stock.nextEvent.label}
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-slate-600 font-mono text-[11px]">—</span>
+                  )}
+                </td>
+
+                {/* 9. Sparkline */}
+                <td className="py-3.5 px-3 text-center">
+                  <Sparkline
+                    points={stock.sparkline}
+                    isPositive={isPositive}
+                    width={90}
+                    height={26}
+                  />
+                </td>
+
+                {/* 10. Actions */}
+                <td
+                  className="py-3.5 pl-3 pr-4 text-right"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center justify-end gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => onSelectStock(stock)}
+                      className="px-2.5 py-1 rounded-lg bg-surface-subtle hover:bg-surface-active border border-border text-[11px] font-medium text-slate-300 hover:text-white transition-colors flex items-center gap-1"
+                    >
+                      <span>Details</span>
+                      <ExternalLink className="w-3 h-3 text-slate-400" />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => onRemoveStock(stock)}
+                      aria-label={`Remove ${stock.symbol} from watchlist`}
+                      title="Remove from watchlist"
+                      className="p-1 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+};

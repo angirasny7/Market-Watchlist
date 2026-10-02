@@ -6,7 +6,6 @@ import {
   ListOrdered,
   History,
   TrendingUp,
-  Sparkles,
   Zap,
 } from 'lucide-react';
 import { useMarketStore } from '../../store/useMarketStore';
@@ -150,18 +149,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ className, onItemClick }) => {
         </nav>
       </div>
 
-      {/* Assistant Status Footer Box */}
-      <div className="p-4 border-t border-border">
-        <div className="p-3 rounded-xl bg-surface border border-border/80 text-xs">
-          <div className="flex items-center gap-2 text-indigo-300 font-semibold mb-1">
-            <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-            <span>Assistant Active</span>
-          </div>
-          <p className="text-[11px] text-slate-400 leading-relaxed">
-            Comparing market state against your last visit.
-          </p>
-        </div>
-      </div>
     </aside>
   );
 };

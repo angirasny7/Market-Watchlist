@@ -1,11 +1,16 @@
 import React from 'react';
 import { AlertTriangle, Trash2, History } from 'lucide-react';
 import { Modal } from '../common';
-import { StockQuote } from '../../types/stock';
 import { useMarketStore } from '../../store/useMarketStore';
 
+export interface RemovableStock {
+  symbol: string;
+  name?: string;
+  companyName?: string;
+}
+
 interface RemoveStockModalProps {
-  stock: StockQuote | null;
+  stock: RemovableStock | null;
   onClose: () => void;
 }
 
@@ -13,11 +18,14 @@ export const RemoveStockModal: React.FC<RemoveStockModalProps> = ({
   stock,
   onClose,
 }) => {
-  const { removeStock } = useMarketStore();
+  const { removeStock, removeStockFromActiveWatchlist } = useMarketStore();
 
   if (!stock) return null;
 
+  const displayName = stock.companyName || stock.name || stock.symbol;
+
   const handleConfirm = () => {
+    removeStockFromActiveWatchlist(stock.symbol);
     removeStock(stock.symbol);
     onClose();
   };
@@ -27,7 +35,7 @@ export const RemoveStockModal: React.FC<RemoveStockModalProps> = ({
       isOpen={Boolean(stock)}
       onClose={onClose}
       title="Remove from Watchlist"
-      subtitle={`Confirming removal of ${stock.name} (${stock.symbol})`}
+      subtitle={`Confirming removal of ${displayName} (${stock.symbol})`}
       maxWidth="md"
       footer={
         <div className="w-full flex items-center justify-end gap-3">
@@ -52,7 +60,7 @@ export const RemoveStockModal: React.FC<RemoveStockModalProps> = ({
           <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
           <div className="space-y-1">
             <div className="font-bold text-slate-100">
-              You are removing {stock.name} ({stock.symbol}) from active tracking.
+              You are removing {displayName} ({stock.symbol}) from active tracking.
             </div>
             <p className="text-slate-300 text-xs leading-relaxed">
               This will un-monitor real-time price anomalies for this equity on your personal dashboard and attention feed.

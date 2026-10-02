@@ -10,13 +10,15 @@ import { filterAndRankStocks, getStockAvatarDetails } from '../../lib/stockSearc
 interface AddStockModalProps {
   isOpen: boolean;
   onClose: () => void;
+  targetWatchlistId?: string;
 }
 
 export const AddStockModal: React.FC<AddStockModalProps> = ({
   isOpen,
   onClose,
+  targetWatchlistId,
 }) => {
-  const { watchlist, allStocks, addStock } = useMarketStore();
+  const { watchlist, allStocks, watchlistOverview, addStock, addStockToActiveWatchlist } = useMarketStore();
   const { addToast } = useToastStore();
 
   const [catalog, setCatalog] = useState<StockQuote[]>([]);
@@ -86,10 +88,14 @@ export const AddStockModal: React.FC<AddStockModalProps> = ({
 
   // 3. Set of already-added watchlist symbols for instant duplicate lookup
   const watchlistSymbolSet = useMemo(() => {
+    if (watchlistOverview?.stocks && watchlistOverview.stocks.length > 0) {
+      return new Set(watchlistOverview.stocks.map((s) => s.symbol.toUpperCase()));
+    }
     return new Set(watchlist.map((s) => s.symbol.toUpperCase()));
-  }, [watchlist]);
+  }, [watchlist, watchlistOverview]);
 
-  const isMaxCapacity = watchlist.length >= 50;
+  const currentCount = watchlistOverview?.stocks?.length ?? watchlist.length;
+  const isMaxCapacity = currentCount >= 50;
 
   // 4. Multi-tiered search, market filtering, sector filtering, and sorting
   const filteredStocks = useMemo(() => {
@@ -115,9 +121,9 @@ export const AddStockModal: React.FC<AddStockModalProps> = ({
       return;
     }
 
+    addStockToActiveWatchlist(stock.symbol, targetWatchlistId);
     addStock(stock);
     setRecentlyAddedSymbol(stock.symbol);
-    addToast(`Added ${stock.symbol} to watchlist`, 'success');
 
     setTimeout(() => {
       setRecentlyAddedSymbol(null);

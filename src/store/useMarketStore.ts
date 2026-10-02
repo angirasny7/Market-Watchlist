@@ -14,6 +14,8 @@ import {
 } from '../data';
 import {
   watchlistService,
+  UserWatchlist,
+  WatchlistOverviewData,
   eventService,
   insightService,
   digestService,
@@ -26,6 +28,11 @@ import {
   adaptBackendInsightToInsight,
   adaptBackendDigestToHistoricalDigest,
 } from '../services';
+import {
+  WatchlistQuickFilter,
+  WatchlistDropdownFilter,
+  WatchlistSortField,
+} from '../lib/watchlistFilters';
 import { useToastStore } from './useToastStore';
 
 export type FeedFilterType = 'all' | 'critical' | 'high' | 'earnings' | 'dividend' | '52w' | 'unread';
@@ -55,6 +62,31 @@ interface MarketState {
   togglePinStock: (symbol: string) => void;
   setWatchlistViewMode: (mode: 'grid' | 'table') => void;
   setStockSearchQuery: (query: string) => void;
+
+  // Phase 1 & 2 Multi-Watchlist & Overview State
+  userWatchlists: UserWatchlist[];
+  activeWatchlistId: string | 'all';
+  watchlistOverview: WatchlistOverviewData | null;
+  watchlistRange: '1D' | '1W' | '1M';
+  watchlistQuickFilter: WatchlistQuickFilter;
+  watchlistDropdownFilter: WatchlistDropdownFilter;
+  watchlistSortField: WatchlistSortField;
+  isOverviewLoading: boolean;
+
+  setActiveWatchlistId: (id: string | 'all') => void;
+  setWatchlistRange: (range: '1D' | '1W' | '1M') => void;
+  setWatchlistQuickFilter: (filter: WatchlistQuickFilter) => void;
+  setWatchlistDropdownFilter: (filter: WatchlistDropdownFilter) => void;
+  setWatchlistSortField: (sort: WatchlistSortField) => void;
+
+  fetchUserWatchlists: () => Promise<void>;
+  fetchWatchlistOverview: (watchlistId?: string | 'all', range?: '1D' | '1W' | '1M', force?: boolean) => Promise<void>;
+  createUserWatchlist: (name: string) => Promise<UserWatchlist | null>;
+  renameUserWatchlist: (id: string, name: string) => Promise<boolean>;
+  deleteUserWatchlist: (id: string) => Promise<boolean>;
+  addStockToActiveWatchlist: (symbol: string, targetWatchlistId?: string) => Promise<boolean>;
+  removeStockFromActiveWatchlist: (symbol: string, targetWatchlistId?: string) => Promise<boolean>;
+  togglePinInActiveWatchlist: (symbol: string, targetWatchlistId?: string) => Promise<boolean>;
 
   // Attention Feed State
   feedFilter: FeedFilterType;
@@ -113,6 +145,11 @@ interface MarketState {
   getCriticalEvents: () => MarketEvent[];
 }
 
+const SAVED_ACTIVE_WL_KEY = 'smw_active_watchlist_id';
+const SAVED_WL_RANGE_KEY = 'smw_watchlist_range';
+const SAVED_WL_VIEW_MODE_KEY = 'smw_watchlist_view_mode';
+const SAVED_WL_SORT_KEY = 'smw_watchlist_sort_field';
+
 export const useMarketStore = create<MarketState>((set, get) => ({
   // Live State
   isLiveMode: false,
@@ -130,8 +167,266 @@ export const useMarketStore = create<MarketState>((set, get) => ({
   digests: [],
 
   // Watchlist View Settings
-  watchlistViewMode: 'grid',
+  watchlistViewMode: (typeof localStorage !== 'undefined' && (localStorage.getItem(SAVED_WL_VIEW_MODE_KEY) as 'grid' | 'table')) || 'table',
   stockSearchQuery: '',
+
+  // Multi-Watchlist & Overview State
+  userWatchlists: [],
+  activeWatchlistId: (typeof localStorage !== 'undefined' && localStorage.getItem(SAVED_ACTIVE_WL_KEY)) || 'all',
+  watchlistOverview: null,
+  watchlistRange: (typeof localStorage !== 'undefined' && (localStorage.getItem(SAVED_WL_RANGE_KEY) as '1D' | '1W' | '1M')) || '1D',
+  watchlistQuickFilter: 'ALL',
+  watchlistDropdownFilter: 'ALL',
+  watchlistSortField: (typeof localStorage !== 'undefined' && (localStorage.getItem(SAVED_WL_SORT_KEY) as WatchlistSortField)) || 'ATTENTION_SCORE',
+  isOverviewLoading: false,
+
+  setActiveWatchlistId: (id: string | 'all') => {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(SAVED_ACTIVE_WL_KEY, id);
+    }
+    set({ activeWatchlistId: id });
+    get().fetchWatchlistOverview(id);
+  },
+
+  setWatchlistRange: (range: '1D' | '1W' | '1M') => {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(SAVED_WL_RANGE_KEY, range);
+    }
+    set({ watchlistRange: range });
+    get().fetchWatchlistOverview(undefined, range);
+  },
+
+  setWatchlistQuickFilter: (filter: WatchlistQuickFilter) => {
+    set({ watchlistQuickFilter: filter });
+  },
+
+  setWatchlistDropdownFilter: (filter: WatchlistDropdownFilter) => {
+    set({ watchlistDropdownFilter: filter });
+  },
+
+  setWatchlistSortField: (sort: WatchlistSortField) => {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(SAVED_WL_SORT_KEY, sort);
+    }
+    set({ watchlistSortField: sort });
+  },
+
+  fetchUserWatchlists: async () => {
+    try {
+      const lists = await watchlistService.fetchUserWatchlists();
+      set({ userWatchlists: lists });
+    } catch (err) {
+      console.error('Failed to fetch user watchlists', err);
+    }
+  },
+
+  fetchWatchlistOverview: async (targetId?: string | 'all', targetRange?: '1D' | '1W' | '1M') => {
+    const currentId = targetId !== undefined ? targetId : get().activeWatchlistId;
+    const currentRange = targetRange !== undefined ? targetRange : get().watchlistRange;
+
+    set({ isOverviewLoading: true });
+    try {
+      const overview = await watchlistService.fetchOverview(currentId, currentRange);
+      if (overview) {
+        set({
+          watchlistOverview: overview,
+          isOverviewLoading: false,
+        });
+      } else {
+        set({ isOverviewLoading: false });
+      }
+    } catch (err: any) {
+      console.error('Failed to fetch watchlist overview', err);
+      set({ isOverviewLoading: false });
+    }
+  },
+
+  createUserWatchlist: async (name: string) => {
+    try {
+      const created = await watchlistService.createWatchlist(name);
+      if (created) {
+        const prev = get().userWatchlists;
+        set({
+          userWatchlists: [...prev, created],
+          activeWatchlistId: created.id,
+        });
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem(SAVED_ACTIVE_WL_KEY, created.id);
+        }
+        useToastStore.getState().addToast(`Watchlist "${created.name}" created`, 'success');
+        await get().fetchWatchlistOverview(created.id);
+        return created;
+      }
+      return null;
+    } catch (err: any) {
+      useToastStore.getState().addToast(err.message || 'Failed to create watchlist', 'error');
+      return null;
+    }
+  },
+
+  renameUserWatchlist: async (id: string, name: string) => {
+    const prevLists = get().userWatchlists;
+    set({
+      userWatchlists: prevLists.map((w) => (w.id === id ? { ...w, name } : w)),
+    });
+    try {
+      const updated = await watchlistService.renameWatchlist(id, name);
+      if (updated) {
+        useToastStore.getState().addToast(`Renamed watchlist to "${name}"`, 'success');
+        const currentOverview = get().watchlistOverview;
+        if (currentOverview?.watchlist?.id === id) {
+          set({
+            watchlistOverview: {
+              ...currentOverview,
+              watchlist: { ...currentOverview.watchlist, name },
+            },
+          });
+        }
+        return true;
+      }
+      set({ userWatchlists: prevLists });
+      return false;
+    } catch (err: any) {
+      set({ userWatchlists: prevLists });
+      useToastStore.getState().addToast(err.message || 'Failed to rename watchlist', 'error');
+      return false;
+    }
+  },
+
+  deleteUserWatchlist: async (id: string) => {
+    const prevLists = get().userWatchlists;
+    const target = prevLists.find((w) => w.id === id);
+    if (!target) return false;
+
+    const remaining = prevLists.filter((w) => w.id !== id);
+    set({
+      userWatchlists: remaining,
+      activeWatchlistId: 'all',
+    });
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(SAVED_ACTIVE_WL_KEY, 'all');
+    }
+
+    try {
+      const success = await watchlistService.deleteWatchlist(id);
+      if (success) {
+        useToastStore.getState().addToast(`Deleted watchlist "${target.name}"`, 'info');
+        await get().fetchWatchlistOverview('all');
+        return true;
+      }
+      set({ userWatchlists: prevLists });
+      return false;
+    } catch (err: any) {
+      set({ userWatchlists: prevLists, activeWatchlistId: id });
+      useToastStore.getState().addToast(err.message || 'Failed to delete watchlist', 'error');
+      return false;
+    }
+  },
+
+  addStockToActiveWatchlist: async (symbol: string, targetWatchlistId?: string) => {
+    const activeId = targetWatchlistId || get().activeWatchlistId;
+    const effectiveId = activeId === 'all'
+      ? (get().userWatchlists.find((w) => w.isDefault)?.id || get().userWatchlists[0]?.id)
+      : activeId;
+
+    if (!effectiveId) {
+      useToastStore.getState().addToast('No watchlist selected', 'error');
+      return false;
+    }
+
+    try {
+      const success = await watchlistService.addStockToWatchlist(effectiveId, symbol);
+      if (success) {
+        useToastStore.getState().addToast(`Added ${symbol} to watchlist`, 'success');
+        await Promise.all([
+          get().fetchUserWatchlists(),
+          get().fetchWatchlistOverview(),
+        ]);
+        return true;
+      }
+      return false;
+    } catch (err: any) {
+      useToastStore.getState().addToast(err.message || `Failed to add ${symbol}`, 'error');
+      return false;
+    }
+  },
+
+  removeStockFromActiveWatchlist: async (symbol: string, targetWatchlistId?: string) => {
+    const activeId = targetWatchlistId || get().activeWatchlistId;
+    const currentOverview = get().watchlistOverview;
+    const prevStocks = currentOverview?.stocks || [];
+
+    if (currentOverview) {
+      set({
+        watchlistOverview: {
+          ...currentOverview,
+          stocks: prevStocks.filter((s) => s.symbol !== symbol),
+          summary: {
+            ...currentOverview.summary,
+            totalStocks: Math.max(0, currentOverview.summary.totalStocks - 1),
+          },
+        },
+      });
+    }
+
+    try {
+      if (activeId === 'all') {
+        const stockItem = prevStocks.find((s) => s.symbol === symbol);
+        const wlIds = stockItem?.watchlistIds || [];
+        await Promise.all(wlIds.map((wlId) => watchlistService.removeStockFromWatchlist(wlId, symbol)));
+      } else {
+        await watchlistService.removeStockFromWatchlist(activeId, symbol);
+      }
+      useToastStore.getState().addToast(`Removed ${symbol} from watchlist`, 'info');
+      await Promise.all([
+        get().fetchUserWatchlists(),
+        get().fetchWatchlistOverview(),
+      ]);
+      return true;
+    } catch (err: any) {
+      if (currentOverview) {
+        set({ watchlistOverview: currentOverview });
+      }
+      useToastStore.getState().addToast(err.message || `Failed to remove ${symbol}`, 'error');
+      return false;
+    }
+  },
+
+  togglePinInActiveWatchlist: async (symbol: string, targetWatchlistId?: string) => {
+    const activeId = targetWatchlistId || get().activeWatchlistId;
+    const currentOverview = get().watchlistOverview;
+    const prevStocks = currentOverview?.stocks || [];
+    const targetStock = prevStocks.find((s) => s.symbol === symbol);
+    if (!targetStock) return false;
+
+    const nextPinned = !targetStock.isPinned;
+
+    if (currentOverview) {
+      set({
+        watchlistOverview: {
+          ...currentOverview,
+          stocks: prevStocks.map((s) => (s.symbol === symbol ? { ...s, isPinned: nextPinned } : s)),
+        },
+      });
+    }
+
+    const effectiveId = activeId === 'all'
+      ? (targetStock.watchlistIds[0] || get().userWatchlists[0]?.id)
+      : activeId;
+
+    if (!effectiveId) return false;
+
+    try {
+      await watchlistService.togglePinInWatchlist(effectiveId, symbol);
+      return true;
+    } catch (err: any) {
+      if (currentOverview) {
+        set({ watchlistOverview: currentOverview });
+      }
+      useToastStore.getState().addToast(err.message || `Failed to update pin for ${symbol}`, 'error');
+      return false;
+    }
+  },
 
   addStock: (stock: StockQuote) => {
     const prevWatchlist = get().watchlist;
@@ -176,6 +471,9 @@ export const useMarketStore = create<MarketState>((set, get) => ({
   },
 
   setWatchlistViewMode: (mode: 'grid' | 'table') => {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(SAVED_WL_VIEW_MODE_KEY, mode);
+    }
     set({ watchlistViewMode: mode });
   },
 
@@ -584,6 +882,10 @@ export const useMarketStore = create<MarketState>((set, get) => ({
           allDevices: allDevicesList,
         },
       });
+
+      // Hydrate multi-watchlists and overview in parallel
+      get().fetchUserWatchlists().catch(() => {});
+      get().fetchWatchlistOverview().catch(() => {});
     } catch (err: any) {
       console.error('[useMarketStore] Failed to fetch live market data:', err);
       set({

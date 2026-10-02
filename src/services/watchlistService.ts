@@ -1,5 +1,37 @@
 import { apiClient } from './apiClient';
 import { StockQuote } from '../types/stock';
+import { WatchlistStockItem } from '../lib/watchlistFilters';
+
+export interface UserWatchlist {
+  id: string;
+  name: string;
+  isDefault: boolean;
+  stockCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WatchlistOverviewSummary {
+  totalStocks: number;
+  needAttention: number;
+  upcomingEvents: number;
+  activeAlerts: number;
+  unseenUpdates: number;
+}
+
+export interface WatchlistOverviewData {
+  watchlist?: {
+    id: string;
+    name: string;
+    isDefault: boolean;
+  };
+  stocks: WatchlistStockItem[];
+  summary: WatchlistOverviewSummary;
+  dataFreshness: {
+    lastSyncedAt: string | null;
+    isStale: boolean;
+  };
+}
 
 export interface WatchlistApiResponse {
   id: string;
@@ -15,6 +47,98 @@ export interface WatchlistApiResponse {
 }
 
 export class WatchlistService {
+  // ==========================================
+  // Modern Multi-Watchlist API (Phase 1 & 2)
+  // ==========================================
+
+  /**
+   * Fetch all user watchlists with stock counts
+   */
+  async fetchUserWatchlists(): Promise<UserWatchlist[]> {
+    const res = await apiClient.get<UserWatchlist[]>('/watchlists');
+    if (res.success && Array.isArray(res.data)) {
+      return res.data;
+    }
+    return [];
+  }
+
+  /**
+   * Create a new named watchlist
+   */
+  async createWatchlist(name: string): Promise<UserWatchlist | null> {
+    const res = await apiClient.post<UserWatchlist>('/watchlists', { name });
+    if (res.success && res.data) {
+      return res.data;
+    }
+    return null;
+  }
+
+  /**
+   * Rename an existing watchlist
+   */
+  async renameWatchlist(id: string, name: string): Promise<UserWatchlist | null> {
+    const res = await apiClient.patch<UserWatchlist>(`/watchlists/${id}`, { name });
+    if (res.success && res.data) {
+      return res.data;
+    }
+    return null;
+  }
+
+  /**
+   * Delete a watchlist
+   */
+  async deleteWatchlist(id: string): Promise<boolean> {
+    const res = await apiClient.delete(`/watchlists/${id}`);
+    return res.success;
+  }
+
+  /**
+   * Fetch complete watchlist overview (all or specific watchlist) with range
+   */
+  async fetchOverview(
+    watchlistId: string | 'all' = 'all',
+    range: '1D' | '1W' | '1M' = '1D'
+  ): Promise<WatchlistOverviewData | null> {
+    const endpoint =
+      watchlistId === 'all'
+        ? `/watchlists/all/overview?range=${range}`
+        : `/watchlists/${watchlistId}/overview?range=${range}`;
+
+    const res = await apiClient.get<WatchlistOverviewData>(endpoint);
+    if (res.success && res.data) {
+      return res.data;
+    }
+    return null;
+  }
+
+  /**
+   * Add a stock to a specific watchlist
+   */
+  async addStockToWatchlist(watchlistId: string, symbol: string): Promise<boolean> {
+    const res = await apiClient.post(`/watchlists/${watchlistId}/stocks`, { symbol });
+    return res.success;
+  }
+
+  /**
+   * Remove a stock from a specific watchlist
+   */
+  async removeStockFromWatchlist(watchlistId: string, symbol: string): Promise<boolean> {
+    const res = await apiClient.delete(`/watchlists/${watchlistId}/stocks/${symbol}`);
+    return res.success;
+  }
+
+  /**
+   * Toggle pin status for a stock in a specific watchlist
+   */
+  async togglePinInWatchlist(watchlistId: string, symbol: string): Promise<boolean> {
+    const res = await apiClient.patch(`/watchlists/${watchlistId}/stocks/${symbol}/pin`, {});
+    return res.success;
+  }
+
+  // ==========================================
+  // Legacy Watchlist Methods (Backward Compatibility)
+  // ==========================================
+
   async fetchWatchlist(watchlistId?: string): Promise<StockQuote[] | null> {
     const qs = watchlistId ? `?watchlistId=${watchlistId}` : '';
     const res = await apiClient.get<WatchlistApiResponse>(`/watchlist${qs}`);
