@@ -156,7 +156,7 @@ export function adaptBackendInsightToInsight(
   const confidenceLevel: ConfidenceLevel =
     confScore >= 0.8 ? 'HIGH' : confScore >= 0.55 ? 'MEDIUM' : 'LOW';
 
-  let sourceName = 'Market Intelligence Engine';
+  let sourceName = 'NSE / Market Filings';
   let sourceUrl = 'https://nseindia.com';
 
   if (Array.isArray(backendInsight.sources) && backendInsight.sources.length > 0) {

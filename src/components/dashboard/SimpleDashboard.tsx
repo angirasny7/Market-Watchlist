@@ -5,6 +5,7 @@ import { useMarketStore } from '../../store/useMarketStore';
 import { useAuthStore } from '../../store/useAuthStore';
 import { formatRelativeTime } from '../../lib/dateUtils';
 import { formatPrice } from '../../lib/utils';
+import { DashboardSkeleton, ErrorState } from '../common';
 
 export const SimpleDashboard: React.FC = () => {
   const { user } = useAuthStore();
@@ -13,6 +14,8 @@ export const SimpleDashboard: React.FC = () => {
     events,
     watchlist,
     isLoading,
+    isError,
+    errorMessage,
     refreshMarketData,
     markEventRead,
   } = useMarketStore();
@@ -44,6 +47,23 @@ export const SimpleDashboard: React.FC = () => {
     if (score >= 50) return { label: 'Worth a look', color: 'bg-indigo-500/10 text-indigo-300 border-indigo-500/20' };
     return { label: 'FYI', color: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20' };
   };
+
+  if (isError && watchlist.length === 0) {
+    return (
+      <div className="py-8">
+        <ErrorState
+          title="Unable to load dashboard"
+          message={errorMessage || 'Could not connect to market intelligence services.'}
+          onRetry={() => refreshMarketData()}
+          isRetrying={isLoading}
+        />
+      </div>
+    );
+  }
+
+  if (isLoading && !dashboardData && watchlist.length === 0) {
+    return <DashboardSkeleton />;
+  }
 
   return (
     <div className="max-w-3xl mx-auto space-y-6 pb-12">

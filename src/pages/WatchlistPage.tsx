@@ -10,7 +10,7 @@ import {
 } from '../components/watchlist';
 import { useMarketStore } from '../store/useMarketStore';
 import { StockQuote } from '../types/stock';
-import { PageContainer } from '../components/common';
+import { PageContainer, WatchlistSkeleton, ErrorState } from '../components/common';
 import { Plus, RotateCcw, SearchX, LineChart } from 'lucide-react';
 
 export const WatchlistPage: React.FC = () => {
@@ -18,6 +18,10 @@ export const WatchlistPage: React.FC = () => {
     watchlist,
     watchlistViewMode,
     stockSearchQuery,
+    isLoading,
+    isError,
+    errorMessage,
+    refreshMarketData,
     setStockSearchQuery,
     getEventsByStock,
   } = useMarketStore();
@@ -91,8 +95,17 @@ export const WatchlistPage: React.FC = () => {
         onOpenAddModal={() => setIsAddModalOpen(true)}
       />
 
-      {/* 2. Grid or Table Content */}
-      {processedStocks.length > 0 ? (
+      {/* 2. Grid or Table Content, Loading Skeleton, or Error */}
+      {isError && watchlist.length === 0 ? (
+        <ErrorState
+          title="Unable to load watchlist"
+          message={errorMessage || 'Could not retrieve your tracked stocks.'}
+          onRetry={() => refreshMarketData()}
+          isRetrying={isLoading}
+        />
+      ) : isLoading && watchlist.length === 0 ? (
+        <WatchlistSkeleton />
+      ) : processedStocks.length > 0 ? (
         watchlistViewMode === 'grid' ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {processedStocks.map((stock) => (

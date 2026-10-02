@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { cn } from '../../lib/utils';
 import { X } from 'lucide-react';
 
@@ -21,20 +21,52 @@ export const Modal: React.FC<ModalProps> = ({
   footer,
   maxWidth = 'md',
 }) => {
+  const modalRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
+      if (!isOpen) return;
+
+      if (e.key === 'Escape') {
         onClose();
+        return;
+      }
+
+      // Basic focus trap
+      if (e.key === 'Tab' && modalRef.current) {
+        const focusableElements = modalRef.current.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusableElements.length > 0) {
+          const firstElement = focusableElements[0];
+          const lastElement = focusableElements[focusableElements.length - 1];
+
+          if (e.shiftKey && document.activeElement === firstElement) {
+            e.preventDefault();
+            lastElement.focus();
+          } else if (!e.shiftKey && document.activeElement === lastElement) {
+            e.preventDefault();
+            firstElement.focus();
+          }
+        }
       }
     };
+
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
-  // Lock body scroll when modal is open
+  // Lock body scroll and focus when modal is open
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
+      // Auto-focus container or first element
+      setTimeout(() => {
+        const focusable = modalRef.current?.querySelector<HTMLElement>(
+          'button, input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        focusable?.focus();
+      }, 50);
     } else {
       document.body.style.overflow = '';
     }
@@ -58,25 +90,34 @@ export const Modal: React.FC<ModalProps> = ({
       <div
         className="fixed inset-0 bg-black/75 backdrop-blur-sm transition-opacity animate-fade-in"
         onClick={onClose}
+        aria-hidden="true"
       />
 
       {/* Modal Card */}
       <div
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-dialog-title"
+        tabIndex={-1}
         className={cn(
-          'relative w-full bg-surface border border-border rounded-2xl shadow-2xl z-10 overflow-hidden transform transition-all animate-fade-in',
+          'relative w-full bg-surface border border-border rounded-2xl shadow-2xl z-10 overflow-hidden transform transition-all animate-fade-in outline-none',
           maxWidthClass
         )}
       >
         {/* Header */}
         <div className="flex items-start justify-between p-5 border-b border-border bg-surface-subtle/50">
           <div>
-            <h3 className="text-lg font-semibold text-slate-100">{title}</h3>
+            <h3 id="modal-dialog-title" className="text-lg font-semibold text-slate-100">
+              {title}
+            </h3>
             {subtitle && (
               <p className="text-xs text-slate-400 mt-1">{subtitle}</p>
             )}
           </div>
           <button
             onClick={onClose}
+            aria-label="Close dialog"
             className="p-1 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-surface-hover transition-colors"
           >
             <X className="w-5 h-5" />

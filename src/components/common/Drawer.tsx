@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { cn } from '../../lib/utils';
 import { X } from 'lucide-react';
 
@@ -21,12 +21,37 @@ export const Drawer: React.FC<DrawerProps> = ({
   footer,
   width = 'lg',
 }) => {
+  const drawerRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
+      if (!isOpen) return;
+
+      if (e.key === 'Escape') {
         onClose();
+        return;
+      }
+
+      // Basic focus trap
+      if (e.key === 'Tab' && drawerRef.current) {
+        const focusableElements = drawerRef.current.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusableElements.length > 0) {
+          const firstElement = focusableElements[0];
+          const lastElement = focusableElements[focusableElements.length - 1];
+
+          if (e.shiftKey && document.activeElement === firstElement) {
+            e.preventDefault();
+            lastElement.focus();
+          } else if (!e.shiftKey && document.activeElement === lastElement) {
+            e.preventDefault();
+            firstElement.focus();
+          }
+        }
       }
     };
+
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
@@ -34,6 +59,12 @@ export const Drawer: React.FC<DrawerProps> = ({
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
+      setTimeout(() => {
+        const focusable = drawerRef.current?.querySelector<HTMLElement>(
+          'button, input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        focusable?.focus();
+      }, 50);
     } else {
       document.body.style.overflow = '';
     }
@@ -56,19 +87,27 @@ export const Drawer: React.FC<DrawerProps> = ({
       <div
         className="fixed inset-0 bg-black/70 backdrop-blur-sm transition-opacity animate-fade-in"
         onClick={onClose}
+        aria-hidden="true"
       />
 
       <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
         <div
+          ref={drawerRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="drawer-dialog-title"
+          tabIndex={-1}
           className={cn(
-            'w-screen bg-surface border-l border-border shadow-2xl flex flex-col animate-slide-in-right',
+            'w-screen bg-surface border-l border-border shadow-2xl flex flex-col animate-slide-in-right outline-none',
             widthClass
           )}
         >
           {/* Header */}
           <div className="flex items-start justify-between p-5 border-b border-border bg-surface-subtle/80 backdrop-blur">
             <div>
-              <h2 className="text-xl font-bold text-slate-100">{title}</h2>
+              <h2 id="drawer-dialog-title" className="text-xl font-bold text-slate-100">
+                {title}
+              </h2>
               {subtitle && (
                 <p className="text-xs text-slate-400 mt-1 font-mono">
                   {subtitle}
@@ -77,6 +116,7 @@ export const Drawer: React.FC<DrawerProps> = ({
             </div>
             <button
               onClick={onClose}
+              aria-label="Close drawer"
               className="p-1.5 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-surface-hover transition-colors"
             >
               <X className="w-5 h-5" />

@@ -13,7 +13,7 @@ import {
 import { useMarketStore } from '../store/useMarketStore';
 import { CheckCircle2, RotateCcw, ShieldAlert, FilterX, ChevronDown, PlusCircle, Database } from 'lucide-react';
 
-import { PageContainer } from '../components/common';
+import { PageContainer, FeedSkeleton, ErrorState } from '../components/common';
 
 const PAGE_SIZE = 8;
 
@@ -23,6 +23,10 @@ export const AttentionFeedPage: React.FC = () => {
     watchlist,
     events,
     insights,
+    isLoading,
+    isError,
+    errorMessage,
+    refreshMarketData,
     feedFilter: storeFeedFilter,
     feedScope,
     setFeedScope,
@@ -197,7 +201,16 @@ export const AttentionFeedPage: React.FC = () => {
 
       {/* 5. Main Content: Triad Cards Stream */}
       <div className="space-y-5">
-        {displayedEvents.length > 0 ? (
+        {isError && events.length === 0 ? (
+          <ErrorState
+            title="Unable to load attention feed"
+            message={errorMessage || 'Could not connect to market signal services.'}
+            onRetry={() => refreshMarketData()}
+            isRetrying={isLoading}
+          />
+        ) : isLoading && events.length === 0 ? (
+          <FeedSkeleton />
+        ) : displayedEvents.length > 0 ? (
           <>
             {displayedEvents.map((event) => {
               const eventInsights = getInsightsByEvent(event.id);

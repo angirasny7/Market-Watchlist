@@ -82,14 +82,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ className, onItemClick }) => {
             <Zap className="w-4 h-4 text-white fill-white" />
           </div>
           <div>
-            <span className="font-bold text-sm tracking-tight text-slate-100 flex items-center gap-1.5">
-              Smart Market
-              <span className="text-[10px] uppercase font-mono px-1.5 py-0.2 bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 rounded">
-                AI
-              </span>
+            <span className="font-bold text-sm tracking-tight text-slate-100">
+              Smart Market Watchlist
             </span>
             <p className="text-[11px] text-slate-400 tracking-normal font-normal">
-              Market Assistant
+              Market Watch
             </p>
           </div>
         </div>

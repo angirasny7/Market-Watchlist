@@ -134,29 +134,45 @@ export const useMarketStore = create<MarketState>((set, get) => ({
   stockSearchQuery: '',
 
   addStock: (stock: StockQuote) => {
-    const exists = get().watchlist.some((s) => s.symbol === stock.symbol);
+    const prevWatchlist = get().watchlist;
+    const exists = prevWatchlist.some((s) => s.symbol === stock.symbol);
     if (!exists) {
-      set((state) => ({
-        watchlist: [stock, ...state.watchlist],
-      }));
-      watchlistService.addStock(stock.symbol).catch(() => {});
+      set({
+        watchlist: [stock, ...prevWatchlist],
+      });
+      useToastStore.getState().addToast(`Added ${stock.symbol} to watchlist`, 'success');
+      watchlistService.addStock(stock.symbol).catch(() => {
+        set({ watchlist: prevWatchlist });
+        useToastStore.getState().addToast(`Failed to add ${stock.symbol}. Reverted.`, 'error');
+      });
     }
   },
 
   removeStock: (symbol: string) => {
-    set((state) => ({
-      watchlist: state.watchlist.filter((s) => s.symbol !== symbol),
-    }));
-    watchlistService.removeStock(symbol).catch(() => {});
+    const prevWatchlist = get().watchlist;
+    set({
+      watchlist: prevWatchlist.filter((s) => s.symbol !== symbol),
+    });
+    useToastStore.getState().addToast(`Removed ${symbol} from watchlist`, 'info');
+    watchlistService.removeStock(symbol).catch(() => {
+      set({ watchlist: prevWatchlist });
+      useToastStore.getState().addToast(`Failed to remove ${symbol}. Reverted.`, 'error');
+    });
   },
 
   togglePinStock: (symbol: string) => {
-    set((state) => ({
-      watchlist: state.watchlist.map((s) =>
-        s.symbol === symbol ? { ...s, isPinned: !s.isPinned } : s
+    const prevWatchlist = get().watchlist;
+    const target = prevWatchlist.find((s) => s.symbol === symbol);
+    const nextPinned = !target?.isPinned;
+    set({
+      watchlist: prevWatchlist.map((s) =>
+        s.symbol === symbol ? { ...s, isPinned: nextPinned } : s
       ),
-    }));
-    watchlistService.togglePin(symbol).catch(() => {});
+    });
+    watchlistService.togglePin(symbol).catch(() => {
+      set({ watchlist: prevWatchlist });
+      useToastStore.getState().addToast(`Failed to update pin for ${symbol}. Reverted.`, 'error');
+    });
   },
 
   setWatchlistViewMode: (mode: 'grid' | 'table') => {
@@ -190,6 +206,13 @@ export const useMarketStore = create<MarketState>((set, get) => ({
   totalMemoryCount: 0,
 
   markEventRead: (id: string) => {
+    const prevEvents = get().events;
+    const targetEvent = prevEvents.find((e) => e.id === id);
+    if (!targetEvent) return;
+    const prevArchivedCount = get().archivedEventsCount;
+    const prevTotalCount = get().totalMemoryCount;
+    const prevCursor = get().userState.cursor;
+
     set((state) => ({
       events: state.events.filter((e) => e.id !== id),
       archivedEventsCount: state.archivedEventsCount + 1,
@@ -203,10 +226,25 @@ export const useMarketStore = create<MarketState>((set, get) => ({
       },
     }));
     useToastStore.getState().addToast('Moved to Market Memory (Archived)', 'success');
-    eventService.markEventRead(id).catch(() => {});
+    eventService.markEventRead(id).catch(() => {
+      set((state) => ({
+        events: prevEvents,
+        archivedEventsCount: prevArchivedCount,
+        totalMemoryCount: prevTotalCount,
+        userState: { ...state.userState, cursor: prevCursor },
+      }));
+      useToastStore.getState().addToast('Failed to mark event read. Reverted.', 'error');
+    });
   },
 
   saveEventForLater: (id: string) => {
+    const prevEvents = get().events;
+    const targetEvent = prevEvents.find((e) => e.id === id);
+    if (!targetEvent) return;
+    const prevSavedCount = get().savedEventsCount;
+    const prevTotalCount = get().totalMemoryCount;
+    const prevCursor = get().userState.cursor;
+
     set((state) => ({
       events: state.events.filter((e) => e.id !== id),
       savedEventsCount: state.savedEventsCount + 1,
@@ -220,11 +258,24 @@ export const useMarketStore = create<MarketState>((set, get) => ({
       },
     }));
     useToastStore.getState().addToast('Saved to Market Memory', 'info');
-    eventService.saveEventForLater(id).catch(() => {});
+    eventService.saveEventForLater(id).catch(() => {
+      set((state) => ({
+        events: prevEvents,
+        savedEventsCount: prevSavedCount,
+        totalMemoryCount: prevTotalCount,
+        userState: { ...state.userState, cursor: prevCursor },
+      }));
+      useToastStore.getState().addToast('Failed to save event. Reverted.', 'error');
+    });
   },
 
   markAllEventsRead: () => {
-    const activeCount = get().events.length;
+    const prevEvents = get().events;
+    const activeCount = prevEvents.length;
+    const prevArchived = get().archivedEventsCount;
+    const prevTotal = get().totalMemoryCount;
+    const prevCursor = get().userState.cursor;
+
     set((state) => ({
       events: [],
       archivedEventsCount: state.archivedEventsCount + activeCount,
@@ -237,17 +288,34 @@ export const useMarketStore = create<MarketState>((set, get) => ({
         },
       },
     }));
-    useToastStore.getState().addToast('Moved to Market Memory (Archived)', 'success');
-    eventService.markAllRead().catch(() => {});
+    useToastStore.getState().addToast('All events marked as read', 'success');
+    eventService.markAllRead().catch(() => {
+      set((state) => ({
+        events: prevEvents,
+        archivedEventsCount: prevArchived,
+        totalMemoryCount: prevTotal,
+        userState: { ...state.userState, cursor: prevCursor },
+      }));
+      useToastStore.getState().addToast('Failed to mark all read. Reverted.', 'error');
+    });
   },
 
   convertSavedToArchived: (id: string) => {
+    const prevSaved = get().savedEventsCount;
+    const prevArchived = get().archivedEventsCount;
+
     set((state) => ({
       savedEventsCount: Math.max(0, state.savedEventsCount - 1),
       archivedEventsCount: state.archivedEventsCount + 1,
     }));
     useToastStore.getState().addToast('Moved to Archived Memory', 'success');
-    eventService.markEventRead(id).catch(() => {});
+    eventService.markEventRead(id).catch(() => {
+      set({
+        savedEventsCount: prevSaved,
+        archivedEventsCount: prevArchived,
+      });
+      useToastStore.getState().addToast('Failed to archive event. Reverted.', 'error');
+    });
   },
 
   acknowledgeEvent: (id: string) => {
@@ -273,13 +341,20 @@ export const useMarketStore = create<MarketState>((set, get) => ({
   },
 
   acknowledgeDigest: (digestId: string) => {
+    const prevDigests = get().digests;
     set((state) => ({
       digests: state.digests.map((d) =>
         d.id === digestId ? { ...d, isAcknowledged: true } : d
       ),
     }));
-    digestService.markDigestRead(digestId).catch(() => {});
-    digestService.viewDigest(digestId).catch(() => {});
+    useToastStore.getState().addToast('Marked dossier as reviewed', 'success');
+    Promise.all([
+      digestService.markDigestRead(digestId),
+      digestService.viewDigest(digestId),
+    ]).catch(() => {
+      set({ digests: prevDigests });
+      useToastStore.getState().addToast('Failed to acknowledge dossier. Reverted.', 'error');
+    });
   },
 
   // Highlights State

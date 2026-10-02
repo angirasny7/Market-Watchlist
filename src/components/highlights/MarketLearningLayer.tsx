@@ -66,7 +66,7 @@ export const MarketLearningLayer: React.FC = () => {
             </span>
           </div>
           <p className="text-xs sm:text-sm text-slate-300 max-w-3xl leading-relaxed">
-            By analyzing historical causal events and realized subsequent returns, the Autonomous Intelligence Engine surfaces empirical tendencies across market regimes.
+            By analyzing historical price patterns and subsequent performance, empirical tendencies across market regimes are summarized below.
           </p>
         </div>
 
