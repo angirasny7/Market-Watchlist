@@ -142,7 +142,7 @@ export const StockDetailModal: React.FC<StockDetailModalProps> = ({
         {/* 1. Header Banner */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border/80">
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-xl font-bold font-mono text-slate-100">{symbol}</h2>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-surface-subtle border border-border text-slate-300">
                 {stockDetails?.exchange || currentOverviewStock?.exchange || 'NSE'}
@@ -150,6 +150,15 @@ export const StockDetailModal: React.FC<StockDetailModalProps> = ({
               <span className="text-[11px] text-slate-400 font-medium">
                 {stockDetails?.sector || currentOverviewStock?.sector || 'General'}
               </span>
+              {currentOverviewStock?.nextEvent && (
+                <span className="flex items-center gap-1.5 text-[11px] px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-300 font-medium">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                  <span>{currentOverviewStock.nextEvent.label}</span>
+                  {currentOverviewStock.nextEvent.isDemo && (
+                    <span className="text-[9px] px-1 rounded bg-amber-500/20 text-amber-300 font-mono">Demo</span>
+                  )}
+                </span>
+              )}
             </div>
             <div className="text-xs text-slate-400 mt-0.5">
               {loading && !stockDetails ? (

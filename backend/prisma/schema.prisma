@@ -393,6 +393,7 @@ enum CorporateEventType {
   DIVIDEND
   SPLIT
   AGM
+  EX_DIVIDEND
 }
 
 model CorporateEvent {
@@ -402,6 +403,7 @@ model CorporateEvent {
   eventDate   DateTime
   title       String
   details     String?
+  isDemo      Boolean            @default(false)
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
   stock       Stock              @relation(fields: [stockSymbol], references: [symbol], onDelete: Cascade)

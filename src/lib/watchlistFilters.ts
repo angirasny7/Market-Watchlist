@@ -37,7 +37,7 @@ export interface WatchlistStockItem {
   attentionLevel: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
   attentionScore: number;
   unseenUpdatesCount: number;
-  nextEvent: { type: string; date: string; label: string } | null;
+  nextEvent: { type: string; date: string; label: string; isDemo?: boolean } | null;
   activeAlertCount: number;
   sparkline: number[];
   watchlistIds: string[];

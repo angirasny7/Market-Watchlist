@@ -188,6 +188,9 @@ export const WatchlistGrid: React.FC<WatchlistGridProps> = ({
                       <Calendar className="w-3 h-3 shrink-0" />
                     )}
                     <span className="truncate max-w-[110px] font-medium">{stock.nextEvent.label}</span>
+                    {stock.nextEvent.isDemo && (
+                      <span className="text-[9px] px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 font-mono shrink-0">Demo</span>
+                    )}
                   </div>
                 );
               })()}

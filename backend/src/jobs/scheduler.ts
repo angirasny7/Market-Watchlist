@@ -6,6 +6,7 @@ import { insightGenerationService, InsightGenerationResult } from '../services/i
 import { runDigestGenerationJob, DigestGenerationResult } from './digestGenerationJob.js';
 import { alertService } from '../services/alertService.js';
 import { corporateEventService } from '../services/corporateEventService.js';
+import { runSyncCorporateEventsJob } from './syncCorporateEventsJob.js';
 
 let lastStockSyncTime: Date | null = null;
 let lastNewsSyncTime: Date | null = null;
@@ -62,6 +63,16 @@ export async function runMarketIntelligencePipeline(): Promise<PipelineExecution
     }
   } catch (err: any) {
     console.error('⚠️ [Pipeline] Alert evaluation error:', err.message);
+  }
+
+  // Step 2c: Real Upcoming Corporate Events Sync (Earnings, Dividends, Ex-Dividends)
+  try {
+    const eventsResult = await runSyncCorporateEventsJob();
+    if (eventsResult.eventsSynced > 0) {
+      console.log(`📅 [Pipeline] Corporate events sync: ${eventsResult.eventsSynced} upcoming event(s) recorded.`);
+    }
+  } catch (err: any) {
+    console.error('⚠️ [Pipeline] Corporate events sync error:', err.message);
   }
 
   // Step 3: Rule-based Causal Insight Generation

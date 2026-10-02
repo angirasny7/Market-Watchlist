@@ -1,12 +1,28 @@
 import { CorporateEventType } from '@prisma/client';
 import { prisma } from '../config/prisma.js';
 
+export interface UpcomingEventSummary {
+  type: string;
+  date: string;
+  label: string;
+  daysAway: number;
+  isDemo: boolean;
+}
+
 export class CorporateEventService {
   /**
-   * Seeds realistic corporate events if fewer than 3 future events exist.
-   * Ensures demo/dev environments immediately show upcoming earnings, dividends, AGMs.
+   * Seeds realistic demo corporate events only when NODE_ENV=development AND SEED_DEMO_EVENTS=true.
+   * Auto-seeded demo events have isDemo=true.
+   * In production or when SEED_DEMO_EVENTS is not set, no demo events are created.
    */
   async ensureSeedCorporateEvents(): Promise<void> {
+    const isDev = (process.env.NODE_ENV || 'development') === 'development';
+    const seedDemo = process.env.SEED_DEMO_EVENTS === 'true';
+
+    if (!isDev || !seedDemo) {
+      return;
+    }
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -44,7 +60,7 @@ export class CorporateEventService {
       },
       {
         symbol: findStock('TCS.NS'),
-        type: 'DIVIDEND',
+        type: 'EX_DIVIDEND',
         daysOffset: 3,
         title: 'Interim Dividend Ex-Date (₹12.00)',
         details: 'Record date for declaration of second interim dividend of ₹12 per equity share.',
@@ -97,6 +113,7 @@ export class CorporateEventService {
             eventDate,
             title: item.title,
             details: item.details,
+            isDemo: true,
           },
         });
       }
@@ -105,20 +122,26 @@ export class CorporateEventService {
 
   /**
    * Retrieves earliest upcoming event for each specified stock symbol.
+   * In production, never returns demo-seeded dates.
+   * If the provider has no data for a stock, shows nothing (no invented dates).
    */
   async getEarliestUpcomingEventsBySymbol(
     symbols: string[]
-  ): Promise<Map<string, { type: string; date: string; label: string; daysAway: number }>> {
-    const eventMap = new Map<string, { type: string; date: string; label: string; daysAway: number }>();
+  ): Promise<Map<string, UpcomingEventSummary>> {
+    const eventMap = new Map<string, UpcomingEventSummary>();
     if (symbols.length === 0) return eventMap;
 
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
 
+    const isDev = (process.env.NODE_ENV || 'development') === 'development';
+    const allowDemo = isDev && process.env.SEED_DEMO_EVENTS === 'true';
+
     const events = await prisma.corporateEvent.findMany({
       where: {
         stockSymbol: { in: symbols },
         eventDate: { gte: startOfToday },
+        ...(allowDemo ? {} : { isDemo: false }),
       },
       orderBy: { eventDate: 'asc' },
     });
@@ -133,6 +156,8 @@ export class CorporateEventService {
           shortLabel = daysAway <= 3 ? `Earnings in ${daysAway}d` : 'Earnings';
         } else if (ev.eventType === 'DIVIDEND') {
           shortLabel = daysAway <= 3 ? `Div in ${daysAway}d` : 'Dividend';
+        } else if (ev.eventType === 'EX_DIVIDEND') {
+          shortLabel = daysAway <= 3 ? `Ex-Div in ${daysAway}d` : 'Ex-Dividend';
         } else if (ev.eventType === 'SPLIT') {
           shortLabel = daysAway <= 3 ? `Split in ${daysAway}d` : 'Stock Split';
         } else if (ev.eventType === 'AGM') {
@@ -144,6 +169,7 @@ export class CorporateEventService {
           date: ev.eventDate.toISOString(),
           label: shortLabel,
           daysAway,
+          isDemo: ev.isDemo,
         });
       }
     }

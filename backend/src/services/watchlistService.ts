@@ -1,7 +1,7 @@
 import { prisma } from '../config/prisma.js';
 import { computeDataFreshness } from './sinceLastVisitService.js';
 import { attentionScoringService } from './attentionScoringService.js';
-import { corporateEventService } from './corporateEventService.js';
+import { corporateEventService, UpcomingEventSummary } from './corporateEventService.js';
 
 export interface WatchlistStockOverviewItem {
   symbol: string;
@@ -17,7 +17,7 @@ export interface WatchlistStockOverviewItem {
   attentionLevel: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
   attentionScore: number;
   unseenUpdatesCount: number;
-  nextEvent: { type: string; date: string; label: string } | null;
+  nextEvent: { type: string; date: string; label: string; isDemo?: boolean } | null;
   activeAlertCount: number;
   sparkline: number[];
   watchlistIds: string[];
@@ -510,7 +510,7 @@ export class WatchlistService {
 
     // 3. Grouped queries: active alerts and upcoming corporate events
     let activeAlertsBySymbol = new Map<string, number>();
-    let upcomingEventsMap = new Map<string, { type: string; date: string; label: string; daysAway: number }>();
+    let upcomingEventsMap = new Map<string, UpcomingEventSummary>();
 
     if (distinctSymbols.length > 0) {
       const alertCounts = await prisma.alert.groupBy({
@@ -585,7 +585,9 @@ export class WatchlistService {
         attentionLevel,
         attentionScore: maxScore,
         unseenUpdatesCount,
-        nextEvent: nextEv ? { type: nextEv.type, date: nextEv.date, label: nextEv.label } : null,
+        nextEvent: nextEv
+          ? { type: nextEv.type, date: nextEv.date, label: nextEv.label, isDemo: nextEv.isDemo }
+          : null,
         activeAlertCount,
         sparkline: sparklineNumbers,
         watchlistIds: symbolToWatchlistIds.get(symbol) || [],
