@@ -9,6 +9,7 @@ import {
   RemoveStockModal,
   StockInsightDrawer,
   StockDetailModal,
+  AlertFormModal,
   RemovableStock,
 } from '../components/watchlist';
 import { useMarketStore } from '../store/useMarketStore';
@@ -50,6 +51,8 @@ export const WatchlistPage: React.FC = () => {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isAlertModalOpen, setIsAlertModalOpen] = useState(false);
+  const [alertTargetSymbol, setAlertTargetSymbol] = useState<string | null>(null);
   const [stockToRemove, setStockToRemove] = useState<RemovableStock | null>(null);
   const [activeInsightStock, setActiveInsightStock] = useState<StockQuote | null>(null);
   const [detailStockSymbol, setDetailStockSymbol] = useState<string | null>(null);
@@ -170,6 +173,10 @@ export const WatchlistPage: React.FC = () => {
             onTogglePin={togglePinInActiveWatchlist}
             onRemoveStock={setStockToRemove}
             onSelectStock={handleSelectStock}
+            onOpenAlerts={(symbol) => {
+              setAlertTargetSymbol(symbol);
+              setIsAlertModalOpen(true);
+            }}
           />
         ) : (
           <WatchlistTable
@@ -177,6 +184,10 @@ export const WatchlistPage: React.FC = () => {
             onTogglePin={togglePinInActiveWatchlist}
             onRemoveStock={setStockToRemove}
             onSelectStock={handleSelectStock}
+            onOpenAlerts={(symbol) => {
+              setAlertTargetSymbol(symbol);
+              setIsAlertModalOpen(true);
+            }}
           />
         )
       ) : (
@@ -257,9 +268,27 @@ export const WatchlistPage: React.FC = () => {
         symbol={detailStockSymbol}
         isOpen={Boolean(detailStockSymbol)}
         onClose={() => setDetailStockSymbol(null)}
+        onOpenAlertModal={(symbol) => {
+          setAlertTargetSymbol(symbol);
+          setIsAlertModalOpen(true);
+        }}
       />
 
-      {/* 9. Stock Causal Insight Drawer */}
+      {/* 9. Set Price & Attention Alert Modal (Phase 4) */}
+      <AlertFormModal
+        isOpen={isAlertModalOpen}
+        onClose={() => {
+          setIsAlertModalOpen(false);
+          setAlertTargetSymbol(null);
+        }}
+        targetSymbol={alertTargetSymbol || undefined}
+        stocks={rawStocks}
+        onAlertCreated={() => {
+          fetchWatchlistOverview();
+        }}
+      />
+
+      {/* 10. Stock Causal Insight Drawer */}
       <StockInsightDrawer
         stock={activeInsightStock}
         onClose={() => setActiveInsightStock(null)}

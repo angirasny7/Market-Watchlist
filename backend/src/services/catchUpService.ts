@@ -3,6 +3,7 @@ import { prisma } from '../config/prisma.js';
 import { ProviderFactory } from '../providers/providerFactory.js';
 import { attentionScoringService } from './attentionScoringService.js';
 import { computeUserSinceTimestamp } from './sinceLastVisitService.js';
+import { alertService } from './alertService.js';
 
 export interface CatchUpResult {
   userId: string;
@@ -475,6 +476,13 @@ export class CatchUpService {
         });
         if (digest) digestsCreated++;
       }
+    }
+
+    // Evaluate active alerts for the user's watchlist symbols
+    try {
+      await alertService.evaluateAlerts(watchlistSymbols);
+    } catch (e: any) {
+      console.error('[CatchUp] Alert evaluation warning:', e.message);
     }
 
     return {

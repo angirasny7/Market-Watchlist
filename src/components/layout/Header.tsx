@@ -11,6 +11,7 @@ import { useAuthStore } from '../../store/useAuthStore';
 import { formatRelativeTime } from '../../lib/dateUtils';
 import { detectCurrentDevice } from '../../lib/deviceUtils';
 import { getNseMarketStatus } from '../../lib/marketHours';
+import { NotificationDropdown } from './NotificationDropdown';
 
 interface HeaderProps {
   onToggleMobileSidebar?: () => void;
@@ -153,7 +154,10 @@ export const Header: React.FC<HeaderProps> = () => {
           </button>
         </div>
 
-        {/* 3. Single Unified Profile Menu */}
+        {/* 3. Notifications Bell Dropdown */}
+        <NotificationDropdown />
+
+        {/* 4. Single Unified Profile Menu */}
         <div className="relative" ref={menuRef}>
           <button
             onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}

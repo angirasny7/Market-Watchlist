@@ -134,26 +134,63 @@ export const WatchlistGrid: React.FC<WatchlistGridProps> = ({
               )}
 
               {/* Active Alerts */}
-              {stock.activeAlertCount > 0 && (
-                <span
+              {stock.activeAlertCount > 0 ? (
+                <button
+                  type="button"
                   onClick={(e) => {
                     e.stopPropagation();
                     if (onOpenAlerts) onOpenAlerts(stock.symbol);
                   }}
-                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 font-mono"
+                  title={`${stock.activeAlertCount} active alerts - click to manage`}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 font-medium hover:bg-indigo-500/25 transition-colors"
                 >
-                  <Bell className="w-3 h-3 text-indigo-400" />
+                  <Bell className="w-3 h-3 text-indigo-400 fill-indigo-400/30" />
                   <span>{stock.activeAlertCount}</span>
-                </span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (onOpenAlerts) onOpenAlerts(stock.symbol);
+                  }}
+                  title="Set Alert"
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-surface-subtle border border-border/80 text-slate-500 hover:text-indigo-400 hover:border-indigo-500/30 transition-colors"
+                >
+                  <Bell className="w-3 h-3" />
+                  <span>+</span>
+                </button>
               )}
 
               {/* Next Event */}
-              {stock.nextEvent && (
-                <div className="flex items-center gap-1 text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 px-2 py-0.5 rounded-md">
-                  <Calendar className="w-3 h-3 shrink-0" />
-                  <span className="truncate max-w-[110px]">{stock.nextEvent.label}</span>
-                </div>
-              )}
+              {stock.nextEvent && (() => {
+                const daysAway = Math.max(
+                  0,
+                  Math.ceil(
+                    (new Date(stock.nextEvent.date).getTime() - Date.now()) /
+                      (1000 * 60 * 60 * 24)
+                  )
+                );
+                const isSoon = daysAway <= 3;
+
+                return (
+                  <div
+                    title={`${stock.nextEvent.label} (${new Date(stock.nextEvent.date).toLocaleDateString()})`}
+                    className={`flex items-center gap-1 px-2 py-0.5 rounded-md border ${
+                      isSoon
+                        ? 'text-amber-300 bg-amber-500/10 border-amber-500/30'
+                        : 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20'
+                    }`}
+                  >
+                    {isSoon ? (
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0" />
+                    ) : (
+                      <Calendar className="w-3 h-3 shrink-0" />
+                    )}
+                    <span className="truncate max-w-[110px] font-medium">{stock.nextEvent.label}</span>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* 4. Footer Actions */}
@@ -161,14 +198,28 @@ export const WatchlistGrid: React.FC<WatchlistGridProps> = ({
               className="flex items-center justify-between pt-2.5 mt-1 border-t border-border/50 text-xs"
               onClick={(e) => e.stopPropagation()}
             >
-              <button
-                type="button"
-                onClick={() => onSelectStock(stock)}
-                className="text-slate-300 hover:text-white font-medium flex items-center gap-1 transition-colors"
-              >
-                <span>Details & Chart</span>
-                <ExternalLink className="w-3 h-3 text-slate-400" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => onSelectStock(stock)}
+                  className="text-slate-300 hover:text-white font-medium flex items-center gap-1 transition-colors"
+                >
+                  <span>Details</span>
+                  <ExternalLink className="w-3 h-3 text-slate-400" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onOpenAlerts) onOpenAlerts(stock.symbol);
+                  }}
+                  title="Set Alert"
+                  className="text-slate-400 hover:text-indigo-400 font-medium flex items-center gap-0.5 transition-colors"
+                >
+                  <Bell className="w-3 h-3" />
+                  <span>Alert</span>
+                </button>
+              </div>
 
               <button
                 type="button"

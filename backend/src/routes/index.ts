@@ -12,6 +12,8 @@ import userRoutes from './userRoutes.js';
 import dashboardRoutes from './dashboardRoutes.js';
 import memoryRoutes from './memoryRoutes.js';
 import internalRoutes from './internalRoutes.js';
+import alertRoutes from './alertRoutes.js';
+import notificationRoutes from './notificationRoutes.js';
 
 const router = Router();
 
@@ -42,6 +44,8 @@ router.use('/providers', providerRoutes);
 router.use('/admin', adminRoutes);
 router.use('/memory', memoryRoutes);
 router.use('/internal', internalRoutes);
+router.use('/alerts', alertRoutes);
+router.use('/notifications', notificationRoutes);
 
 export default router;
 

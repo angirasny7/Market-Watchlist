@@ -4,6 +4,8 @@ import { runNewsSyncJob } from './newsSyncJob.js';
 import { runChangeDetectionJob, ChangeDetectionResult } from './changeDetectionJob.js';
 import { insightGenerationService, InsightGenerationResult } from '../services/insightGenerationService.js';
 import { runDigestGenerationJob, DigestGenerationResult } from './digestGenerationJob.js';
+import { alertService } from '../services/alertService.js';
+import { corporateEventService } from '../services/corporateEventService.js';
 
 let lastStockSyncTime: Date | null = null;
 let lastNewsSyncTime: Date | null = null;
@@ -41,7 +43,7 @@ export interface PipelineExecutionResult {
 
 /**
  * Sequential Pipeline Orchestrator:
- * syncStocksJob -> changeDetectionJob -> insightGenerationJob -> digestGenerationJob
+ * syncStocksJob -> changeDetectionJob -> alert evaluation -> insightGenerationJob -> digestGenerationJob
  */
 export async function runMarketIntelligencePipeline(): Promise<PipelineExecutionResult> {
   console.log('🔄 [Pipeline] Starting automated Market Intelligence Pipeline execution...');
@@ -51,6 +53,16 @@ export async function runMarketIntelligencePipeline(): Promise<PipelineExecution
 
   // Step 2: Automated Anomaly Change Detection
   const changeResult = await runChangeDetectionJob();
+
+  // Step 2b: Active Alerts Evaluation
+  try {
+    const triggeredCount = await alertService.evaluateAlerts();
+    if (triggeredCount > 0) {
+      console.log(`🔔 [Pipeline] Evaluated active alerts: ${triggeredCount} alert(s) triggered.`);
+    }
+  } catch (err: any) {
+    console.error('⚠️ [Pipeline] Alert evaluation error:', err.message);
+  }
 
   // Step 3: Rule-based Causal Insight Generation
   const insightResult = await insightGenerationService.runInsightGeneration();
@@ -116,6 +128,12 @@ export function startScheduler(): void {
   // 3. Immediate Warm-Up Synchronization on Boot
   setTimeout(async () => {
     console.log('⚡ [Scheduler] Executing boot warm-up synchronization...');
+    try {
+      await corporateEventService.ensureSeedCorporateEvents();
+    } catch (e: any) {
+      console.error('[Scheduler] Initial corporate event seed warning:', e.message);
+    }
+
     try {
       isPipelineInProgress = true;
       await runMarketIntelligencePipeline();

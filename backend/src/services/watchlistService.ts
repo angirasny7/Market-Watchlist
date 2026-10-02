@@ -1,6 +1,7 @@
 import { prisma } from '../config/prisma.js';
 import { computeDataFreshness } from './sinceLastVisitService.js';
 import { attentionScoringService } from './attentionScoringService.js';
+import { corporateEventService } from './corporateEventService.js';
 
 export interface WatchlistStockOverviewItem {
   symbol: string;
@@ -507,7 +508,32 @@ export class WatchlistService {
       unreadEventsBySymbol.set(ev.stockSymbol, list);
     }
 
-    // 3. Assemble stock items
+    // 3. Grouped queries: active alerts and upcoming corporate events
+    let activeAlertsBySymbol = new Map<string, number>();
+    let upcomingEventsMap = new Map<string, { type: string; date: string; label: string; daysAway: number }>();
+
+    if (distinctSymbols.length > 0) {
+      const alertCounts = await prisma.alert.groupBy({
+        by: ['stockSymbol'],
+        where: {
+          userId,
+          isActive: true,
+          stockSymbol: { in: distinctSymbols },
+        },
+        _count: { id: true },
+      });
+      for (const a of alertCounts) {
+        activeAlertsBySymbol.set(a.stockSymbol, a._count.id);
+      }
+
+      upcomingEventsMap = await corporateEventService.getEarliestUpcomingEventsBySymbol(distinctSymbols);
+    }
+
+    const totalUserActiveAlerts = await prisma.alert.count({
+      where: { userId, isActive: true },
+    });
+
+    // 4. Assemble stock items
     // Attention thresholds aligned with attentionScoringService.ts:
     // CRITICAL: >= 75
     // HIGH: >= 55
@@ -542,6 +568,8 @@ export class WatchlistService {
       const sparklineNumbers = extractSparklineNumbers(stock, range);
       const isPinned = isPinnedMap.get(symbol) || false;
       const addedAt = addedAtMap.get(symbol) || new Date();
+      const nextEv = upcomingEventsMap.get(symbol);
+      const activeAlertCount = activeAlertsBySymbol.get(symbol) || 0;
 
       stockItems.push({
         symbol,
@@ -557,8 +585,8 @@ export class WatchlistService {
         attentionLevel,
         attentionScore: maxScore,
         unseenUpdatesCount,
-        nextEvent: null,
-        activeAlertCount: 0,
+        nextEvent: nextEv ? { type: nextEv.type, date: nextEv.date, label: nextEv.label } : null,
+        activeAlertCount,
         sparkline: sparklineNumbers,
         watchlistIds: symbolToWatchlistIds.get(symbol) || [],
       });
@@ -571,14 +599,14 @@ export class WatchlistService {
       return b.attentionScore - a.attentionScore;
     });
 
-    // 4. Compute aggregate summary
+    // 5. Compute aggregate summary
     const summary: WatchlistOverviewSummary = {
       totalStocks: stockItems.length,
       needAttention: stockItems.filter(
         (s) => s.attentionLevel === 'CRITICAL' || s.attentionLevel === 'HIGH'
       ).length,
       upcomingEvents: stockItems.filter((s) => s.nextEvent !== null).length,
-      activeAlerts: stockItems.reduce((acc, s) => acc + s.activeAlertCount, 0),
+      activeAlerts: totalUserActiveAlerts,
       unseenUpdates: stockItems.reduce((acc, s) => acc + s.unseenUpdatesCount, 0),
     };
 

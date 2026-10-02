@@ -156,19 +156,30 @@ export const WatchlistTable: React.FC<WatchlistTableProps> = ({
                   }}
                 >
                   {stock.activeAlertCount > 0 ? (
-                    <span
-                      title={`${stock.activeAlertCount} active alert triggers`}
-                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 text-[10px] font-mono font-medium hover:bg-indigo-500/25 transition-colors"
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (onOpenAlerts) onOpenAlerts(stock.symbol);
+                      }}
+                      title={`${stock.activeAlertCount} active alert triggers - click to manage`}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 text-[10px] font-medium hover:bg-indigo-500/25 transition-colors"
                     >
-                      <Bell className="w-3 h-3 text-indigo-400" />
-                      <span>{stock.activeAlertCount}</span>
-                    </span>
+                      <Bell className="w-3 h-3 text-indigo-400 fill-indigo-400/30" />
+                      <span>{stock.activeAlertCount} {stock.activeAlertCount === 1 ? 'alert' : 'alerts'}</span>
+                    </button>
                   ) : (
                     <button
                       type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (onOpenAlerts) onOpenAlerts(stock.symbol);
+                      }}
                       aria-label={`Set alert for ${stock.symbol}`}
-                      className="p-1 rounded text-slate-600 hover:text-slate-400 opacity-40 group-hover:opacity-100 transition-opacity"
+                      title="Set price or attention alert"
+                      className="p-1 rounded text-slate-600 hover:text-indigo-400 opacity-40 group-hover:opacity-100 hover:bg-indigo-500/10 transition-all flex items-center justify-center mx-auto"
                     >
+                      <span className="text-[11px] font-bold mr-0.5 hidden group-hover:inline">+</span>
                       <Bell className="w-3.5 h-3.5" />
                     </button>
                   )}
@@ -195,14 +206,36 @@ export const WatchlistTable: React.FC<WatchlistTableProps> = ({
 
                 {/* 8. Next Event */}
                 <td className="py-3.5 px-3">
-                  {stock.nextEvent ? (
-                    <div className="flex items-center gap-1.5 text-[11px] text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 px-2 py-0.5 rounded-md w-max">
-                      <Calendar className="w-3 h-3 shrink-0" />
-                      <span className="truncate max-w-[120px] font-medium">
-                        {stock.nextEvent.label}
-                      </span>
-                    </div>
-                  ) : (
+                  {stock.nextEvent ? (() => {
+                    const daysAway = Math.max(
+                      0,
+                      Math.ceil(
+                        (new Date(stock.nextEvent.date).getTime() - Date.now()) /
+                          (1000 * 60 * 60 * 24)
+                      )
+                    );
+                    const isSoon = daysAway <= 3;
+
+                    return (
+                      <div
+                        title={`${stock.nextEvent.label} (${new Date(stock.nextEvent.date).toLocaleDateString()})`}
+                        className={`flex items-center gap-1.5 text-[11px] px-2 py-0.5 rounded-md w-max border ${
+                          isSoon
+                            ? 'text-amber-300 bg-amber-500/10 border-amber-500/30'
+                            : 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20'
+                        }`}
+                      >
+                        {isSoon ? (
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0" />
+                        ) : (
+                          <Calendar className="w-3 h-3 shrink-0" />
+                        )}
+                        <span className="truncate max-w-[130px] font-medium">
+                          {stock.nextEvent.label}
+                        </span>
+                      </div>
+                    );
+                  })() : (
                     <span className="text-slate-600 font-mono text-[11px]">—</span>
                   )}
                 </td>
@@ -223,6 +256,18 @@ export const WatchlistTable: React.FC<WatchlistTableProps> = ({
                   onClick={(e) => e.stopPropagation()}
                 >
                   <div className="flex items-center justify-end gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (onOpenAlerts) onOpenAlerts(stock.symbol);
+                      }}
+                      aria-label={`Set alert for ${stock.symbol}`}
+                      title="Set Alert"
+                      className="p-1 rounded-lg text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 transition-colors"
+                    >
+                      <Bell className="w-3.5 h-3.5" />
+                    </button>
+
                     <button
                       type="button"
                       onClick={() => onSelectStock(stock)}
