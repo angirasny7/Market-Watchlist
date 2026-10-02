@@ -32,7 +32,7 @@ app.use(
     },
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-cron-secret'],
   })
 );
 
@@ -97,7 +97,11 @@ if (process.env.NODE_ENV !== 'test') {
     console.log(`🔌 Provider status available at: http://localhost:${PORT}/api/providers/status`);
 
     // Initialize real-time synchronization scheduler
-    startScheduler();
+    if (process.env.ENABLE_INTERNAL_CRON !== 'false') {
+      startScheduler();
+    } else {
+      console.log('ℹ️ [Scheduler] Internal cron scheduler disabled via ENABLE_INTERNAL_CRON=false');
+    }
 
     // Verify and seed master stock catalog without resetting data
     stockService.ensureMasterCatalogSeeded().catch((err) => {

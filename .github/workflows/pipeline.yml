@@ -1,0 +1,43 @@
+name: Market Intelligence Pipeline Cron
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+jobs:
+  run-pipeline:
+    name: Trigger Market Pipeline
+    runs-on: ubuntu-latest
+    steps:
+      - name: Invoke Pipeline Endpoint
+        run: |
+          if [ -z "${{ secrets.BACKEND_URL }}" ]; then
+            echo "Error: BACKEND_URL secret is not set."
+            exit 1
+          fi
+          if [ -z "${{ secrets.CRON_SECRET }}" ]; then
+            echo "Error: CRON_SECRET secret is not set."
+            exit 1
+          fi
+
+          echo "Triggering Market Intelligence Pipeline at ${{ secrets.BACKEND_URL }}..."
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            -H "Content-Type: application/json" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.BACKEND_URL }}/api/internal/run-pipeline")
+
+          HTTP_BODY=$(echo "$RESPONSE" | sed '$d')
+          HTTP_STATUS=$(echo "$RESPONSE" | tail -n 1)
+
+          echo "HTTP Status: $HTTP_STATUS"
+          echo "Response: $HTTP_BODY"
+
+          if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
+            echo "Pipeline executed successfully."
+          elif [ "$HTTP_STATUS" -eq 409 ]; then
+            echo "Pipeline is already in progress, skipping cycle."
+          else
+            echo "Pipeline execution failed with HTTP $HTTP_STATUS"
+            exit 1
+          fi

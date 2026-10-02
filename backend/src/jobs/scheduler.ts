@@ -10,6 +10,10 @@ let lastNewsSyncTime: Date | null = null;
 let isPipelineInProgress = false;
 let isNewsSyncInProgress = false;
 
+export function isPipelineRunning(): boolean {
+  return isPipelineInProgress;
+}
+
 export function recordStockSyncCompleted(): void {
   lastStockSyncTime = new Date();
 }
@@ -26,6 +30,7 @@ export function getSchedulerState() {
     isNewsSyncInProgress,
   };
 }
+
 
 export interface PipelineExecutionResult {
   stockResult: SyncStocksResult;

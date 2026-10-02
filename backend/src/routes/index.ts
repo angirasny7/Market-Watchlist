@@ -11,6 +11,7 @@ import adminRoutes from './adminRoutes.js';
 import userRoutes from './userRoutes.js';
 import dashboardRoutes from './dashboardRoutes.js';
 import memoryRoutes from './memoryRoutes.js';
+import internalRoutes from './internalRoutes.js';
 
 const router = Router();
 
@@ -39,6 +40,7 @@ router.use('/news', newsRoutes);
 router.use('/providers', providerRoutes);
 router.use('/admin', adminRoutes);
 router.use('/memory', memoryRoutes);
+router.use('/internal', internalRoutes);
 
 export default router;
 
