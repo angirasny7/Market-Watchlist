@@ -184,6 +184,15 @@ Calibrated in `attentionScoringService.ts` to ensure Urgent (CRITICAL) events re
 - Populated into `GET /api/watchlists/:id/overview` and `all/overview` as `nextEvent: { type, date, label }`.
 - Events within 3 days are highlighted with an amber pulsating dot indicator in the UI.
 
+### Attention Feed & Clustering (`/api/feed`) (Phase F0 & Rebuild)
+- `GET /api/feed` — Query clustered feed items (1 item per stock per calendar day). Supports `window=sinceLastVisit|24h|7d|30d`, `watchlistId=`, `symbol=`, `priority=`, `type=`, `unreadOnly=true`, `savedOnly=true`, `q=`, cursor pagination (`cursor=`, `limit=`).
+- `GET /api/feed/summary` — High-level summary sentence ("You were away N days · X updates across Y stocks · Z need attention"), count breakdowns by priority, and data freshness / delay metadata.
+- `GET /api/feed/items/:id/details?tab=happened|why|matters|sources|price|alert|all` — Lazy-computed tab details for progressive disclosure details drawer.
+- `POST /api/feed/mark-read` — Mark all or specified item clusters as read.
+- `POST /api/feed/items/:id/mark-read` — Mark single item cluster as read.
+- `POST /api/feed/items/:id/save` — Toggle saved bookmark status for an item.
+- `POST /api/feed/caught-up` — Advance user session cursor and mark all current events read.
+
 ### Events & Attention Feed (`/api/events`)
 - `GET /api/events` — Query market anomaly events (`?priority=&eventType=&sinceLastVisit=true&unreadOnly=false`).
 - `GET /api/events/:symbol` — Events for a specific stock.
