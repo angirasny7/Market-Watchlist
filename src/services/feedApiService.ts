@@ -40,8 +40,9 @@ export class FeedApiService {
     return null;
   }
 
-  async getSummary(): Promise<FeedSummary | null> {
-    const res = await apiClient.get<FeedSummary>('/feed/summary');
+  async getSummary(window?: FeedTimeWindow): Promise<FeedSummary | null> {
+    const qs = window ? `?window=${window}` : '';
+    const res = await apiClient.get<FeedSummary>(`/feed/summary${qs}`);
     if (res.success && res.data) {
       return res.data;
     }

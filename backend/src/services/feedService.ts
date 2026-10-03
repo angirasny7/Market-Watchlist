@@ -20,6 +20,7 @@ export interface FeedItem {
   currency: string;
   date: string;
   occurredOn?: string | null;
+  occurredAt?: string | null;
   periodStart?: string | null;
   detectedAt?: string | null;
   isCumulative?: boolean;
@@ -59,6 +60,7 @@ export interface FeedDetailsHappened {
   is52wLow: boolean;
   eventTimestamp: string;
   occurredOn?: string | null;
+  occurredAt?: string | null;
   periodStart?: string | null;
   detectedAt?: string | null;
   isCumulative?: boolean;
@@ -131,6 +133,14 @@ export interface FeedSummary {
   lastSyncedAt: string;
   isDelayed: boolean;
   delayNotice: string;
+  windowCounts?: {
+    sinceLastVisit: number;
+    '24h': number;
+    '7d': number;
+    '30d': number;
+  };
+  marketsClosed?: boolean;
+  newsCountInWindow?: number;
 }
 
 export class FeedService {
@@ -327,7 +337,11 @@ export class FeedService {
     // 4. Query Events for monitored symbols within window
     const whereClause: any = {
       stockSymbol: { in: monitoredSymbols },
-      timestamp: { gte: windowStartDate },
+      OR: [
+        { occurredAt: { gte: windowStartDate } },
+        { AND: [{ occurredAt: null }, { occurredOn: { gte: windowStartDate } }] },
+        { AND: [{ occurredAt: null }, { occurredOn: null }, { timestamp: { gte: windowStartDate } }] },
+      ],
       ...(allowDemo
         ? {}
         : {
@@ -361,7 +375,8 @@ export class FeedService {
     // 5. Cluster by stockSymbol + calendarDay
     const clusterMap = new Map<string, typeof eligibleEvents>();
     for (const ev of eligibleEvents) {
-      const dayStr = new Date(ev.timestamp).toISOString().split('T')[0];
+      const evDate = ev.occurredAt || ev.occurredOn || ev.timestamp;
+      const dayStr = new Date(evDate).toISOString().split('T')[0];
       const key = `${ev.stockSymbol}|${dayStr}`;
       const list = clusterMap.get(key) || [];
       list.push(ev);
@@ -438,6 +453,7 @@ export class FeedService {
         currency: stock?.currency || '₹',
         date: topEv.timestamp.toISOString(),
         occurredOn: topEv.occurredOn ? topEv.occurredOn.toISOString() : null,
+        occurredAt: topEv.occurredAt ? topEv.occurredAt.toISOString() : (topEv.occurredOn ? topEv.occurredOn.toISOString() : topEv.timestamp.toISOString()),
         periodStart: topEv.periodStart ? topEv.periodStart.toISOString() : null,
         detectedAt: topEv.detectedAt ? topEv.detectedAt.toISOString() : topEv.timestamp.toISOString(),
         isCumulative,
@@ -550,6 +566,7 @@ export class FeedService {
       currency: stock?.currency || '₹',
       date: event.timestamp.toISOString(),
       occurredOn: event.occurredOn ? event.occurredOn.toISOString() : null,
+      occurredAt: event.occurredAt ? event.occurredAt.toISOString() : (event.occurredOn ? event.occurredOn.toISOString() : event.timestamp.toISOString()),
       periodStart: event.periodStart ? event.periodStart.toISOString() : null,
       detectedAt: event.detectedAt ? event.detectedAt.toISOString() : event.timestamp.toISOString(),
       isCumulative: Boolean(delta.isCumulativeReturnEvent),
@@ -592,6 +609,7 @@ export class FeedService {
       is52wLow: Boolean(event.eventType === 'FIFTY_TWO_WEEK_LOW' || (low52w && currentPrice && currentPrice <= low52w * 1.005)),
       eventTimestamp: event.timestamp.toISOString(),
       occurredOn: event.occurredOn ? event.occurredOn.toISOString() : null,
+      occurredAt: event.occurredAt ? event.occurredAt.toISOString() : (event.occurredOn ? event.occurredOn.toISOString() : event.timestamp.toISOString()),
       periodStart: event.periodStart ? event.periodStart.toISOString() : null,
       detectedAt: event.detectedAt ? event.detectedAt.toISOString() : event.timestamp.toISOString(),
       isCumulative: Boolean(delta.isCumulativeReturnEvent),
@@ -694,16 +712,30 @@ export class FeedService {
   /**
    * GET /feed/summary: High-level summary sentence, counts and freshness
    */
-  async getSummary(userId: string): Promise<FeedSummary> {
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+  async getSummary(
+    userId: string,
+    options?: { window?: 'sinceLastVisit' | '24h' | '7d' | '30d' }
+  ): Promise<FeedSummary> {
+    const selectedWindow = options?.window || 'sinceLastVisit';
     const userState = await prisma.userState.findUnique({ where: { userId } });
 
-    const lastSessionAt = userState?.previousSessionAt || userState?.lastSeenAt || new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+    const lastSessionAt =
+      userState?.previousSessionEndedAt ||
+      userState?.previousSessionAt ||
+      userState?.lastSeenAt ||
+      new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
     const daysSinceLastVisit = Math.max(1, Math.round((Date.now() - lastSessionAt.getTime()) / (24 * 60 * 60 * 1000)));
 
-    const feedResult = await this.getFeed(userId, { window: '30d', limit: 1000 });
-    const items = feedResult.items;
+    // Fetch feed for the selected window as well as all windows
+    const [selectedFeed, sinceFeed, feed24h, feed7d, feed30d] = await Promise.all([
+      this.getFeed(userId, { window: selectedWindow, limit: 1000 }),
+      this.getFeed(userId, { window: 'sinceLastVisit', limit: 1000 }),
+      this.getFeed(userId, { window: '24h', limit: 1000 }),
+      this.getFeed(userId, { window: '7d', limit: 1000 }),
+      this.getFeed(userId, { window: '30d', limit: 1000 }),
+    ]);
 
+    const items = selectedFeed.items;
     const unreadClusters = items.filter((i) => i.isUnread).length;
     const totalInWindow = items.length;
     const criticalCount = items.filter((i) => i.priority === 'CRITICAL').length;
@@ -714,7 +746,23 @@ export class FeedService {
 
     const uniqueStocksCount = new Set(items.map((i) => i.stockSymbol)).size;
 
-    const headline = `You were away ${daysSinceLastVisit} day${daysSinceLastVisit > 1 ? 's' : ''} · ${unreadClusters} updates across ${uniqueStocksCount} stocks · ${needAttentionCount} need attention`;
+    // Check if markets were closed during this period (e.g. weekend with no trading price moves)
+    const hasTradingMoves = items.some((i) =>
+      i.signals.some((s) => s.type === 'PRICE_SURGE' || s.type === 'PRICE_DROP' || s.type === 'VOLUME_SPIKE')
+    );
+    const isWeekend = new Date().getDay() === 0 || new Date().getDay() === 6;
+    const marketsClosed = items.length === 0 || (!hasTradingMoves && isWeekend);
+
+    let headline = '';
+    if (selectedWindow === 'sinceLastVisit') {
+      headline = `Since your last visit: ${unreadClusters} updates across ${uniqueStocksCount} stocks · ${needAttentionCount} need attention`;
+    } else if (selectedWindow === '24h') {
+      headline = `Last 24 hours: ${totalInWindow} updates across ${uniqueStocksCount} stocks · ${needAttentionCount} need attention`;
+    } else if (selectedWindow === '7d') {
+      headline = `Last 7 days: ${totalInWindow} updates across ${uniqueStocksCount} stocks · ${needAttentionCount} need attention`;
+    } else {
+      headline = `Last 30 days: ${totalInWindow} updates across ${uniqueStocksCount} stocks · ${needAttentionCount} need attention`;
+    }
 
     const lastStock = await prisma.stock.findFirst({
       orderBy: { updatedAt: 'desc' },
@@ -740,6 +788,13 @@ export class FeedService {
       lastSyncedAt,
       isDelayed: true,
       delayNotice: 'Delayed ~15 min (NSE)',
+      windowCounts: {
+        sinceLastVisit: sinceFeed.total,
+        '24h': feed24h.total,
+        '7d': feed7d.total,
+        '30d': feed30d.total,
+      },
+      marketsClosed,
     };
   }
 

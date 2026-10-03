@@ -218,6 +218,7 @@ export async function runChangeDetectionJob(): Promise<ChangeDetectionResult> {
             priority: scoreResult.priority,
             timestamp: new Date(),
             occurredOn: new Date(),
+            occurredAt: new Date(),
             detectedAt: new Date(),
             metricsDelta: metricsData,
           },

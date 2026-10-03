@@ -14,6 +14,7 @@ export interface FeedItem {
   currency: string;
   date: string;
   occurredOn?: string | null;
+  occurredAt?: string | null;
   periodStart?: string | null;
   detectedAt?: string | null;
   isCumulative?: boolean;
@@ -53,6 +54,7 @@ export interface FeedDetailsHappened {
   is52wLow: boolean;
   eventTimestamp: string;
   occurredOn?: string | null;
+  occurredAt?: string | null;
   periodStart?: string | null;
   detectedAt?: string | null;
   isCumulative?: boolean;
@@ -125,6 +127,14 @@ export interface FeedSummary {
   lastSyncedAt: string;
   isDelayed: boolean;
   delayNotice: string;
+  windowCounts?: {
+    sinceLastVisit: number;
+    '24h': number;
+    '7d': number;
+    '30d': number;
+  };
+  marketsClosed?: boolean;
+  newsCountInWindow?: number;
 }
 
 export type FeedTimeWindow = 'sinceLastVisit' | '24h' | '7d' | '30d';

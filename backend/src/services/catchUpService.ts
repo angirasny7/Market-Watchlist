@@ -384,6 +384,7 @@ export class CatchUpService {
                 priority: anomaly.priority,
                 timestamp: barTime,
                 occurredOn: barTime,
+                occurredAt: barTime,
                 detectedAt: new Date(),
                 metricsDelta: metricsData,
               },
@@ -495,6 +496,7 @@ export class CatchUpService {
                 priority: scoreRes.priority,
                 periodStart: since,
                 occurredOn: new Date(),
+                occurredAt: new Date(),
                 metricsDelta: {
                   ...updatedMetrics,
                   enrichment: enrichment as any,
@@ -509,6 +511,7 @@ export class CatchUpService {
                 priority: scoreRes.priority,
                 timestamp: new Date(),
                 occurredOn: new Date(),
+                occurredAt: new Date(),
                 periodStart: since,
                 detectedAt: new Date(),
                 metricsDelta: cumMetricsData,

@@ -61,7 +61,8 @@ export class FeedController {
   async getSummary(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const userId = await this.resolveUserId(req);
-      const summary = await feedService.getSummary(userId);
+      const windowParam = req.query.window as any;
+      const summary = await feedService.getSummary(userId, { window: windowParam });
 
       res.status(200).json({
         success: true,

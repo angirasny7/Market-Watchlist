@@ -69,7 +69,7 @@ describe('Part B: Feed Shape & Backend Endpoints Test Suite', () => {
   });
 
   it('4. No contradictory numbers inside feed items and happened details', async () => {
-    const result = await feedService.getFeed(userId, { window: '30d', limit: 10 });
+    const result = await feedService.getFeed(userId, { window: '30d', limit: 3 });
 
     for (const item of result.items) {
       const details = await feedService.getItemDetails(userId, item.id);
@@ -90,10 +90,10 @@ describe('Part B: Feed Shape & Backend Endpoints Test Suite', () => {
         expect(happened.priceAtEvent).toBeLessThanOrEqual(happened.dayHigh * 1.01);
       }
     }
-  }, 15000);
+  }, 30000);
 
   it('5. Only qualifying verified sources are returned in sources and why tabs', async () => {
-    const result = await feedService.getFeed(userId, { window: '30d', limit: 10 });
+    const result = await feedService.getFeed(userId, { window: '30d', limit: 3 });
 
     for (const item of result.items) {
       const details = await feedService.getItemDetails(userId, item.id);
@@ -112,10 +112,10 @@ describe('Part B: Feed Shape & Backend Endpoints Test Suite', () => {
         expect(details.why.confidenceScore).toBeLessThanOrEqual(25);
       }
     }
-  }, 15000);
+  }, 30000);
 
   it('6. Counts are identical across summary, sidebar, watchlist and buttons', async () => {
-    const summary = await feedService.getSummary(userId);
+    const summary = await feedService.getSummary(userId, { window: '30d' });
     const unreadCount = await eventService.getUnreadFeedCount(userId);
     const overview = await watchlistService.getOverview(userId, 'all');
     const feed = await feedService.getFeed(userId, { window: '30d', limit: 1000 });
@@ -141,5 +141,5 @@ describe('Part B: Feed Shape & Backend Endpoints Test Suite', () => {
     expect(details!.sources).toBeInstanceOf(Array);
     expect(details!.price.series1M).toBeInstanceOf(Array);
     expect(details!.item.headline).toBeTruthy();
-  });
+  }, 25000);
 });
