@@ -1,13 +1,12 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef } from 'react';
 import {
-  Search,
-  X,
   Filter,
   ArrowUpDown,
   LayoutGrid,
   List,
   Plus,
 } from 'lucide-react';
+import { SearchInput } from '../common/SearchInput';
 import {
   WatchlistDropdownFilter,
   WatchlistSortField,
@@ -42,61 +41,20 @@ export const WatchlistToolbar: React.FC<WatchlistToolbarProps> = ({
 }) => {
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // Global '/' keyboard hotkey to focus search bar
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't trigger if user is typing in an input, textarea or contenteditable element
-      const target = e.target as HTMLElement;
-      if (
-        target.tagName === 'INPUT' ||
-        target.tagName === 'TEXTAREA' ||
-        target.isContentEditable
-      ) {
-        if (e.key === 'Escape' && target === searchInputRef.current) {
-          searchInputRef.current?.blur();
-        }
-        return;
-      }
-
-      if (e.key === '/') {
-        e.preventDefault();
-        searchInputRef.current?.focus();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
-
   return (
     <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 mb-4">
       {/* 1. Left Controls: Search Bar & Filter Dropdown */}
       <div className="flex items-center gap-2 flex-1 max-w-xl">
-        {/* Search Input */}
-        <div className="relative flex-1">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-          <input
-            ref={searchInputRef}
-            type="text"
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Search by company, ticker, sector... (Press '/' to focus)"
-            className="w-full pl-9 pr-8 py-2 rounded-xl bg-surface border border-border focus:border-emerald-500/80 focus:ring-1 focus:ring-emerald-500/50 text-xs sm:text-sm text-slate-100 placeholder:text-slate-500 outline-none transition-all"
-          />
-          {searchQuery ? (
-            <button
-              onClick={() => onSearchChange('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded text-slate-400 hover:text-slate-200 hover:bg-surface-hover"
-              title="Clear search"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          ) : (
-            <kbd className="hidden sm:inline-block absolute right-2.5 top-1/2 -translate-y-1/2 px-1.5 py-0.5 text-[10px] font-mono text-slate-400 bg-surface-subtle border border-border/80 rounded">
-              /
-            </kbd>
-          )}
-        </div>
+        {/* Reusable Search Input */}
+        <SearchInput
+          ref={searchInputRef}
+          value={searchQuery}
+          onChange={onSearchChange}
+          placeholder="Search by company, ticker, sector..."
+          mobilePlaceholder="Search…"
+          ariaLabel="Search watchlist stocks"
+          containerClassName="flex-1"
+        />
 
         {/* Filter Dropdown */}
         <div className="relative shrink-0">

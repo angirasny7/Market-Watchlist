@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Plus, Check, Globe, SlidersHorizontal, ArrowUpDown, AlertCircle, RefreshCw } from 'lucide-react';
-import { Modal } from '../common';
+import { Plus, Check, Globe, SlidersHorizontal, ArrowUpDown, AlertCircle, RefreshCw } from 'lucide-react';
+import { Modal, SearchInput } from '../common';
 import { StockQuote } from '../../types/stock';
 import { useMarketStore } from '../../store/useMarketStore';
 import { useToastStore } from '../../store/useToastStore';
@@ -190,17 +190,15 @@ export const AddStockModal: React.FC<AddStockModalProps> = ({
 
         {/* Search & Market Filter Row */}
         <div className="flex flex-col sm:flex-row items-center gap-2.5">
-          {/* Search Input */}
-          <div className="relative w-full">
-            <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by symbol (e.g. TCS, NVDA, INFY) or company name..."
-              className="w-full pl-10 pr-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs sm:text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
-            />
-          </div>
+          {/* Reusable Search Input */}
+          <SearchInput
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder="Search by symbol (e.g. TCS, NVDA, INFY) or company name..."
+            mobilePlaceholder="Search stocks…"
+            ariaLabel="Search stocks to add"
+            containerClassName="w-full flex-1"
+          />
 
           {/* Market Filter Chips */}
           <div className="flex items-center gap-1 shrink-0 bg-slate-950 p-1 rounded-xl border border-slate-800">

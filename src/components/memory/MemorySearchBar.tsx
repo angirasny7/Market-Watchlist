@@ -1,5 +1,6 @@
 import React from 'react';
-import { Search, X, RotateCcw, Filter, Activity, Calendar, Layers, Sparkles } from 'lucide-react';
+import { RotateCcw, Filter, Activity, Calendar, Layers, Sparkles } from 'lucide-react';
+import { SearchInput } from '../common/SearchInput';
 import { MarketMoodType } from './MarketMoodBadge';
 import { EventType } from '../../types/event';
 import { DateRangePreset } from '../../types/memory';
@@ -84,24 +85,14 @@ export const MemorySearchBar: React.FC<MemorySearchBarProps> = ({
     <div className="p-4 sm:p-5 rounded-2xl bg-surface border border-border shadow-sm space-y-3.5">
       {/* Search Input Row */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Search market memory by headline, symbol (e.g. TCS), company name, or explanation..."
-            className="w-full pl-10 pr-9 py-2.5 bg-surface-subtle rounded-xl border border-border text-xs sm:text-sm text-slate-100 placeholder-slate-400 focus:outline-none focus:border-indigo-500 transition-colors"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => onSearchChange('')}
-              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
-        </div>
+        <SearchInput
+          value={searchQuery}
+          onChange={onSearchChange}
+          placeholder="Search market memory by headline, symbol, company, or cause..."
+          mobilePlaceholder="Search memory…"
+          ariaLabel="Search market memory"
+          containerClassName="flex-1"
+        />
 
         {/* Reset Action */}
         {isFiltered && (

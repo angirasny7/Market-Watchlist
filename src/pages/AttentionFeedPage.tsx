@@ -392,6 +392,7 @@ export const AttentionFeedPage: React.FC = () => {
           onResetFilters={handleResetFilters}
           isFiltered={isFiltered}
           totalFilteredCount={totalCount}
+          totalUnfilteredCount={summary?.totalInWindow}
         />
 
         {/* 3. Feed List Stream */}

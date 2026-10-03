@@ -1,5 +1,6 @@
 import React from 'react';
-import { Search, X, CheckCheck, RotateCcw } from 'lucide-react';
+import { CheckCheck, RotateCcw } from 'lucide-react';
+import { SearchInput } from '../common/SearchInput';
 import { EventPriority, EventType } from '../../types/event';
 
 export type PriorityFilter = 'ALL' | EventPriority;
@@ -45,24 +46,14 @@ export const FeedFilterBar: React.FC<FeedFilterBarProps> = ({
       {/* Left: Search input + Scope & Filter Chips */}
       <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
         {/* Compact Search */}
-        <div className="relative min-w-[160px] sm:w-56">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Search symbol or name..."
-            className="w-full pl-8 pr-7 py-1.5 bg-surface-subtle rounded-lg border border-border text-xs text-slate-100 placeholder-slate-400 focus:outline-none focus:border-indigo-500/80 transition-colors"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => onSearchChange('')}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
+        <SearchInput
+          value={searchQuery}
+          onChange={onSearchChange}
+          placeholder="Search symbol or name..."
+          mobilePlaceholder="Search…"
+          ariaLabel="Search feed"
+          containerClassName="min-w-[160px] sm:w-56 flex-initial"
+        />
 
         {/* Scope Chips */}
         <div className="flex items-center p-0.5 rounded-lg bg-surface-subtle border border-border/80">

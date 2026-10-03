@@ -6,8 +6,8 @@ import { useAuthStore } from '../store/useAuthStore';
 import { useMarketStore } from '../store/useMarketStore';
 import { STARTER_TEMPLATES, StarterWatchlistTemplate } from '../data/starterTemplates';
 import { formatPrice } from '../lib/utils';
+import { SearchInput } from '../components/common/SearchInput';
 import {
-  Search,
   Check,
   X,
   ArrowRight,
@@ -262,16 +262,13 @@ export const OnboardingPage: React.FC = () => {
               </span>
             </div>
 
-            <div className="relative">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search stocks by name or ticker (e.g. TCS, RELIANCE, INFY)..."
-                className="w-full pl-9 pr-4 py-2 bg-surface border border-border rounded-xl text-xs sm:text-sm text-slate-100 placeholder-slate-400 focus:outline-none focus:border-indigo-500 transition-colors"
-              />
-            </div>
+            <SearchInput
+              value={searchQuery}
+              onChange={setSearchQuery}
+              placeholder="Search stocks by name or ticker (e.g. TCS, RELIANCE, INFY)..."
+              mobilePlaceholder="Search stocks…"
+              ariaLabel="Search stock catalog"
+            />
 
             {loadingStocks ? (
               <div className="p-8 text-center text-xs text-slate-400">

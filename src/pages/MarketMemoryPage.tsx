@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMarketStore } from '../store/useMarketStore';
-import { PageContainer } from '../components/common';
+import { PageContainer, SearchInput } from '../components/common';
 import { MarketMoodBadge } from '../components/memory/MarketMoodBadge';
 import { MemoryTimeline } from '../components/memory/MemoryTimeline';
 import { MemorySearchBar } from '../components/memory/MemorySearchBar';
@@ -12,8 +12,6 @@ import {
   Calendar,
   ChevronRight,
   CheckCircle2,
-  Search,
-  X,
   Bookmark,
   Loader2,
 } from 'lucide-react';
@@ -140,25 +138,13 @@ export const MarketMemoryPage: React.FC = () => {
       {activeTab === 'digests' && (
         <div className="space-y-4">
           {/* Search bar */}
-          <div className="relative">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-            <input
-              type="text"
-              value={digestSearchQuery}
-              onChange={(e) => setDigestSearchQuery(e.target.value)}
-              placeholder="Search digests by headline or date..."
-              className="w-full pl-9 pr-8 py-2 bg-surface border border-border rounded-xl text-xs sm:text-sm text-slate-100 placeholder-slate-400 focus:outline-none focus:border-indigo-500 transition-colors"
-            />
-            {digestSearchQuery && (
-              <button
-                onClick={() => setDigestSearchQuery('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 p-0.5"
-                aria-label="Clear search"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
+          <SearchInput
+            value={digestSearchQuery}
+            onChange={setDigestSearchQuery}
+            placeholder="Search digests by headline or date..."
+            mobilePlaceholder="Search digests…"
+            ariaLabel="Search digests"
+          />
 
           {/* Simple Timeline List of Digests */}
           {filteredDigests.length > 0 ? (

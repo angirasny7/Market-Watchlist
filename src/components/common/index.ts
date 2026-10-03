@@ -14,3 +14,4 @@ export * from './Card';
 export * from './LoadingSkeleton';
 export * from './ErrorState';
 export * from './PopoverMenu';
+export * from './SearchInput';

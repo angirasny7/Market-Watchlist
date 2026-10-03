@@ -1,12 +1,12 @@
 import React from 'react';
 import {
-  Search,
   Bookmark,
   CheckCircle2,
   X,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { UserWatchlist } from '../../services/watchlistService';
+import { SearchInput } from '../common/SearchInput';
 
 interface FeedControlsBarProps {
   searchQuery: string;
@@ -26,6 +26,7 @@ interface FeedControlsBarProps {
   onResetFilters: () => void;
   isFiltered: boolean;
   totalFilteredCount: number;
+  totalUnfilteredCount?: number;
 }
 
 export const FeedControlsBar: React.FC<FeedControlsBarProps> = ({
@@ -46,6 +47,7 @@ export const FeedControlsBar: React.FC<FeedControlsBarProps> = ({
   onResetFilters,
   isFiltered,
   totalFilteredCount,
+  totalUnfilteredCount,
 }) => {
   const priorities = [
     { id: 'ALL', label: 'All Priorities' },
@@ -72,37 +74,23 @@ export const FeedControlsBar: React.FC<FeedControlsBarProps> = ({
     <div className="space-y-3">
       {/* Search and Primary Filters */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-        {/* Search Input with '/' Shortcut hint */}
-        <div className="relative flex-1">
-          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            ref={searchInputRef as any}
-            type="text"
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Search company, ticker, catalyst... (/)"
-            className="w-full pl-9.5 pr-8 py-2 rounded-xl bg-surface border border-border text-xs sm:text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
-          />
-          {searchQuery ? (
-            <button
-              type="button"
-              onClick={() => onSearchChange('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-white"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          ) : (
-            <kbd className="hidden sm:inline-block absolute right-3 top-1/2 -translate-y-1/2 px-1.5 py-0.5 text-[10px] font-mono text-slate-400 bg-surface-subtle border border-border rounded">
-              /
-            </kbd>
-          )}
-        </div>
+        {/* Reusable Search Input */}
+        <SearchInput
+          ref={searchInputRef as any}
+          value={searchQuery}
+          onChange={onSearchChange}
+          placeholder="Search stock or keyword"
+          mobilePlaceholder="Search…"
+          ariaLabel="Search feed"
+          containerClassName="flex-1 min-w-[220px] w-full"
+        />
 
         {/* Watchlist Filter Dropdown */}
         <select
           value={selectedWatchlistId}
           onChange={(e) => onSelectWatchlist(e.target.value)}
-          className="px-3 py-2 rounded-xl bg-surface border border-border text-xs sm:text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
+          aria-label="Filter by watchlist"
+          className="h-10 px-3 rounded-lg bg-surface border border-border text-xs sm:text-sm text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors shrink-0 cursor-pointer"
         >
           <option value="all">All Watchlists</option>
           {watchlists.map((w) => (
@@ -116,7 +104,8 @@ export const FeedControlsBar: React.FC<FeedControlsBarProps> = ({
         <select
           value={selectedPriority}
           onChange={(e) => onSelectPriority(e.target.value)}
-          className="px-3 py-2 rounded-xl bg-surface border border-border text-xs sm:text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
+          aria-label="Filter by priority"
+          className="h-10 px-3 rounded-lg bg-surface border border-border text-xs sm:text-sm text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors shrink-0 cursor-pointer"
         >
           {priorities.map((p) => (
             <option key={p.id} value={p.id}>
@@ -129,7 +118,8 @@ export const FeedControlsBar: React.FC<FeedControlsBarProps> = ({
         <select
           value={selectedType}
           onChange={(e) => onSelectType(e.target.value)}
-          className="px-3 py-2 rounded-xl bg-surface border border-border text-xs sm:text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
+          aria-label="Filter by signal type"
+          className="h-10 px-3 rounded-lg bg-surface border border-border text-xs sm:text-sm text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-colors shrink-0 cursor-pointer"
         >
           {types.map((t) => (
             <option key={t.id} value={t.id}>
@@ -139,15 +129,16 @@ export const FeedControlsBar: React.FC<FeedControlsBarProps> = ({
         </select>
 
         {/* Quick Toggles: Unread Only & Saved Only */}
-        <div className="flex items-center gap-1.5 self-end sm:self-auto">
+        <div className="flex items-center gap-1.5 self-end sm:self-auto shrink-0">
           <button
             type="button"
             onClick={onToggleUnreadOnly}
+            aria-label="Toggle unread only"
             className={cn(
-              'inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-semibold transition-colors',
+              'h-10 inline-flex items-center gap-1.5 px-3 rounded-lg border text-xs font-semibold transition-colors',
               unreadOnly
                 ? 'bg-indigo-500/15 border-indigo-500/40 text-indigo-300'
-                : 'bg-surface border-border text-slate-400 hover:text-slate-200'
+                : 'bg-surface border-border text-slate-400 hover:text-slate-200 hover:bg-surface-hover'
             )}
           >
             <CheckCircle2 className="w-3.5 h-3.5" />
@@ -157,11 +148,12 @@ export const FeedControlsBar: React.FC<FeedControlsBarProps> = ({
           <button
             type="button"
             onClick={onToggleSavedOnly}
+            aria-label="Toggle saved only"
             className={cn(
-              'inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-semibold transition-colors',
+              'h-10 inline-flex items-center gap-1.5 px-3 rounded-lg border text-xs font-semibold transition-colors',
               savedOnly
                 ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
-                : 'bg-surface border-border text-slate-400 hover:text-slate-200'
+                : 'bg-surface border-border text-slate-400 hover:text-slate-200 hover:bg-surface-hover'
             )}
           >
             <Bookmark className="w-3.5 h-3.5" />
@@ -170,11 +162,13 @@ export const FeedControlsBar: React.FC<FeedControlsBarProps> = ({
         </div>
       </div>
 
-      {/* Active Filter Tags bar */}
+      {/* Active Filter Tags & Results Count */}
       {isFiltered && (
         <div className="flex flex-wrap items-center gap-2 pt-1">
           <span className="text-[11px] font-semibold text-slate-400">
-            Filtered ({totalFilteredCount}):
+            {totalUnfilteredCount !== undefined
+              ? `Showing ${totalFilteredCount} of ${totalUnfilteredCount}:`
+              : `Showing ${totalFilteredCount} updates:`}
           </span>
 
           {searchQuery && (
@@ -182,8 +176,9 @@ export const FeedControlsBar: React.FC<FeedControlsBarProps> = ({
               <span>"{searchQuery}"</span>
               <button
                 type="button"
+                aria-label="Clear search text filter"
                 onClick={() => onSearchChange('')}
-                className="p-0.5 hover:text-white"
+                className="p-0.5 hover:text-white transition-colors"
               >
                 <X className="w-3 h-3" />
               </button>
@@ -195,8 +190,9 @@ export const FeedControlsBar: React.FC<FeedControlsBarProps> = ({
               <span>List: {watchlists.find((w) => w.id === selectedWatchlistId)?.name || selectedWatchlistId}</span>
               <button
                 type="button"
+                aria-label="Clear watchlist filter"
                 onClick={() => onSelectWatchlist('all')}
-                className="p-0.5 hover:text-white"
+                className="p-0.5 hover:text-white transition-colors"
               >
                 <X className="w-3 h-3" />
               </button>
@@ -208,8 +204,9 @@ export const FeedControlsBar: React.FC<FeedControlsBarProps> = ({
               <span>Priority: {selectedPriority}</span>
               <button
                 type="button"
+                aria-label="Clear priority filter"
                 onClick={() => onSelectPriority('ALL')}
-                className="p-0.5 hover:text-white"
+                className="p-0.5 hover:text-white transition-colors"
               >
                 <X className="w-3 h-3" />
               </button>
@@ -221,8 +218,9 @@ export const FeedControlsBar: React.FC<FeedControlsBarProps> = ({
               <span>Type: {types.find((t) => t.id === selectedType)?.label || selectedType}</span>
               <button
                 type="button"
+                aria-label="Clear type filter"
                 onClick={() => onSelectType('ALL')}
-                className="p-0.5 hover:text-white"
+                className="p-0.5 hover:text-white transition-colors"
               >
                 <X className="w-3 h-3" />
               </button>
@@ -234,8 +232,9 @@ export const FeedControlsBar: React.FC<FeedControlsBarProps> = ({
               <span>Unread Only</span>
               <button
                 type="button"
+                aria-label="Clear unread only filter"
                 onClick={onToggleUnreadOnly}
-                className="p-0.5 hover:text-white"
+                className="p-0.5 hover:text-white transition-colors"
               >
                 <X className="w-3 h-3" />
               </button>
@@ -247,8 +246,9 @@ export const FeedControlsBar: React.FC<FeedControlsBarProps> = ({
               <span>Saved Only</span>
               <button
                 type="button"
+                aria-label="Clear saved only filter"
                 onClick={onToggleSavedOnly}
-                className="p-0.5 hover:text-white"
+                className="p-0.5 hover:text-white transition-colors"
               >
                 <X className="w-3 h-3" />
               </button>
