@@ -177,6 +177,16 @@ export const TriadEventCard: React.FC<TriadEventCardProps> = ({
                   Day Low: {currency}{formatPrice(event.metrics.dayLow)}
                 </span>
               )}
+              {event.metrics?.priceAtEvent !== undefined && Number(event.metrics.priceAtEvent) !== event.price && (
+                <span className="px-2 py-0.5 rounded bg-surface border border-border text-slate-300">
+                  Price at Event: {currency}{formatPrice(Number(event.metrics.priceAtEvent))}
+                </span>
+              )}
+              {event.metrics?.priceAtSince !== undefined && (
+                <span className="px-2 py-0.5 rounded bg-surface border border-border text-slate-300">
+                  Baseline (Last Visit): {currency}{formatPrice(Number(event.metrics.priceAtSince))}
+                </span>
+              )}
             </div>
           </section>
 

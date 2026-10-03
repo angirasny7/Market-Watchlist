@@ -75,9 +75,9 @@ export function adaptBackendEventToMarketEvent(
   const delta = backendEvent.metricsDelta || {};
   const stock = backendEvent.stock || {};
 
-  const changePercent = Number(delta.changePercent ?? stock.changePercent ?? 0);
-  const changeAmount = Number(delta.changeAmount ?? stock.changeAmount ?? 0);
-  const price = Number(delta.price ?? stock.currentPrice ?? 0);
+  const changePercent = Number(stock.changePercent ?? delta.changePercent ?? 0);
+  const changeAmount = Number(stock.changeAmount ?? delta.changeAmount ?? 0);
+  const price = Number(stock.currentPrice ?? delta.price ?? 0);
 
   const impact: EventImpact =
     changePercent > 0.5 ? 'BULLISH' : changePercent < -0.5 ? 'BEARISH' : 'NEUTRAL';
@@ -108,6 +108,8 @@ export function adaptBackendEventToMarketEvent(
       volumeRatio: delta.volumeRatio,
       dayHigh: delta.dayHigh ? Number(delta.dayHigh) : stock.high52w ? Number(stock.high52w) : undefined,
       dayLow: delta.dayLow ? Number(delta.dayLow) : stock.low52w ? Number(stock.low52w) : undefined,
+      priceAtEvent: delta.price !== undefined ? Number(delta.price) : undefined,
+      priceAtSince: delta.priceAtSince !== undefined ? Number(delta.priceAtSince) : undefined,
       revenueSurprisePercent: delta.revenueSurprisePercent,
       dividendAmount: delta.dividendAmount,
       contractValue: delta.contractValue,

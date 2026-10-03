@@ -195,36 +195,60 @@ export class CatchUpService {
         const dateStr = barTime.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
         const anomalies: Array<{ eventType: EventType; reason: string; priority: Priority; score: number }> = [];
 
-        // Threshold 1: Day Price Surge (>= 5%)
-        if (dayChangePercent >= 5.0) {
-          const scoreRes = attentionScoringService.calculateScore({
-            changePercent: dayChangePercent,
-            volume: barVolume,
-            avgVolume20D: Math.round(avgVol20),
-            eventType: EventType.PRICE_SURGE,
-          });
-          anomalies.push({
-            eventType: EventType.PRICE_SURGE,
-            reason: `Price surged +${dayChangePercent.toFixed(2)}% on ${dateStr} exceeding the +5% anomaly threshold.`,
-            priority: scoreRes.priority,
-            score: scoreRes.score,
-          });
-        }
+        // Check for corporate action (split/bonus) before filtering large price moves
+        const corporateActions = await prisma.corporateEvent.findMany({
+          where: {
+            stockSymbol: symbol,
+            eventDate: {
+              gte: new Date(barTime.getTime() - 24 * 60 * 60 * 1000),
+              lte: new Date(barTime.getTime() + 24 * 60 * 60 * 1000),
+            },
+          },
+        });
+        const hasCorporateAction = corporateActions.length > 0;
 
-        // Threshold 2: Day Price Drop (<= -5%)
-        if (dayChangePercent <= -5.0) {
-          const scoreRes = attentionScoringService.calculateScore({
-            changePercent: dayChangePercent,
-            volume: barVolume,
-            avgVolume20D: Math.round(avgVol20),
-            eventType: EventType.PRICE_DROP,
-          });
-          anomalies.push({
-            eventType: EventType.PRICE_DROP,
-            reason: `Price dropped ${dayChangePercent.toFixed(2)}% on ${dateStr} exceeding the -5% risk threshold.`,
-            priority: scoreRes.priority,
-            score: scoreRes.score,
-          });
+        // Sanity guard: reject implausible daily moves (>25% for a single day) without corporate action
+        if (Math.abs(dayChangePercent) > 25.0 && !hasCorporateAction) {
+          await prisma.systemJobRun.create({
+            data: {
+              jobName: 'catchUpSanityGuard',
+              status: 'FAILED',
+              errorMessage: `Skipped implausible single-day move of ${dayChangePercent.toFixed(2)}% for ${symbol} on ${dateStr} (exceeds 25% single-day circuit limit).`,
+              completedAt: new Date(),
+            },
+          }).catch(() => {});
+        } else {
+          // Threshold 1: Day Price Surge (>= 5%)
+          if (dayChangePercent >= 5.0) {
+            const scoreRes = attentionScoringService.calculateScore({
+              changePercent: dayChangePercent,
+              volume: barVolume,
+              avgVolume20D: Math.round(avgVol20),
+              eventType: EventType.PRICE_SURGE,
+            });
+            anomalies.push({
+              eventType: EventType.PRICE_SURGE,
+              reason: `Price surged +${dayChangePercent.toFixed(2)}% on ${dateStr} exceeding the +5% anomaly threshold.`,
+              priority: scoreRes.priority,
+              score: scoreRes.score,
+            });
+          }
+
+          // Threshold 2: Day Price Drop (<= -5%)
+          if (dayChangePercent <= -5.0) {
+            const scoreRes = attentionScoringService.calculateScore({
+              changePercent: dayChangePercent,
+              volume: barVolume,
+              avgVolume20D: Math.round(avgVol20),
+              eventType: EventType.PRICE_DROP,
+            });
+            anomalies.push({
+              eventType: EventType.PRICE_DROP,
+              reason: `Price dropped ${dayChangePercent.toFixed(2)}% on ${dateStr} exceeding the -5% risk threshold.`,
+              priority: scoreRes.priority,
+              score: scoreRes.score,
+            });
+          }
         }
 
         // Threshold 3: Volume Spike (>= 2x 20D average)
@@ -333,11 +357,24 @@ export class CatchUpService {
       }
 
       // 4. Cumulative event: |price now vs price at `since`| >= 8%
-      if (barAtSince && barAtSince.close > 0) {
+      // Require trustworthy baseline close on since date
+      if (barAtSince && barAtSince.close > 0 && currentStockPrice > 0 && daysSince > 0) {
         const priceAtSince = barAtSince.close;
         const cumChangePct = ((currentStockPrice - priceAtSince) / priceAtSince) * 100;
 
-        if (Math.abs(cumChangePct) >= 8.0) {
+        // Sanity guard for cumulative move:
+        // Reject if single-day equivalent move > 25% or cumulative move > 50% without corporate action
+        const maxExpectedMove = Math.min(60, 25 * Math.max(1, daysSince));
+        if (Math.abs(cumChangePct) > maxExpectedMove) {
+          await prisma.systemJobRun.create({
+            data: {
+              jobName: 'catchUpCumulativeSanityGuard',
+              status: 'FAILED',
+              errorMessage: `Skipped cumulative event for ${symbol}: return ${cumChangePct.toFixed(2)}% (${priceAtSince} -> ${currentStockPrice}) exceeds plausible threshold of ${maxExpectedMove}%.`,
+              completedAt: new Date(),
+            },
+          }).catch(() => {});
+        } else if (Math.abs(cumChangePct) >= 8.0) {
           const isGain = cumChangePct >= 0;
           const cumEventType = isGain ? EventType.PRICE_SURGE : EventType.PRICE_DROP;
           const signStr = isGain ? '+' : '';
