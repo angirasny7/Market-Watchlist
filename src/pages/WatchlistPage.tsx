@@ -49,6 +49,7 @@ export const WatchlistPage: React.FC = () => {
     setWatchlistViewMode,
     togglePinInActiveWatchlist,
     refreshMarketData,
+    pollWatchlistQuotes,
   } = useMarketStore();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -65,6 +66,36 @@ export const WatchlistPage: React.FC = () => {
     fetchUserWatchlists();
     fetchWatchlistOverview();
   }, [fetchUserWatchlists, fetchWatchlistOverview]);
+
+  // 60-second price polling — runs when at least one exchange is open.
+  // Uses the lightweight /quotes endpoint so attention/events/sparklines are unchanged.
+  useEffect(() => {
+    const POLL_INTERVAL_MS = 60_000;
+
+    const tick = () => {
+      // Check if any exchange currently open (NSE hours OR US market hours)
+      const nowIST = new Date();
+      const istHour = new Date(nowIST.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' })).getHours();
+      const istMin = new Date(nowIST.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' })).getMinutes();
+      const istTotal = istHour * 60 + istMin;
+      const istDay = new Date(nowIST.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' })).getDay();
+
+      const etHour = new Date(nowIST.toLocaleString('en-US', { timeZone: 'America/New_York' })).getHours();
+      const etMin = new Date(nowIST.toLocaleString('en-US', { timeZone: 'America/New_York' })).getMinutes();
+      const etTotal = etHour * 60 + etMin;
+      const etDay = new Date(nowIST.toLocaleString('en-US', { timeZone: 'America/New_York' })).getDay();
+
+      const nseOpen = istDay > 0 && istDay < 6 && istTotal >= 555 && istTotal <= 930;
+      const usOpen = etDay > 0 && etDay < 6 && etTotal >= 570 && etTotal <= 960;
+
+      if (nseOpen || usOpen) {
+        pollWatchlistQuotes(activeWatchlistId);
+      }
+    };
+
+    const id = setInterval(tick, POLL_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [activeWatchlistId, pollWatchlistQuotes]);
 
   // Combine live overview stocks or fallback to adapted store watchlist
   const rawStocks: WatchlistStockItem[] = useMemo(() => {

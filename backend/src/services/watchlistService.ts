@@ -483,12 +483,16 @@ export class WatchlistService {
     const distinctSymbols = Array.from(stockMap.keys());
 
     // 2. Grouped query: unread events for these symbols for this user
+    // Window: last 30 days only. All-time accumulation inflates counts to 100+
+    // which pushes nearly every stock to CRITICAL. Filter to a meaningful window.
+    const eventWindowDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     let unreadEvents: any[] = [];
     if (distinctSymbols.length > 0) {
       unreadEvents = await prisma.event.findMany({
         where: {
           stockSymbol: { in: distinctSymbols },
           userReads: { none: { userId } },
+          timestamp: { gte: eventWindowDate },
         },
         select: {
           id: true,
@@ -625,6 +629,75 @@ export class WatchlistService {
       stocks: stockItems,
       summary,
       dataFreshness,
+    };
+  }
+
+  // =========================================================================
+  // Lightweight quotes endpoint for frontend polling
+  // =========================================================================
+
+  /**
+   * Returns price/change/updatedAt for a set of symbols in a watchlist.
+   * Designed for 30-60s frontend polling without fetching attention/events/sparklines.
+   */
+  async getQuotes(userId: string, watchlistId: string, symbols?: string[]) {
+    // Resolve which symbols to return
+    let targetSymbols: string[];
+
+    if (symbols && symbols.length > 0) {
+      targetSymbols = symbols.map(s => s.toUpperCase().trim());
+    } else if (watchlistId === 'all') {
+      const rows = await prisma.watchlistStock.findMany({
+        where: { watchlist: { userId } },
+        select: { stockSymbol: true },
+      });
+      targetSymbols = [...new Set(rows.map(r => r.stockSymbol))];
+    } else {
+      const wl = await prisma.watchlist.findFirst({ where: { id: watchlistId, userId } });
+      if (!wl) {
+        const err: any = new Error('Watchlist not found or unauthorized');
+        err.statusCode = 404;
+        throw err;
+      }
+      const rows = await prisma.watchlistStock.findMany({
+        where: { watchlistId: watchlistId },
+        select: { stockSymbol: true },
+      });
+      targetSymbols = rows.map(r => r.stockSymbol);
+    }
+
+    if (targetSymbols.length === 0) return { quotes: [], providerName: 'DB', timestamp: new Date().toISOString() };
+
+    const stocks = await prisma.stock.findMany({
+      where: { symbol: { in: targetSymbols } },
+      select: {
+        symbol: true,
+        currentPrice: true,
+        changeAmount: true,
+        changePercent: true,
+        updatedAt: true,
+        exchange: true,
+        currency: true,
+      },
+    });
+
+    const quotes = stocks.map(s => ({
+      symbol: s.symbol,
+      price: Number(s.currentPrice),
+      changeAmount: Number(s.changeAmount),
+      changePercent: Number(s.changePercent),
+      exchange: s.exchange,
+      currency: s.currency,
+      updatedAt: s.updatedAt.toISOString(),
+      // Note: Yahoo Finance for NSE is typically delayed ~15 minutes.
+      // Prices shown are last close or delayed intraday quote from provider.
+      isDelayed: true,
+    }));
+
+    return {
+      quotes,
+      providerName: 'Yahoo Finance (15-min delayed for NSE/BSE)',
+      timestamp: new Date().toISOString(),
     };
   }
 

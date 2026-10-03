@@ -24,6 +24,10 @@ router.patch('/:id/stocks/:symbol/pin', authenticateJwt, (req, res, next) => wat
 router.post('/:id/stocks', authenticateJwt, (req, res, next) => watchlistController.addStockToWatchlist(req, res, next));
 router.delete('/:id/stocks/:symbol', authenticateJwt, (req, res, next) => watchlistController.removeStockFromWatchlist(req, res, next));
 
+// 3b. Lightweight quotes polling (must come before generic /:id routes)
+router.get('/all/quotes', authenticateJwt, (req, res, next) => watchlistController.getQuotes(req, res, next));
+router.get('/:id/quotes', authenticateJwt, (req, res, next) => watchlistController.getQuotes(req, res, next));
+
 // 4. Multi-watchlist management operations (Phase 1)
 router.patch('/:id', authenticateJwt, (req, res, next) => watchlistController.renameWatchlist(req, res, next));
 router.delete('/:id', authenticateJwt, (req, res, next) => watchlistController.deleteWatchlist(req, res, next));

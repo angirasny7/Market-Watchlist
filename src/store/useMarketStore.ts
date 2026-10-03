@@ -90,6 +90,7 @@ interface MarketState {
   togglePinInActiveWatchlist: (symbol: string, targetWatchlistId?: string) => Promise<boolean>;
   copyStockToWatchlist: (symbol: string, targetWatchlistId: string) => Promise<boolean>;
   moveStockToWatchlist: (symbol: string, sourceWatchlistId: string, targetWatchlistId: string) => Promise<boolean>;
+  pollWatchlistQuotes: (watchlistId?: string | 'all') => Promise<void>;
 
   // Attention Feed State
   feedFilter: FeedFilterType;
@@ -505,6 +506,44 @@ export const useMarketStore = create<MarketState>((set, get) => ({
     } catch (err: any) {
       useToastStore.getState().addToast(err.message || `Failed to move ${symbol}`, 'error');
       return false;
+    }
+  },
+
+  /**
+   * Lightweight price polling — updates price/change fields in watchlistOverview
+   * without refetching the full overview (sparkline, attention, alerts unchanged).
+   * Call at 30-60s intervals during market hours.
+   */
+  pollWatchlistQuotes: async (watchlistId?: string | 'all') => {
+    const currentId = watchlistId || get().activeWatchlistId || 'all';
+    try {
+      const result = await watchlistService.fetchQuotes(currentId as string | 'all');
+      if (!result || !result.quotes.length) return;
+
+      const current = get().watchlistOverview;
+      if (!current) return;
+
+      // Patch prices in-place without triggering a full overview reload
+      const patchMap = new Map(result.quotes.map(q => [q.symbol, q]));
+      const patchedStocks = current.stocks.map(s => {
+        const q = patchMap.get(s.symbol);
+        if (!q) return s;
+        return {
+          ...s,
+          currentPrice: q.price,
+          changeAmount: q.changeAmount,
+          changePercent: q.changePercent,
+        };
+      });
+
+      set({
+        watchlistOverview: {
+          ...current,
+          stocks: patchedStocks,
+        },
+      });
+    } catch {
+      // Silent fail on polling errors — UI retains last known prices
     }
   },
 

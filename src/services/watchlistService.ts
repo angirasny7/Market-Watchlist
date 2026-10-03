@@ -112,6 +112,37 @@ export class WatchlistService {
   }
 
   /**
+   * Lightweight price polling — returns price/change/updatedAt for a watchlist.
+   * Use for 30-60s polling during market hours instead of full overview refresh.
+   * Prices from DB are Yahoo Finance sourced (15-min delayed for NSE/BSE).
+   */
+  async fetchQuotes(watchlistId: string | 'all' = 'all'): Promise<{
+    quotes: Array<{
+      symbol: string;
+      price: number;
+      changeAmount: number;
+      changePercent: number;
+      exchange: string;
+      currency: string;
+      updatedAt: string;
+      isDelayed: boolean;
+    }>;
+    providerName: string;
+    timestamp: string;
+  } | null> {
+    const endpoint =
+      watchlistId === 'all'
+        ? '/watchlists/all/quotes'
+        : `/watchlists/${watchlistId}/quotes`;
+
+    const res = await apiClient.get<any>(endpoint);
+    if (res.success && res.data) {
+      return res.data;
+    }
+    return null;
+  }
+
+  /**
    * Add a stock to a specific watchlist
    */
   async addStockToWatchlist(watchlistId: string, symbol: string): Promise<boolean> {

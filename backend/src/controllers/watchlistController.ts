@@ -234,6 +234,35 @@ export class WatchlistController {
   }
 
   /**
+   * GET /watchlists/all/quotes or /watchlists/:id/quotes
+   * Lightweight price polling endpoint — returns current price/change/updatedAt.
+   * Designed for 30-60s frontend intervals without the overhead of the full overview.
+   */
+  async getQuotes(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) {
+        res.status(401).json({ success: false, message: 'Unauthorized' });
+        return;
+      }
+      const watchlistId = (typeof req.params.id === 'string' ? req.params.id : undefined) || 'all';
+      const symbolsParam = req.query.symbols;
+      const symbols = symbolsParam
+        ? (Array.isArray(symbolsParam) ? symbolsParam : [symbolsParam]).map(String)
+        : undefined;
+
+      const data = await watchlistService.getQuotes(userId as string, watchlistId, symbols);
+      res.status(200).json({ success: true, data });
+    } catch (err: any) {
+      if (err.statusCode) {
+        res.status(err.statusCode).json({ success: false, error: err.message });
+        return;
+      }
+      next(err);
+    }
+  }
+
+  /**
    * GET /watchlists/:id/overview?range=1D|1W|1M
    * Single call aggregated overview for a specific watchlist.
    */
