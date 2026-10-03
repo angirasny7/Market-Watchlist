@@ -4,21 +4,56 @@ import { ProviderFactory } from '../src/providers/providerFactory.js';
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🔍 Running Price Consistency Audit Script...');
-  console.log('================================================');
+  const args = process.argv.slice(2);
+  const auditAll = args.includes('--all');
+  let userId = args.find((a) => !a.startsWith('--'));
 
-  // 1. Gather all monitored stocks (union of all watchlist stocks)
-  const watchlistStocks = await prisma.watchlistStock.findMany({
-    select: { stockSymbol: true },
-  });
-  const symbols = Array.from(new Set(watchlistStocks.map((w) => w.stockSymbol)));
+  let targetUser: any = null;
+  let symbols: string[] = [];
+
+  if (auditAll) {
+    const watchlistStocks = await prisma.watchlistStock.findMany({
+      select: { stockSymbol: true },
+    });
+    symbols = Array.from(new Set(watchlistStocks.map((w) => w.stockSymbol)));
+    console.log(`Auditing all ${symbols.length} unique monitored stocks across ALL users in database.\n`);
+  } else {
+    if (!userId) {
+      // Find primary user (e.g. Alex N or user with multiple watchlists)
+      targetUser = await prisma.user.findFirst({
+        where: { email: 'alex@example.com' },
+      });
+      if (!targetUser) {
+        targetUser = await prisma.user.findFirst({
+          where: { watchlists: { some: { stocks: { some: {} } } } },
+        });
+      }
+      userId = targetUser?.id;
+    } else {
+      targetUser = await prisma.user.findUnique({ where: { id: userId } });
+    }
+
+    if (targetUser) {
+      const userWatchlistStocks = await prisma.watchlistStock.findMany({
+        where: { watchlist: { userId: targetUser.id } },
+        select: { stockSymbol: true },
+      });
+      symbols = Array.from(new Set(userWatchlistStocks.map((w) => w.stockSymbol))).sort();
+      console.log(`Auditing ${symbols.length} monitored stocks for User: ${targetUser.name} (${targetUser.email})`);
+      console.log(`(Note: Global database contains 47 stocks across multiple test users; this user's union has ${symbols.length} stocks).\n`);
+    } else {
+      const watchlistStocks = await prisma.watchlistStock.findMany({
+        select: { stockSymbol: true },
+      });
+      symbols = Array.from(new Set(watchlistStocks.map((w) => w.stockSymbol))).sort();
+      console.log(`Auditing ${symbols.length} monitored stock(s): ${symbols.join(', ')}\n`);
+    }
+  }
 
   if (symbols.length === 0) {
     console.log('No monitored stocks found across watchlists.');
     return;
   }
-
-  console.log(`Auditing ${symbols.length} monitored stock(s): ${symbols.join(', ')}\n`);
 
   const provider = ProviderFactory.getMarketDataProvider();
   let discrepanciesCount = 0;
@@ -38,6 +73,7 @@ async function main() {
       where: { symbol },
     });
 
+    const curr = stock?.currency || '₹';
     const dbPrice = stock ? Number(stock.currentPrice) : null;
     const dbUpdatedAt = stock ? stock.updatedAt.toISOString() : 'N/A';
 
@@ -82,9 +118,9 @@ async function main() {
       discrepanciesCount++;
     }
 
-    const dbPriceStr = dbPrice !== null ? `₹${dbPrice.toFixed(2)}` : 'N/A';
-    const provPriceStr = providerPrice !== null ? `₹${providerPrice.toFixed(2)}` : 'N/A';
-    const eventPriceStr = latestEventPrice !== null ? `₹${latestEventPrice.toFixed(2)}` : 'N/A';
+    const dbPriceStr = dbPrice !== null ? `${curr}${dbPrice.toFixed(2)}` : 'N/A';
+    const provPriceStr = providerPrice !== null ? `${curr}${providerPrice.toFixed(2)}` : 'N/A';
+    const eventPriceStr = latestEventPrice !== null ? `${curr}${latestEventPrice.toFixed(2)}` : 'N/A';
 
     console.log(
       symbol.padEnd(14) +
