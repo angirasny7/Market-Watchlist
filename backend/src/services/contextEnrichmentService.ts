@@ -13,40 +13,41 @@ export interface EventEnrichment {
 /**
  * Context Enrichment Engine
  * 
- * Attaches supporting evidence, multi-factor confidence scores, and factual causal drivers
- * to every market event before external verification.
+ * Attaches verified supporting evidence and factual causal drivers to market events.
  * 
- * SAFETY RULE:
- * If no real evidence can be found from news or exchange sources,
- * summary must strictly be: "Supporting evidence currently unavailable."
- * and possibleDrivers must be empty.
+ * STRICT RULES:
+ * 1. The words "Confirmed" or a named publisher may appear ONLY if backed by a real stored news/filing record with url, publisher, and date.
+ * 2. If no real evidence exists, summary must strictly state: "No confirmed cause found" describing only measurable price and volume data.
+ * 3. Confidence must reflect real evidence (no evidence = Low, score <= 25).
  */
 export class ContextEnrichmentService {
-  /**
-   * Enrich a market event with verified evidence and confidence scoring
-   */
   async enrichEvent(event: Event, stock?: Stock | null): Promise<EventEnrichment> {
-    // 1. Gather all attributed evidence from real sources
+    const delta = (event.metricsDelta as any) || {};
+    const changePercent = Number(delta.changePercent ?? stock?.changePercent ?? 0);
+    const volumeRatio = delta.volumeRatio || (stock?.avgVolume20D && stock?.volume ? (Number(stock.volume) / Number(stock.avgVolume20D)).toFixed(1) : '1.0');
+    const dir = changePercent >= 0 ? '+' : '';
+
+    // 1. Gather real attributed evidence strictly from database
     const evidence = await evidenceAggregator.gatherEvidence(event, stock);
 
     // 2. Compute multi-factor confidence score (0 to 100)
     const scoreResult = confidenceScoringService.calculateConfidence(event, stock, evidence);
 
-    // 3. Check for Safety Fallback (Constraint 10: If no supporting evidence exists)
+    // 3. Fallback when no real evidence exists: No fabricated drivers or fake publishers
     if (evidence.length === 0) {
       return {
-        summary: 'Supporting evidence currently unavailable.',
-        confidenceScore: scoreResult.score,
+        summary: `No confirmed cause found. Recorded ${dir}${changePercent.toFixed(1)}% price move with ${volumeRatio}x 20-day average volume.`,
+        confidenceScore: Math.min(25, scoreResult.score),
         possibleDrivers: [],
         evidence: [],
         scoreBreakdown: scoreResult,
       };
     }
 
-    // 4. Derive concise, factual possible drivers based exclusively on confirmed evidence
+    // 4. Derive factual drivers backed strictly by verified news/filings
     const possibleDrivers = this.deriveDriversFromEvidence(event, stock, evidence);
 
-    // 5. Formulate factual summary
+    // 5. Formulate factual summary referencing verified sources
     const summary = this.buildSummary(event, stock, possibleDrivers, evidence);
 
     return {
@@ -58,72 +59,29 @@ export class ContextEnrichmentService {
     };
   }
 
-  /**
-   * Derive factual possible drivers strictly from verified evidence items and exchange metrics
-   */
   private deriveDriversFromEvidence(
     event: Event,
     stock?: Stock | null,
     evidence: EvidenceItem[] = []
   ): string[] {
     const drivers: string[] = [];
-    const delta = (event.metricsDelta as any) || {};
-    const volumeRatio = delta.volumeRatio || (stock?.avgVolume20D && stock?.volume ? (Number(stock.volume) / Number(stock.avgVolume20D)).toFixed(1) : null);
-    const changePercent = Number(delta.changePercent ?? stock?.changePercent ?? 0);
 
-    // Driver from News or Filings
     const filing = evidence.find((e) => e.sourceType === 'FILING' || e.sourceType === 'ANNOUNCEMENT');
     const news = evidence.find((e) => e.sourceType === 'NEWS');
 
     if (filing) {
-      if (event.eventType === EventType.DIVIDEND_ANNOUNCED) {
-        drivers.push(`Official corporate dividend distribution announcement on record`);
-      } else if (event.eventType === EventType.EARNINGS_BEAT) {
-        drivers.push(`Quarterly financial performance disclosure beating analyst consensus`);
-      } else if (event.eventType === EventType.EARNINGS_MISS) {
-        drivers.push(`Financial results disclosure reflecting margin compression`);
-      } else {
-        drivers.push(`Corporate regulatory disclosure filed with exchange`);
-      }
+      drivers.push(`Official corporate disclosure on record: "${filing.title}"`);
     }
 
-    if (news && (!filing || drivers.length < 2)) {
-      // Extract concise news catalyst
+    if (news) {
       const headline = news.title.trim();
-      if (headline.length > 0) {
-        const shortHeadline = headline.length > 70 ? `${headline.slice(0, 67)}...` : headline;
-        drivers.push(`Media catalyst: "${shortHeadline}" (${news.source})`);
-      }
+      const shortHeadline = headline.length > 80 ? `${headline.slice(0, 77)}...` : headline;
+      drivers.push(`Reported media catalyst: "${shortHeadline}" (${news.source})`);
     }
 
-    // Driver from Volume Confirmation
-    if (volumeRatio && Number(volumeRatio) >= 1.5) {
-      drivers.push(`Increased institutional trading volume (${volumeRatio}x of 20-day historical average)`);
-    } else if (event.eventType === EventType.VOLUME_SPIKE) {
-      drivers.push(`Elevated order book turnover and liquidity realignment`);
-    }
-
-    // Driver from Technical / Sector / Price Trend
-    if (event.eventType === EventType.FIFTY_TWO_WEEK_HIGH) {
-      drivers.push(`Systematic momentum breakout through 52-week resistance ceiling`);
-    } else if (event.eventType === EventType.FIFTY_TWO_WEEK_LOW) {
-      drivers.push(`Price test of key 52-week historical support zone`);
-    } else if (Math.abs(changePercent) >= 5.0) {
-      drivers.push(
-        changePercent > 0
-          ? `Strong directional price momentum (+${changePercent.toFixed(1)}% session surge)`
-          : `High-volume liquidation and stop-loss unwinding (${changePercent.toFixed(1)}% drop)`
-      );
-    } else if (drivers.length < 3 && stock?.sector) {
-      drivers.push(`Broader ${stock.sector} sector momentum alignment`);
-    }
-
-    return drivers.slice(0, 3);
+    return drivers;
   }
 
-  /**
-   * Build concise event explanation summary
-   */
   private buildSummary(
     event: Event,
     stock: Stock | null | undefined,
@@ -134,14 +92,10 @@ export class ContextEnrichmentService {
     const topEvidence = evidence[0];
 
     if (topEvidence) {
-      return `${symbol} movement correlates with recent ${topEvidence.sourceType.toLowerCase()} from ${topEvidence.source}: "${topEvidence.title.slice(0, 80)}${topEvidence.title.length > 80 ? '...' : ''}".`;
+      return `${symbol} movement correlates with reported ${topEvidence.sourceType.toLowerCase()} from ${topEvidence.source}: "${topEvidence.title.slice(0, 90)}${topEvidence.title.length > 90 ? '...' : ''}".`;
     }
 
-    if (drivers.length > 0) {
-      return `${symbol} movement driven by ${drivers[0].toLowerCase()}.`;
-    }
-
-    return 'Supporting evidence currently unavailable.';
+    return drivers[0] || 'No confirmed cause found.';
   }
 }
 

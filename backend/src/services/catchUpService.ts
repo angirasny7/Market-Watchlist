@@ -4,6 +4,7 @@ import { ProviderFactory } from '../providers/providerFactory.js';
 import { attentionScoringService } from './attentionScoringService.js';
 import { computeUserSinceTimestamp } from './sinceLastVisitService.js';
 import { alertService } from './alertService.js';
+import { contextEnrichmentService } from './contextEnrichmentService.js';
 
 export interface CatchUpResult {
   userId: string;
@@ -319,7 +320,7 @@ export class CatchUpService {
           });
 
           if (!existingEvent) {
-            await prisma.event.create({
+            const created = await prisma.event.create({
               data: {
                 stockSymbol: symbol,
                 eventType: anomaly.eventType,
@@ -333,21 +334,22 @@ export class CatchUpService {
                   volume: barVolume,
                   avgVolume20D: Math.round(avgVol20),
                   volumeRatio: avgVol20 > 0 ? parseFloat((barVolume / avgVol20).toFixed(2)) : 1.0,
-                  enrichment: {
-                    whatHappened: anomaly.reason,
-                    whyItHappened: `Session price action and volume accumulation on ${dateStr}.`,
-                    whyItMatters: `High-impact technical movement detected during your absence.`,
-                    sources: [
-                      {
-                        title: `${symbol} Trading Record (${dateStr})`,
-                        url: `https://www.nseindia.com/get-quotes/equity?symbol=${symbol}`,
-                        publisher: 'NSE Historical Feed',
-                        publishedAt: barTime.toISOString(),
-                        confidence: 0.95,
-                      },
-                    ],
-                    confidenceScore: 0.92,
-                  },
+                },
+              },
+            });
+            const enrichment = await contextEnrichmentService.enrichEvent(created, stock);
+            await prisma.event.update({
+              where: { id: created.id },
+              data: {
+                metricsDelta: {
+                  attentionScore: anomaly.score,
+                  detectionReason: anomaly.reason,
+                  price: bar.close,
+                  changePercent: parseFloat(dayChangePercent.toFixed(2)),
+                  volume: barVolume,
+                  avgVolume20D: Math.round(avgVol20),
+                  volumeRatio: avgVol20 > 0 ? parseFloat((barVolume / avgVol20).toFixed(2)) : 1.0,
+                  enrichment: enrichment as any,
                 },
               },
             });
@@ -405,7 +407,7 @@ export class CatchUpService {
               eventType: cumEventType,
             });
 
-            await prisma.event.create({
+            const created = await prisma.event.create({
               data: {
                 stockSymbol: symbol,
                 eventType: cumEventType,
@@ -418,21 +420,21 @@ export class CatchUpService {
                   priceAtSince,
                   changePercent: parseFloat(cumChangePct.toFixed(2)),
                   isCumulativeReturnEvent: true,
-                  enrichment: {
-                    whatHappened: cumReason,
-                    whyItHappened: `Cumulative market trend since last session on ${since.toLocaleDateString()}.`,
-                    whyItMatters: `Significant portfolio drift occurred while you were away.`,
-                    sources: [
-                      {
-                        title: `${symbol} Trend Assessment`,
-                        url: `https://www.nseindia.com/get-quotes/equity?symbol=${symbol}`,
-                        publisher: 'Market Intelligence Engine',
-                        publishedAt: new Date().toISOString(),
-                        confidence: 0.98,
-                      },
-                    ],
-                    confidenceScore: 0.98,
-                  },
+                },
+              },
+            });
+            const enrichment = await contextEnrichmentService.enrichEvent(created, stock);
+            await prisma.event.update({
+              where: { id: created.id },
+              data: {
+                metricsDelta: {
+                  attentionScore: scoreRes.score,
+                  detectionReason: cumReason,
+                  price: currentStockPrice,
+                  priceAtSince,
+                  changePercent: parseFloat(cumChangePct.toFixed(2)),
+                  isCumulativeReturnEvent: true,
+                  enrichment: enrichment as any,
                 },
               },
             });
