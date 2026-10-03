@@ -106,7 +106,7 @@ export class EventService {
     const events = await prisma.event.findMany({
       where,
       orderBy: { timestamp: 'desc' },
-      take: options?.limit || 200,
+      take: options?.limit || 1000,
       include: {
         stock: true,
         insights: true,

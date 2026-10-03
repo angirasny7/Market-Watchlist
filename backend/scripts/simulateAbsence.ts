@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { catchUpService } from '../src/services/catchUpService.js';
 import { sinceLastVisitService } from '../src/services/sinceLastVisitService.js';
 import { eventService } from '../src/services/eventService.js';
+import { marketProvider } from '../src/providers/marketDataProvider.js';
 
 const prisma = new PrismaClient();
 
@@ -50,35 +51,68 @@ async function runSimulation(userId: string, daysAway: number) {
     durationMs: catchUpResult.durationMs,
   });
 
-  // 3. Query sinceLastVisit intelligence
-  console.log(`\n📊 Querying sinceLastVisitService.getIntelligenceSinceLastVisit()...`);
+  // 3. Baseline vs Current Price Table for key stocks (INFY, RELIANCE, TATAMOTORS, TCS, TSLA)
+  const keySymbols = ['INFY', 'RELIANCE', 'TATAMOTORS', 'TCS', 'TSLA'];
+  const priceComparisonTable: any[] = [];
+  const anomalyFlags: string[] = [];
+
+  for (const sym of keySymbols) {
+    const stock = await prisma.stock.findUnique({ where: { symbol: sym } });
+    const currentPrice = stock?.currentPrice ? Number(stock.currentPrice) : 0;
+    
+    // Fetch historical bar closest to sinceDate
+    let baselinePrice = currentPrice;
+    try {
+      const bars = await marketProvider.getHistoricalBars(sym, Math.min(daysAway + 25, 365));
+      if (bars && bars.length > 0) {
+        // Find bar on or immediately after absenceDate
+        const targetMs = absenceDate.getTime();
+        const sorted = [...bars].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        const match = sorted.find((b) => new Date(b.date).getTime() >= targetMs) || sorted[0];
+        if (match) {
+          baselinePrice = match.close;
+        }
+      }
+    } catch {
+      baselinePrice = currentPrice;
+    }
+
+    const pctMove = baselinePrice > 0 ? ((currentPrice - baselinePrice) / baselinePrice) * 100 : 0;
+
+    if (Math.abs(pctMove) > 25.0) {
+      anomalyFlags.push(`ANOMALY: ${sym} moved ${pctMove.toFixed(2)}% over ${daysAway} days`);
+    }
+
+    priceComparisonTable.push({
+      symbol: sym,
+      baselineDate: absenceDate.toISOString().split('T')[0],
+      baselineClose: baselinePrice.toFixed(2),
+      currentPrice: currentPrice.toFixed(2),
+      periodChangePct: `${pctMove >= 0 ? '+' : ''}${pctMove.toFixed(2)}%`,
+    });
+  }
+
+  console.log(`\n📈 Baseline (Historical Close on Since-Date) vs Current Price:`);
+  console.table(priceComparisonTable);
+
+  if (anomalyFlags.length > 0) {
+    console.log(`⚠️ Anomaly Flags (>25% move check):`);
+    anomalyFlags.forEach((a) => console.log(`  - ${a}`));
+  } else {
+    console.log(`✓ No single-day circuit limit breaches (>25%) detected without corporate action.`);
+  }
+
+  // 4. Query unread count and sinceLastVisit intelligence
+  const unreadFeedCount = await eventService.getUnreadFeedCount(userId);
   const intelligence = await sinceLastVisitService.getIntelligenceSinceLastVisit(userId);
-  console.log(`Intelligence Summary:`, {
+
+  console.log(`\n📊 Intelligence & Unread Summary:`, {
     awayDuration: intelligence.awayDuration,
-    newEventsCount: intelligence.newEventsCount,
-    criticalEventsCount: intelligence.criticalEventsCount,
-    watchlistEventsCount: intelligence.watchlistEventsCount,
-    newInsightsCount: intelligence.newInsights.length,
+    unreadFeedCount,
+    newEventsSinceLastVisit: intelligence.newEventsCount,
+    criticalEventsSinceLastVisit: intelligence.criticalEventsCount,
     latestDigestHeadline: intelligence.latestDigest?.headline || 'None',
   });
-
-  // 4. Query Attention Feed events
-  console.log(`\n📬 Querying Attention Feed events via eventService.getEvents()...`);
-  const feed = await eventService.getEvents({ userId, limit: 10 });
-  console.log(`Feed Items Returned: ${feed.length}`);
-
-  for (let i = 0; i < Math.min(feed.length, 5); i++) {
-    const ev = feed[i];
-    const score = (ev as any).scoring?.finalScore ?? (ev.metricsDelta as any)?.attentionScore ?? 50;
-    const pri = ev.priority;
-    const what = (ev.metricsDelta as any)?.detectionReason || (ev as any).whatHappened || 'N/A';
-    const why = (ev.metricsDelta as any)?.enrichment?.summary || (ev as any).enrichment?.summary || 'N/A';
-    const evidenceCount = (ev.metricsDelta as any)?.enrichment?.evidence?.length || 0;
-    console.log(`  [${i + 1}] ${ev.stockSymbol} | ${pri} (Score: ${score})`);
-    console.log(`      What: ${what}`);
-    console.log(`      Why: ${why}`);
-    console.log(`      Evidence sources: ${evidenceCount}`);
-  }
 
   console.log(`\n✅ Absence simulation of ${daysAway} days completed successfully.`);
 }
