@@ -497,7 +497,6 @@ export class WatchlistService {
         where: {
           stockSymbol: { in: distinctSymbols },
           userReads: { none: { userId } },
-          userSaves: { none: { userId } },
           timestamp: { gte: eventWindowDate },
           ...(allowDemo
             ? {}
@@ -511,6 +510,7 @@ export class WatchlistService {
         select: {
           id: true,
           stockSymbol: true,
+          eventType: true,
           priority: true,
           metricsDelta: true,
           timestamp: true,
@@ -524,6 +524,19 @@ export class WatchlistService {
           return !e.id.startsWith('demo_') && !e.id.startsWith('evt_00') && delta.isDemo !== true;
         });
       }
+
+      // Deduplicate unread events per stock + day + eventType
+      const seenUnreadKeys = new Set<string>();
+      const dedupedUnreadEvents: typeof unreadEvents = [];
+      for (const ev of unreadEvents) {
+        const dayStr = new Date(ev.timestamp).toISOString().split('T')[0];
+        const key = `${ev.stockSymbol}|${dayStr}|${ev.eventType}`;
+        if (!seenUnreadKeys.has(key)) {
+          seenUnreadKeys.add(key);
+          dedupedUnreadEvents.push(ev);
+        }
+      }
+      unreadEvents = dedupedUnreadEvents;
     }
 
     const unreadEventsBySymbol = new Map<string, any[]>();

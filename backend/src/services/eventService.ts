@@ -78,12 +78,9 @@ export class EventService {
       where.eventType = options.eventType;
     }
 
-    // Attention Feed only returns actionable events: exclude events already handled (read or saved)
-    if (options?.userId) {
+    // If unreadOnly is requested, filter out events already read by the user
+    if (options?.unreadOnly && options?.userId) {
       where.userReads = {
-        none: { userId: options.userId },
-      };
-      where.userSaves = {
         none: { userId: options.userId },
       };
     }
@@ -120,8 +117,20 @@ export class EventService {
       ? events
       : events.filter((e) => !isEventDemo(e));
 
+    // Calendar-day deduplication by stockSymbol + calendarDay + eventType
+    const seenEventKeys = new Set<string>();
+    const deduplicatedEvents: typeof eligibleEvents = [];
+    for (const e of eligibleEvents) {
+      const dayStr = new Date(e.timestamp).toISOString().split('T')[0];
+      const key = `${e.stockSymbol}|${dayStr}|${e.eventType}`;
+      if (!seenEventKeys.has(key)) {
+        seenEventKeys.add(key);
+        deduplicatedEvents.push(e);
+      }
+    }
+
     const mapped = await Promise.all(
-      eligibleEvents.map(async (e) => {
+      deduplicatedEvents.map(async (e) => {
         const isRead = options?.userId ? readEventIds.has(e.id) : Boolean(e.read);
         const delta = (e.metricsDelta as any) || {};
 
@@ -187,15 +196,9 @@ export class EventService {
 
   /**
    * Mark event as read for specific authenticated user
-   * If the event was previously saved, converts Saved -> Archived by deleting UserSavedEvent.
    */
   async markEventRead(id: string, userId?: string) {
     if (userId) {
-      // Remove from UserSavedEvent if it exists (Saved -> Archived conversion)
-      await prisma.userSavedEvent.deleteMany({
-        where: { userId, eventId: id },
-      });
-
       return prisma.userEventRead.upsert({
         where: {
           userId_eventId: { userId, eventId: id },
@@ -218,26 +221,41 @@ export class EventService {
 
   /**
    * Mark all active feed events as read for specific authenticated user
-   * Only archives active unhandled events present in the feed. Does not touch saved events.
    */
   async markAllRead(userId?: string) {
     if (userId) {
-      // Find all active unhandled events (neither read nor saved)
-      const unhandledEvents = await prisma.event.findMany({
+      // Find all active unread events in user's monitored watchlist
+      const userStocks = await prisma.watchlistStock.findMany({
+        where: { watchlist: { userId } },
+        select: { stockSymbol: true },
+      });
+      const symbols = Array.from(new Set(userStocks.map((s) => s.stockSymbol)));
+
+      const windowDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const allowDemo = process.env.NODE_ENV === 'development' && process.env.SEED_DEMO_EVENTS === 'true';
+
+      const unreadEvents = await prisma.event.findMany({
         where: {
+          stockSymbol: { in: symbols },
+          timestamp: { gte: windowDate },
           userReads: {
             none: { userId },
           },
-          userSaves: {
-            none: { userId },
-          },
+          ...(allowDemo
+            ? {}
+            : {
+                NOT: [
+                  { id: { startsWith: 'demo_' } },
+                  { id: { in: ['evt_001', 'evt_002', 'evt_003', 'evt_004'] } },
+                ],
+              }),
         },
         select: { id: true },
       });
 
-      if (unhandledEvents.length > 0) {
+      if (unreadEvents.length > 0) {
         await prisma.userEventRead.createMany({
-          data: unhandledEvents.map((e) => ({
+          data: unreadEvents.map((e) => ({
             userId,
             eventId: e.id,
           })),
@@ -253,7 +271,7 @@ export class EventService {
         },
       });
 
-      return { count: unhandledEvents.length };
+      return { count: unreadEvents.length };
     }
 
     return prisma.event.updateMany({
@@ -292,7 +310,7 @@ export class EventService {
 
   /**
    * Single source of truth for user's unread feed events count
-   * Filters strictly: user's monitored watchlist stocks, active 30-day window, real events only, unread & unsaved.
+   * Filters strictly: user's monitored watchlist stocks, active 30-day window, real events only, unread.
    */
   async getUnreadFeedCount(userId: string): Promise<number> {
     const userStocks = await prisma.watchlistStock.findMany({
@@ -305,12 +323,11 @@ export class EventService {
     const windowDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const allowDemo = process.env.NODE_ENV === 'development' && process.env.SEED_DEMO_EVENTS === 'true';
 
-    const count = await prisma.event.count({
+    const events = await prisma.event.findMany({
       where: {
         stockSymbol: { in: symbols },
         timestamp: { gte: windowDate },
         userReads: { none: { userId } },
-        userSaves: { none: { userId } },
         ...(allowDemo
           ? {}
           : {
@@ -320,7 +337,29 @@ export class EventService {
               ],
             }),
       },
+      select: {
+        id: true,
+        stockSymbol: true,
+        eventType: true,
+        timestamp: true,
+        metricsDelta: true,
+      },
+      orderBy: { timestamp: 'desc' },
     });
+
+    const eligibleEvents = allowDemo ? events : events.filter((e) => !isEventDemo(e));
+
+    // Calendar day deduplication for accurate unread count
+    const seenKeys = new Set<string>();
+    let count = 0;
+    for (const ev of eligibleEvents) {
+      const dayStr = new Date(ev.timestamp).toISOString().split('T')[0];
+      const key = `${ev.stockSymbol}|${dayStr}|${ev.eventType}`;
+      if (!seenKeys.has(key)) {
+        seenKeys.add(key);
+        count++;
+      }
+    }
 
     return count;
   }
