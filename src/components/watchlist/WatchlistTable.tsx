@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { WatchlistStockItem } from '../../lib/watchlistFilters';
 import { Sparkline } from './Sparkline';
+import { isExchangeOpen } from '../../lib/marketHours';
 
 interface WatchlistTableProps {
   stocks: WatchlistStockItem[];
@@ -56,15 +57,15 @@ export const WatchlistTable: React.FC<WatchlistTableProps> = ({
         <thead>
           <tr className="border-b border-border bg-surface-subtle/70 text-[11px] font-semibold text-slate-400 uppercase tracking-wider" role="row">
             <th role="columnheader" className="py-3 pl-4 pr-1 w-10 text-center">Pin</th>
-            <th role="columnheader" className="py-3 px-3 min-w-[170px]">Company</th>
+            <th role="columnheader" className="py-3 px-3 min-w-[170px] sticky left-0 bg-surface-subtle/70 z-10">Company</th>
             <th role="columnheader" className="py-3 px-3 text-right min-w-[110px]">Market Price</th>
             <th role="columnheader" className="py-3 px-3 text-right min-w-[110px]">Day Change</th>
             <th role="columnheader" className="py-3 px-3 text-center min-w-[95px]">Attention</th>
             <th role="columnheader" className="py-3 px-3 text-center min-w-[85px]">Alerts</th>
             <th role="columnheader" className="py-3 px-3 text-center min-w-[95px]">Updates</th>
-            <th role="columnheader" className="py-3 px-3 min-w-[130px] hidden md:table-cell">Next Event</th>
+            <th role="columnheader" className="py-3 px-3 min-w-[140px] hidden md:table-cell">Next Event</th>
             <th role="columnheader" className="py-3 px-3 text-center min-w-[100px] hidden sm:table-cell">Trend</th>
-            <th role="columnheader" className="py-3 pl-3 pr-4 text-right min-w-[100px]">Actions</th>
+            <th role="columnheader" className="py-3 pl-3 pr-4 text-right min-w-[120px]">Actions</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-border/60 text-xs">
@@ -72,6 +73,7 @@ export const WatchlistTable: React.FC<WatchlistTableProps> = ({
             const isPositive = stock.changePercent >= 0;
             const changeGlyph = isPositive ? '▲ +' : '▼ ';
             const curr = stock.currency || '₹';
+            const exchangeClosed = stock.exchange ? !isExchangeOpen(stock.exchange) : false;
 
             return (
               <tr
@@ -112,7 +114,7 @@ export const WatchlistTable: React.FC<WatchlistTableProps> = ({
                 </td>
 
                 {/* 2. Company Column */}
-                <td className="py-3.5 px-3">
+                <td className="py-3.5 px-3 sticky left-0 bg-surface group-hover:bg-surface-hover/80 z-10">
                   <div className="flex flex-col">
                     <div className="flex items-center gap-1.5">
                       <span className="font-bold text-sm text-slate-100 group-hover:text-emerald-400 transition-colors">
@@ -121,10 +123,20 @@ export const WatchlistTable: React.FC<WatchlistTableProps> = ({
                       <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-surface-subtle border border-border/80 text-slate-400">
                         {stock.exchange}
                       </span>
+                      {exchangeClosed && (
+                        <span className="text-[9px] px-1 py-0.5 rounded bg-zinc-800 border border-zinc-700/60 text-zinc-500 font-medium leading-none">
+                          Closed
+                        </span>
+                      )}
                     </div>
                     <span className="text-xs text-slate-400 truncate max-w-[180px]">
                       {stock.companyName}
                     </span>
+                    {stock.sector && (
+                      <span className="text-[10px] text-slate-500 truncate max-w-[180px]">
+                        {stock.sector}
+                      </span>
+                    )}
                   </div>
                 </td>
 
@@ -137,9 +149,6 @@ export const WatchlistTable: React.FC<WatchlistTableProps> = ({
                       maximumFractionDigits: 2,
                     })}
                   </div>
-                  <span className="text-[10px] text-slate-500 font-mono">
-                    {stock.sector}
-                  </span>
                 </td>
 
                 {/* 4. Day Change */}
@@ -247,9 +256,18 @@ export const WatchlistTable: React.FC<WatchlistTableProps> = ({
                     );
                     const isSoon = daysAway <= 3;
 
+                    // Build relative date text
+                    const eventType = stock.nextEvent.label?.replace(/^(EARNINGS|DIVIDEND|EX_DIVIDEND|AGM)$/i, (m) =>
+                      m.charAt(0).toUpperCase() + m.slice(1).toLowerCase().replace('_', '-')
+                    ) || 'Event';
+                    const relativeText =
+                      daysAway === 0 ? `${eventType} today` :
+                      daysAway === 1 ? `${eventType} tomorrow` :
+                      `${eventType} in ${daysAway}d`;
+
                     return (
                       <div
-                        title={`${stock.nextEvent.label} (${new Date(stock.nextEvent.date).toLocaleDateString()})`}
+                        title={`${stock.nextEvent.label} on ${new Date(stock.nextEvent.date).toLocaleDateString()}`}
                         className={`flex items-center gap-1.5 text-[11px] px-2 py-0.5 rounded-md w-max border ${
                           isSoon
                             ? 'text-amber-300 bg-amber-500/10 border-amber-500/30'
@@ -262,7 +280,7 @@ export const WatchlistTable: React.FC<WatchlistTableProps> = ({
                           <Calendar className="w-3 h-3 shrink-0" />
                         )}
                         <span className="truncate max-w-[130px] font-medium">
-                          {stock.nextEvent.label}
+                          {relativeText}
                         </span>
                         {stock.nextEvent.isDemo && (
                           <span className="text-[9px] px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 font-mono shrink-0">Demo</span>

@@ -163,9 +163,17 @@ export const WatchlistGrid: React.FC<WatchlistGridProps> = ({
                 );
                 const isSoon = daysAway <= 3;
 
+                const eventType = stock.nextEvent.label?.replace(/^(EARNINGS|DIVIDEND|EX_DIVIDEND|AGM)$/i, (m) =>
+                  m.charAt(0).toUpperCase() + m.slice(1).toLowerCase().replace('_', '-')
+                ) || 'Event';
+                const relativeText =
+                  daysAway === 0 ? `${eventType} today` :
+                  daysAway === 1 ? `${eventType} tomorrow` :
+                  `${eventType} in ${daysAway}d`;
+
                 return (
                   <div
-                    title={`${stock.nextEvent.label} (${new Date(stock.nextEvent.date).toLocaleDateString()})`}
+                    title={`${stock.nextEvent.label} on ${new Date(stock.nextEvent.date).toLocaleDateString()}`}
                     className={`flex items-center gap-1 px-2 py-0.5 rounded-md border ${
                       isSoon
                         ? 'text-amber-300 bg-amber-500/10 border-amber-500/30'
@@ -177,7 +185,7 @@ export const WatchlistGrid: React.FC<WatchlistGridProps> = ({
                     ) : (
                       <Calendar className="w-3 h-3 shrink-0" />
                     )}
-                    <span className="truncate max-w-[110px] font-medium">{stock.nextEvent.label}</span>
+                    <span className="truncate max-w-[110px] font-medium">{relativeText}</span>
                     {stock.nextEvent.isDemo && (
                       <span className="text-[9px] px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 font-mono shrink-0">Demo</span>
                     )}

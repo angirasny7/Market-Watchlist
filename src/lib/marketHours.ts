@@ -3,6 +3,72 @@
  * Trading hours: Monday – Friday, 09:15 to 15:30 IST (UTC+5:30).
  */
 export function getNseMarketStatus(): { isOpen: boolean; label: string; subtext: string } {
+  return getExchangeMarketStatus('NSE');
+}
+
+type ExchangeGroup = 'IN' | 'US';
+
+export interface ExchangeStatus {
+  isOpen: boolean;
+  label: string;
+  subtext: string;
+  exchange: string;
+  group: ExchangeGroup;
+}
+
+/**
+ * Get market status for a specific exchange.
+ */
+export function getExchangeMarketStatus(exchange: string): ExchangeStatus {
+  const upper = (exchange || '').toUpperCase();
+  const group: ExchangeGroup = (upper === 'NSE' || upper === 'BSE') ? 'IN' : 'US';
+
+  if (group === 'IN') {
+    return getIndianMarketStatus(upper);
+  }
+  return getUsMarketStatus(upper);
+}
+
+/**
+ * Get a compact multi-exchange status string for the header.
+ * Only shows statuses for exchanges the user's stocks belong to.
+ */
+export function getMultiExchangeStatus(exchanges: string[]): { parts: ExchangeStatus[]; summary: string } {
+  const uniqueExchanges = [...new Set(exchanges.map(e => (e || '').toUpperCase()))].filter(Boolean);
+
+  if (uniqueExchanges.length === 0) {
+    return { parts: [], summary: 'No stocks' };
+  }
+
+  // Deduplicate by group (IN exchanges share the same hours, US exchanges share the same hours)
+  const seenGroups = new Set<ExchangeGroup>();
+  const parts: ExchangeStatus[] = [];
+
+  for (const ex of uniqueExchanges) {
+    const status = getExchangeMarketStatus(ex);
+    if (!seenGroups.has(status.group)) {
+      seenGroups.add(status.group);
+      parts.push(status);
+    }
+  }
+
+  const summary = parts
+    .map(p => `${p.exchange} ${p.isOpen ? 'Open' : 'Closed'}`)
+    .join(' · ');
+
+  return { parts, summary };
+}
+
+/**
+ * Check if a given exchange is currently open.
+ */
+export function isExchangeOpen(exchange: string): boolean {
+  return getExchangeMarketStatus(exchange).isOpen;
+}
+
+// ── Internal helpers ──
+
+function getIndianMarketStatus(exchange: string): ExchangeStatus {
   const now = new Date();
   const formatter = new Intl.DateTimeFormat('en-US', {
     timeZone: 'Asia/Kolkata',
@@ -19,19 +85,64 @@ export function getNseMarketStatus(): { isOpen: boolean; label: string; subtext:
   const totalMinutes = hour * 60 + minute;
 
   const isWeekend = weekday === 'Sat' || weekday === 'Sun';
+  // NSE/BSE: 09:15 (555 min) to 15:30 (930 min) IST
   const isMarketOpenTime = totalMinutes >= 555 && totalMinutes <= 930;
 
   if (!isWeekend && isMarketOpenTime) {
     return {
       isOpen: true,
-      label: 'Market Open',
-      subtext: 'NSE • 09:15 – 15:30 IST',
+      label: `${exchange} Open`,
+      subtext: `${exchange} • 09:15 – 15:30 IST`,
+      exchange,
+      group: 'IN',
     };
   }
 
   return {
     isOpen: false,
-    label: 'Market Closed',
-    subtext: isWeekend ? 'Weekend • Opens Mon 09:15 IST' : 'Opens 09:15 IST',
+    label: `${exchange} Closed`,
+    subtext: isWeekend ? `Weekend • Opens Mon 09:15 IST` : `Opens 09:15 IST`,
+    exchange,
+    group: 'IN',
+  };
+}
+
+function getUsMarketStatus(exchange: string): ExchangeStatus {
+  const label = exchange || 'US';
+  const now = new Date();
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    hour: 'numeric',
+    minute: 'numeric',
+    hour12: false,
+    weekday: 'short',
+  });
+
+  const parts = formatter.formatToParts(now);
+  const weekday = parts.find((p) => p.type === 'weekday')?.value;
+  const hour = parseInt(parts.find((p) => p.type === 'hour')?.value || '0', 10);
+  const minute = parseInt(parts.find((p) => p.type === 'minute')?.value || '0', 10);
+  const totalMinutes = hour * 60 + minute;
+
+  const isWeekend = weekday === 'Sat' || weekday === 'Sun';
+  // NYSE/NASDAQ: 09:30 (570 min) to 16:00 (960 min) ET
+  const isMarketOpenTime = totalMinutes >= 570 && totalMinutes <= 960;
+
+  if (!isWeekend && isMarketOpenTime) {
+    return {
+      isOpen: true,
+      label: `${label} Open`,
+      subtext: `${label} • 09:30 – 16:00 ET`,
+      exchange: label,
+      group: 'US',
+    };
+  }
+
+  return {
+    isOpen: false,
+    label: `${label} Closed`,
+    subtext: isWeekend ? `Weekend • Opens Mon 09:30 ET` : `Opens 09:30 ET`,
+    exchange: label,
+    group: 'US',
   };
 }

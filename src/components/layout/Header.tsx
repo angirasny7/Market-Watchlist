@@ -10,7 +10,7 @@ import { useMarketStore } from '../../store/useMarketStore';
 import { useAuthStore } from '../../store/useAuthStore';
 import { formatRelativeTime } from '../../lib/dateUtils';
 import { detectCurrentDevice } from '../../lib/deviceUtils';
-import { getNseMarketStatus } from '../../lib/marketHours';
+import { getMultiExchangeStatus } from '../../lib/marketHours';
 import { NotificationDropdown } from './NotificationDropdown';
 
 interface HeaderProps {
@@ -26,6 +26,7 @@ export const Header: React.FC<HeaderProps> = () => {
     refreshMarketData,
     watchlist,
     userState,
+    watchlistOverview,
   } = useMarketStore();
 
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
@@ -70,8 +71,19 @@ export const Header: React.FC<HeaderProps> = () => {
     }
   }, [location.pathname]);
 
-  // Non-interactive market status derived from NSE IST hours
-  const marketStatus = useMemo(() => getNseMarketStatus(), []);
+  // Multi-exchange market status derived from user's stocks' exchanges
+  const userExchanges = useMemo(() => {
+    const exchanges: string[] = [];
+    if (watchlistOverview?.stocks) {
+      for (const s of watchlistOverview.stocks) {
+        if (s.exchange) exchanges.push(s.exchange);
+      }
+    }
+    // If no overview yet, default to NSE
+    return exchanges.length > 0 ? exchanges : ['NSE'];
+  }, [watchlistOverview]);
+
+  const multiStatus = useMemo(() => getMultiExchangeStatus(userExchanges), [userExchanges]);
 
   // Data Freshness & Sync status
   const dataFreshness = dashboardData?.dataFreshness;
@@ -112,22 +124,35 @@ export const Header: React.FC<HeaderProps> = () => {
 
       {/* 2. Right Controls */}
       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-        {/* Market Status (Non-interactive derived from NSE schedule) */}
+        {/* Market Status — per-exchange, non-interactive */}
         <div
-          className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border select-none ${
-            marketStatus.isOpen
-              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-              : 'bg-zinc-800 text-zinc-400 border-zinc-700/60'
-          }`}
-          title={marketStatus.subtext}
+          className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border select-none bg-surface-subtle border-border/80"
+          title={multiStatus.parts.map(p => p.subtext).join(' | ')}
         >
-          <span
-            className={`w-1.5 h-1.5 rounded-full ${
-              marketStatus.isOpen ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-500'
-            }`}
-          />
-          <span className="hidden xs:inline">{marketStatus.label}</span>
-          <span className="xs:hidden">{marketStatus.isOpen ? 'Open' : 'Closed'}</span>
+          {multiStatus.parts.length > 0 ? (
+            multiStatus.parts.map((p, i) => (
+              <React.Fragment key={p.exchange}>
+                {i > 0 && <span className="text-slate-600">·</span>}
+                <span
+                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                    p.isOpen ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-500'
+                  }`}
+                />
+                <span className={`hidden sm:inline ${p.isOpen ? 'text-emerald-400' : 'text-zinc-400'}`}>
+                  {p.exchange} {p.isOpen ? 'Open' : 'Closed'}
+                </span>
+              </React.Fragment>
+            ))
+          ) : (
+            <>
+              <span className="w-1.5 h-1.5 rounded-full bg-zinc-500" />
+              <span className="text-zinc-400 hidden xs:inline">Market Closed</span>
+            </>
+          )}
+          {/* Mobile: show anyOpen */}
+          <span className={`sm:hidden ${multiStatus.parts.some(p => p.isOpen) ? 'text-emerald-400' : 'text-zinc-400'}`}>
+            {multiStatus.parts.some(p => p.isOpen) ? 'Open' : 'Closed'}
+          </span>
         </div>
 
         {/* Updated indicator with refresh icon button */}
