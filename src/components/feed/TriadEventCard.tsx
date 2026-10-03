@@ -16,6 +16,7 @@ import {
 import { MarketEvent } from '../../types/event';
 import { Insight } from '../../types/insight';
 import { formatPrice } from '../../lib/utils';
+import { formatEventTime, formatEventTooltip } from '../../lib/formatEventTime';
 import { useMarketStore } from '../../store/useMarketStore';
 
 interface TriadEventCardProps {
@@ -96,9 +97,26 @@ export const TriadEventCard: React.FC<TriadEventCardProps> = ({
               {event.stockSymbol}
             </span>
 
-            <div className="flex items-center gap-1 text-[11px] text-slate-400 font-mono ml-auto sm:ml-2">
+            <div
+              title={formatEventTooltip({
+                occurredOn: (event as any).occurredOn || event.timestamp,
+                periodStart: (event as any).periodStart,
+                detectedAt: (event as any).detectedAt || event.timestamp,
+                eventType: event.eventType,
+                exchange: (matchedStock as any)?.exchange || 'NSE',
+              })}
+              className="flex items-center gap-1 text-[11px] text-slate-400 font-mono ml-auto sm:ml-2 cursor-help hover:text-slate-200 transition-colors"
+            >
               <Clock className="w-3 h-3 text-slate-400" />
-              <span>{event.timestamp}</span>
+              <span>
+                {formatEventTime({
+                  occurredOn: (event as any).occurredOn || event.timestamp,
+                  periodStart: (event as any).periodStart,
+                  detectedAt: (event as any).detectedAt || event.timestamp,
+                  eventType: event.eventType,
+                  exchange: (matchedStock as any)?.exchange || 'NSE',
+                })}
+              </span>
             </div>
           </div>
 

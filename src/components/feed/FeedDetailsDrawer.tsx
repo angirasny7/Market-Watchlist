@@ -24,6 +24,7 @@ import {
   BarChart2,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { formatEventTime, formatEventTooltip } from '../../lib/formatEventTime';
 
 interface FeedDetailsDrawerProps {
   isOpen: boolean;
@@ -218,8 +219,19 @@ export const FeedDetailsDrawer: React.FC<FeedDetailsDrawerProps> = ({
                 </span>
               </div>
 
-              <div className="text-right text-[11px] text-slate-400 font-mono">
-                Delayed ~15 min (NSE)
+              <div className="text-right flex flex-col items-end">
+                <span className="text-xs font-semibold text-slate-200">
+                  {formatEventTime(item)}
+                </span>
+                <span
+                  title={formatEventTooltip(item)}
+                  className="text-[11px] text-slate-400 font-mono flex items-center gap-1 cursor-help mt-0.5"
+                >
+                  <Clock className="w-3 h-3 text-slate-400" />
+                  {details?.happened.detectedAt
+                    ? `Detected ${new Date(details.happened.detectedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                    : `Delayed ~15 min (${item.exchange})`}
+                </span>
               </div>
             </div>
 
@@ -357,6 +369,62 @@ export const FeedDetailsDrawer: React.FC<FeedDetailsDrawerProps> = ({
                           <span className="text-slate-500 block">Close</span>
                           <span className="text-slate-200 font-semibold">
                             {formatMoney(details.happened.dayClose, item.currency)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Market Timing & Provenance */}
+                    <div className="p-4 rounded-xl bg-surface-subtle border border-border space-y-2.5">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-slate-400" />
+                        Market Timing & Detection
+                      </h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                        <div className="p-2.5 rounded-lg bg-surface border border-border/60">
+                          <span className="text-slate-400 block text-[11px]">Market Trading Date</span>
+                          <span className="text-slate-200 font-mono font-medium">
+                            {details.happened.occurredOn
+                              ? new Date(details.happened.occurredOn).toLocaleDateString('en-GB', {
+                                  weekday: 'short',
+                                  day: 'numeric',
+                                  month: 'short',
+                                  year: 'numeric',
+                                })
+                              : new Date(details.happened.eventTimestamp).toLocaleDateString('en-GB', {
+                                  weekday: 'short',
+                                  day: 'numeric',
+                                  month: 'short',
+                                  year: 'numeric',
+                                })}
+                          </span>
+                        </div>
+                        {details.happened.periodStart && (
+                          <div className="p-2.5 rounded-lg bg-surface border border-border/60">
+                            <span className="text-slate-400 block text-[11px]">Cumulative Baseline (Since)</span>
+                            <span className="text-slate-200 font-mono font-medium">
+                              {new Date(details.happened.periodStart).toLocaleDateString('en-GB', {
+                                weekday: 'short',
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric',
+                              })}
+                            </span>
+                          </div>
+                        )}
+                        <div className="p-2.5 rounded-lg bg-surface border border-border/60 sm:col-span-2">
+                          <span className="text-slate-400 block text-[11px]">System Detection Timestamp</span>
+                          <span className="text-slate-300 font-mono text-[11px]">
+                            {details.happened.detectedAt
+                              ? new Date(details.happened.detectedAt).toLocaleString('en-GB', {
+                                  day: 'numeric',
+                                  month: 'short',
+                                  year: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                  second: '2-digit',
+                                })
+                              : new Date(details.happened.eventTimestamp).toLocaleString('en-GB')}
                           </span>
                         </div>
                       </div>

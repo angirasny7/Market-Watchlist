@@ -146,6 +146,9 @@ model Event {
   eventType    EventType
   priority     Priority         @default(MEDIUM)
   timestamp    DateTime         @default(now())
+  occurredOn   DateTime?
+  periodStart  DateTime?
+  detectedAt   DateTime         @default(now())
   read         Boolean          @default(false)
   acknowledged Boolean          @default(false)
   metricsDelta Json
@@ -157,6 +160,7 @@ model Event {
   userSaves    UserSavedEvent[]
 
   @@index([stockSymbol, timestamp(sort: Desc)])
+  @@index([occurredOn(sort: Desc)])
   @@index([priority, timestamp(sort: Desc)])
   @@index([eventType])
   @@map("events")

@@ -11,6 +11,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { formatEventTime, formatEventTooltip } from '../../lib/formatEventTime';
 
 interface FeedListCardProps {
   item: FeedItem;
@@ -58,26 +59,8 @@ export const FeedListCard: React.FC<FeedListCardProps> = ({
   };
 
   const pStyle = priorityStyles[item.priorityLabel] || priorityStyles.FYI;
-
-  // Format date / relative time
-  const formatTime = (iso: string) => {
-    try {
-      const d = new Date(iso);
-      const now = new Date();
-      const diffDays = Math.floor((now.getTime() - d.getTime()) / (24 * 60 * 60 * 1000));
-      if (diffDays === 0) {
-        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      } else if (diffDays === 1) {
-        return 'Yesterday';
-      } else if (diffDays < 7) {
-        return `${diffDays}d ago`;
-      } else {
-        return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
-      }
-    } catch {
-      return '';
-    }
-  };
+  const timeLabel = formatEventTime(item);
+  const timeTooltip = formatEventTooltip(item);
 
   return (
     <div
@@ -211,9 +194,12 @@ export const FeedListCard: React.FC<FeedListCardProps> = ({
 
           {/* Timestamp and Quick Action buttons */}
           <div className="flex items-center gap-1.5 text-slate-400">
-            <span className="text-[11px] font-medium text-slate-500 mr-1 flex items-center gap-1">
-              <Clock className="w-3 h-3 text-slate-500" />
-              {formatTime(item.date)}
+            <span
+              title={timeTooltip}
+              className="text-[11px] font-medium text-slate-400 hover:text-slate-300 mr-1 flex items-center gap-1 transition-colors cursor-help"
+            >
+              <Clock className="w-3 h-3 text-slate-400" />
+              {timeLabel}
             </span>
 
             {/* Save / Bookmark Button */}

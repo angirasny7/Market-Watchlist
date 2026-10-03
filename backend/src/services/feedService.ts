@@ -19,6 +19,11 @@ export interface FeedItem {
   exchange: string;
   currency: string;
   date: string;
+  occurredOn?: string | null;
+  periodStart?: string | null;
+  detectedAt?: string | null;
+  isCumulative?: boolean;
+  eventType?: EventType;
   priority: Priority;
   priorityLabel: FeedPriorityLabel;
   isUnread: boolean;
@@ -53,6 +58,10 @@ export interface FeedDetailsHappened {
   is52wHigh: boolean;
   is52wLow: boolean;
   eventTimestamp: string;
+  occurredOn?: string | null;
+  periodStart?: string | null;
+  detectedAt?: string | null;
+  isCumulative?: boolean;
 }
 
 export interface FeedDetailsWhy {
@@ -428,6 +437,11 @@ export class FeedService {
         exchange: stock?.exchange || 'NSE',
         currency: stock?.currency || '₹',
         date: topEv.timestamp.toISOString(),
+        occurredOn: topEv.occurredOn ? topEv.occurredOn.toISOString() : null,
+        periodStart: topEv.periodStart ? topEv.periodStart.toISOString() : null,
+        detectedAt: topEv.detectedAt ? topEv.detectedAt.toISOString() : topEv.timestamp.toISOString(),
+        isCumulative,
+        eventType: topEv.eventType,
         priority: topEv.priority,
         priorityLabel: this.mapPriorityToLabel(topEv.priority),
         isUnread,
@@ -535,6 +549,11 @@ export class FeedService {
       exchange: stock?.exchange || 'NSE',
       currency: stock?.currency || '₹',
       date: event.timestamp.toISOString(),
+      occurredOn: event.occurredOn ? event.occurredOn.toISOString() : null,
+      periodStart: event.periodStart ? event.periodStart.toISOString() : null,
+      detectedAt: event.detectedAt ? event.detectedAt.toISOString() : event.timestamp.toISOString(),
+      isCumulative: Boolean(delta.isCumulativeReturnEvent),
+      eventType: event.eventType,
       priority: event.priority,
       priorityLabel: this.mapPriorityToLabel(event.priority),
       isUnread,
@@ -572,6 +591,10 @@ export class FeedService {
       is52wHigh: Boolean(event.eventType === 'FIFTY_TWO_WEEK_HIGH' || (high52w && currentPrice && currentPrice >= high52w * 0.995)),
       is52wLow: Boolean(event.eventType === 'FIFTY_TWO_WEEK_LOW' || (low52w && currentPrice && currentPrice <= low52w * 1.005)),
       eventTimestamp: event.timestamp.toISOString(),
+      occurredOn: event.occurredOn ? event.occurredOn.toISOString() : null,
+      periodStart: event.periodStart ? event.periodStart.toISOString() : null,
+      detectedAt: event.detectedAt ? event.detectedAt.toISOString() : event.timestamp.toISOString(),
+      isCumulative: Boolean(delta.isCumulativeReturnEvent),
     };
 
     // 3. Tab "why" & "sources"

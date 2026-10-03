@@ -382,6 +382,8 @@ export class CatchUpService {
                 eventType: anomaly.eventType,
                 priority: anomaly.priority,
                 timestamp: barTime,
+                occurredOn: barTime,
+                detectedAt: new Date(),
                 metricsDelta: metricsData,
               },
             });
@@ -490,6 +492,8 @@ export class CatchUpService {
               where: { id: existingCumEvent.id },
               data: {
                 priority: scoreRes.priority,
+                periodStart: since,
+                occurredOn: new Date(),
                 metricsDelta: {
                   ...updatedMetrics,
                   enrichment: enrichment as any,
@@ -503,6 +507,9 @@ export class CatchUpService {
                 eventType: cumEventType,
                 priority: scoreRes.priority,
                 timestamp: new Date(),
+                occurredOn: new Date(),
+                periodStart: since,
+                detectedAt: new Date(),
                 metricsDelta: cumMetricsData,
               },
             });

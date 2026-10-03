@@ -13,6 +13,11 @@ export interface FeedItem {
   exchange: string;
   currency: string;
   date: string;
+  occurredOn?: string | null;
+  periodStart?: string | null;
+  detectedAt?: string | null;
+  isCumulative?: boolean;
+  eventType?: string;
   priority: FeedPriority;
   priorityLabel: FeedPriorityLabel;
   isUnread: boolean;
@@ -47,6 +52,10 @@ export interface FeedDetailsHappened {
   is52wHigh: boolean;
   is52wLow: boolean;
   eventTimestamp: string;
+  occurredOn?: string | null;
+  periodStart?: string | null;
+  detectedAt?: string | null;
+  isCumulative?: boolean;
 }
 
 export interface FeedDetailsWhy {

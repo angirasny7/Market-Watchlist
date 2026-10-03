@@ -217,6 +217,8 @@ export async function runChangeDetectionJob(): Promise<ChangeDetectionResult> {
             eventType: anomaly.eventType,
             priority: scoreResult.priority,
             timestamp: new Date(),
+            occurredOn: new Date(),
+            detectedAt: new Date(),
             metricsDelta: metricsData,
           },
         });
