@@ -104,7 +104,7 @@ export const TriadEventCard: React.FC<TriadEventCardProps> = ({
 
           <div className="flex items-center justify-between sm:justify-end gap-3 font-mono text-right">
             <span className="text-sm sm:text-base font-semibold text-slate-100">
-              {currency}{formatPrice(event.price)}
+              {formatPrice(event.price, currency)}
             </span>
             <span
               className={`text-xs font-medium flex items-center gap-0.5 ${
@@ -178,22 +178,22 @@ export const TriadEventCard: React.FC<TriadEventCardProps> = ({
               )}
               {event.metrics?.dayHigh && (
                 <span className="px-2 py-0.5 rounded bg-surface border border-border text-slate-300">
-                  Day High: {currency}{formatPrice(event.metrics.dayHigh)}
+                  Day High: {formatPrice(event.metrics.dayHigh, currency)}
                 </span>
               )}
               {event.metrics?.dayLow && (
                 <span className="px-2 py-0.5 rounded bg-surface border border-border text-slate-300">
-                  Day Low: {currency}{formatPrice(event.metrics.dayLow)}
+                  Day Low: {formatPrice(event.metrics.dayLow, currency)}
                 </span>
               )}
               {event.metrics?.priceAtEvent !== undefined && Number(event.metrics.priceAtEvent) !== event.price && (
                 <span className="px-2 py-0.5 rounded bg-surface border border-border text-slate-300">
-                  Price at Event: {currency}{formatPrice(Number(event.metrics.priceAtEvent))}
+                  Price at Event: {formatPrice(Number(event.metrics.priceAtEvent), currency)}
                 </span>
               )}
               {event.metrics?.priceAtSince !== undefined && (
                 <span className="px-2 py-0.5 rounded bg-surface border border-border text-slate-300">
-                  Baseline (Last Visit): {currency}{formatPrice(Number(event.metrics.priceAtSince))}
+                  Baseline (Last Visit): {formatPrice(Number(event.metrics.priceAtSince), currency)}
                 </span>
               )}
             </div>

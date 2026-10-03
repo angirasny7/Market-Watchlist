@@ -5,12 +5,10 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+import { formatMoney } from './formatMoney';
+
 export function formatPrice(price: number, currency: string = '₹'): string {
-  const isUSD = currency === '$';
-  if (isUSD) {
-    return `$${price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  }
-  return `₹${price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return formatMoney(price, currency);
 }
 
 export function formatPercent(percent: number): string {

@@ -154,7 +154,7 @@ export const SimpleDashboard: React.FC = () => {
                   <div className="flex items-center sm:flex-col items-end justify-between sm:justify-center gap-2 shrink-0 border-t sm:border-t-0 border-border/50 pt-2 sm:pt-0">
                     <div className="text-right">
                       <div className="text-sm font-semibold text-slate-100 font-mono">
-                        {currency}{formatPrice(event.price)}
+                        {formatPrice(event.price, currency)}
                       </div>
                       <div
                         className={`text-xs font-medium font-mono flex items-center justify-end gap-0.5 ${
@@ -227,7 +227,7 @@ export const SimpleDashboard: React.FC = () => {
 
                   <div className="text-right shrink-0">
                     <div className="font-mono text-sm font-semibold text-slate-100">
-                      {currency}{formatPrice(stock.currentPrice)}
+                      {formatPrice(stock.currentPrice, currency)}
                     </div>
                     <div
                       className={`text-xs font-medium font-mono flex items-center justify-end gap-0.5 ${
