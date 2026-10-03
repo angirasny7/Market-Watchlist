@@ -39,13 +39,13 @@ export const TriadEventCard: React.FC<TriadEventCardProps> = ({
   // Attention Score translated to plain-English label
   const score = event.scoring?.finalScore ?? 50;
   const getScoreBadge = (sc: number, pri: string) => {
-    if (sc >= 80 || pri === 'CRITICAL') {
+    if (sc >= 85 || pri === 'CRITICAL') {
       return { label: 'Urgent', color: 'bg-rose-500/10 text-rose-400 border-rose-500/20' };
     }
     if (sc >= 65 || pri === 'HIGH') {
       return { label: 'Important', color: 'bg-amber-500/10 text-amber-400 border-amber-500/20' };
     }
-    if (sc >= 50) {
+    if (sc >= 40 || pri === 'MEDIUM') {
       return { label: 'Worth a look', color: 'bg-indigo-500/10 text-indigo-300 border-indigo-500/20' };
     }
     return { label: 'FYI', color: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20' };

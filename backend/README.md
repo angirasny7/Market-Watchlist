@@ -138,12 +138,12 @@ Both overview endpoints return in **one single round-trip**:
 - `summary`: `totalStocks`, `needAttention` (CRITICAL + HIGH), `upcomingEvents`, `activeAlerts`, `unseenUpdates`.
 - `dataFreshness`: `{ lastSyncedAt, isStale }`.
 
-#### Attention Scoring Thresholds
-Aligned with `attentionScoringService.ts`:
-- **CRITICAL**: Attention score $\ge 75$ (e.g. violent multi-day break, earnings crash, regulatory ban)
-- **HIGH**: Attention score $\ge 55$ (e.g. sharp volume spike, break of 52W level)
-- **MEDIUM**: Attention score $\ge 35$ (e.g. steady breakout, sector rotation)
-- **LOW**: Attention score $< 35$ (normal volatility or no unread events)
+#### Attention Scoring Thresholds & Priority Distribution
+Calibrated in `attentionScoringService.ts` to ensure Urgent (CRITICAL) events remain rare and actionable:
+- **CRITICAL (Urgent)**: Attention score $\ge 85$ (e.g. violent $\ge 12\%$ move, $\ge 4\times$ volume spike, major earnings shock, active user alert triggered)
+- **HIGH (Important)**: Attention score $\ge 65$ (e.g. break of 52W high/low, $\ge 6\%$ move with elevated volume, earnings beat/miss)
+- **MEDIUM (Worth a look)**: Attention score $\ge 40$ (e.g. 3% – 6% move, 1.5x – 2.5x volume, corporate actions)
+- **LOW (FYI)**: Attention score $< 40$ (standard volatility, minor dividend notice, normal trading session)
 
 #### Legacy Endpoints (Maintained for Backward Compatibility)
 - `GET /api/watchlist` — Retrieve default watchlist with stocks array.
