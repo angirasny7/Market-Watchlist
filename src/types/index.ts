@@ -4,3 +4,4 @@ export * from './event';
 export * from './digest';
 export * from './userState';
 export * from './market';
+export * from './feed';

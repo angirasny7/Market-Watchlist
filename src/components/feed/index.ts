@@ -3,3 +3,7 @@ export * from './FeedFilterBar';
 export * from './FeedMetricsSummary';
 export * from './ConfidenceIndicator';
 export * from './TriadEventCard';
+export * from './FeedListCard';
+export * from './FeedDetailsDrawer';
+export * from './FeedHeaderBar';
+export * from './FeedControlsBar';

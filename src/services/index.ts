@@ -8,3 +8,4 @@ export * from './digestService';
 export * from './newsService';
 export * from './dashboardService';
 export * from './dataAdapters';
+export * from './feedApiService';
