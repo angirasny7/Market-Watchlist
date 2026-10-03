@@ -34,6 +34,7 @@ export const WatchlistPage: React.FC = () => {
     watchlistSortField,
     watchlistViewMode,
     isOverviewLoading,
+    userWatchlists,
     isLoading,
     isError,
     errorMessage,
@@ -222,6 +223,8 @@ export const WatchlistPage: React.FC = () => {
         summary={summaryMetrics}
         activeFilter={watchlistQuickFilter}
         onSelectFilter={setWatchlistQuickFilter}
+        isAllWatchlists={activeWatchlistId === 'all'}
+        watchlistsCount={userWatchlists.length}
       />
 
       {/* 3. Streamlined Toolbar */}

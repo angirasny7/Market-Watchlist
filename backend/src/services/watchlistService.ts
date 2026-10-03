@@ -492,6 +492,7 @@ export class WatchlistService {
         where: {
           stockSymbol: { in: distinctSymbols },
           userReads: { none: { userId } },
+          userSaves: { none: { userId } },
           timestamp: { gte: eventWindowDate },
         },
         select: {

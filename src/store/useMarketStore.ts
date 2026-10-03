@@ -622,23 +622,47 @@ export const useMarketStore = create<MarketState>((set, get) => ({
     const prevArchivedCount = get().archivedEventsCount;
     const prevTotalCount = get().totalMemoryCount;
     const prevCursor = get().userState.cursor;
+    const prevOverview = get().watchlistOverview;
 
-    set((state) => ({
-      events: state.events.filter((e) => e.id !== id),
-      archivedEventsCount: state.archivedEventsCount + 1,
-      totalMemoryCount: state.totalMemoryCount + 1,
-      userState: {
-        ...state.userState,
-        cursor: {
-          ...state.userState.cursor,
-          unreadEventsCount: Math.max(0, state.userState.cursor.unreadEventsCount - 1),
+    set((state) => {
+      let updatedOverview = state.watchlistOverview;
+      if (updatedOverview) {
+        const updatedStocks = updatedOverview.stocks.map((s) => {
+          if (s.symbol === targetEvent.stockSymbol) {
+            return { ...s, unseenUpdatesCount: Math.max(0, s.unseenUpdatesCount - 1) };
+          }
+          return s;
+        });
+        updatedOverview = {
+          ...updatedOverview,
+          stocks: updatedStocks,
+          summary: {
+            ...updatedOverview.summary,
+            unseenUpdates: Math.max(0, updatedOverview.summary.unseenUpdates - 1),
+          },
+        };
+      }
+
+      return {
+        events: state.events.filter((e) => e.id !== id),
+        watchlistOverview: updatedOverview,
+        archivedEventsCount: state.archivedEventsCount + 1,
+        totalMemoryCount: state.totalMemoryCount + 1,
+        userState: {
+          ...state.userState,
+          cursor: {
+            ...state.userState.cursor,
+            unreadEventsCount: Math.max(0, state.userState.cursor.unreadEventsCount - 1),
+          },
         },
-      },
-    }));
+      };
+    });
+
     useToastStore.getState().addToast('Moved to Market Memory (Archived)', 'success');
     eventService.markEventRead(id).catch(() => {
       set((state) => ({
         events: prevEvents,
+        watchlistOverview: prevOverview,
         archivedEventsCount: prevArchivedCount,
         totalMemoryCount: prevTotalCount,
         userState: { ...state.userState, cursor: prevCursor },
@@ -654,23 +678,47 @@ export const useMarketStore = create<MarketState>((set, get) => ({
     const prevSavedCount = get().savedEventsCount;
     const prevTotalCount = get().totalMemoryCount;
     const prevCursor = get().userState.cursor;
+    const prevOverview = get().watchlistOverview;
 
-    set((state) => ({
-      events: state.events.filter((e) => e.id !== id),
-      savedEventsCount: state.savedEventsCount + 1,
-      totalMemoryCount: state.totalMemoryCount + 1,
-      userState: {
-        ...state.userState,
-        cursor: {
-          ...state.userState.cursor,
-          unreadEventsCount: Math.max(0, state.userState.cursor.unreadEventsCount - 1),
+    set((state) => {
+      let updatedOverview = state.watchlistOverview;
+      if (updatedOverview) {
+        const updatedStocks = updatedOverview.stocks.map((s) => {
+          if (s.symbol === targetEvent.stockSymbol) {
+            return { ...s, unseenUpdatesCount: Math.max(0, s.unseenUpdatesCount - 1) };
+          }
+          return s;
+        });
+        updatedOverview = {
+          ...updatedOverview,
+          stocks: updatedStocks,
+          summary: {
+            ...updatedOverview.summary,
+            unseenUpdates: Math.max(0, updatedOverview.summary.unseenUpdates - 1),
+          },
+        };
+      }
+
+      return {
+        events: state.events.filter((e) => e.id !== id),
+        watchlistOverview: updatedOverview,
+        savedEventsCount: state.savedEventsCount + 1,
+        totalMemoryCount: state.totalMemoryCount + 1,
+        userState: {
+          ...state.userState,
+          cursor: {
+            ...state.userState.cursor,
+            unreadEventsCount: Math.max(0, state.userState.cursor.unreadEventsCount - 1),
+          },
         },
-      },
-    }));
+      };
+    });
+
     useToastStore.getState().addToast('Saved to Market Memory', 'info');
     eventService.saveEventForLater(id).catch(() => {
       set((state) => ({
         events: prevEvents,
+        watchlistOverview: prevOverview,
         savedEventsCount: prevSavedCount,
         totalMemoryCount: prevTotalCount,
         userState: { ...state.userState, cursor: prevCursor },
@@ -685,23 +733,41 @@ export const useMarketStore = create<MarketState>((set, get) => ({
     const prevArchived = get().archivedEventsCount;
     const prevTotal = get().totalMemoryCount;
     const prevCursor = get().userState.cursor;
+    const prevOverview = get().watchlistOverview;
 
-    set((state) => ({
-      events: [],
-      archivedEventsCount: state.archivedEventsCount + activeCount,
-      totalMemoryCount: state.totalMemoryCount + activeCount,
-      userState: {
-        ...state.userState,
-        cursor: {
-          ...state.userState.cursor,
-          unreadEventsCount: 0,
+    set((state) => {
+      let updatedOverview = state.watchlistOverview;
+      if (updatedOverview) {
+        updatedOverview = {
+          ...updatedOverview,
+          stocks: updatedOverview.stocks.map((s) => ({ ...s, unseenUpdatesCount: 0 })),
+          summary: {
+            ...updatedOverview.summary,
+            unseenUpdates: 0,
+          },
+        };
+      }
+
+      return {
+        events: [],
+        watchlistOverview: updatedOverview,
+        archivedEventsCount: state.archivedEventsCount + activeCount,
+        totalMemoryCount: state.totalMemoryCount + activeCount,
+        userState: {
+          ...state.userState,
+          cursor: {
+            ...state.userState.cursor,
+            unreadEventsCount: 0,
+          },
         },
-      },
-    }));
+      };
+    });
+
     useToastStore.getState().addToast('All events marked as read', 'success');
     eventService.markAllRead().catch(() => {
       set((state) => ({
         events: prevEvents,
+        watchlistOverview: prevOverview,
         archivedEventsCount: prevArchived,
         totalMemoryCount: prevTotal,
         userState: { ...state.userState, cursor: prevCursor },

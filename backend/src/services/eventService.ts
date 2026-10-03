@@ -71,7 +71,7 @@ export class EventService {
       };
     }
 
-    // Filter events that occurred since user's last visit cursor
+    // Filter events: either by user's sinceLastVisit cursor or by standard 30-day rolling window
     if (options?.sinceLastVisit && options?.userId) {
       const userState = await prisma.userState.findUnique({
         where: { userId: options.userId },
@@ -83,12 +83,16 @@ export class EventService {
         userState?.lastLoginAt ||
         defaultSince;
       where.timestamp = { gte: since };
+    } else {
+      // Standard 30-day rolling window matching attention and overview logic
+      const windowDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      where.timestamp = { gte: windowDate };
     }
 
     const events = await prisma.event.findMany({
       where,
       orderBy: { timestamp: 'desc' },
-      take: options?.limit || 50,
+      take: options?.limit || 200,
       include: {
         stock: true,
         insights: true,

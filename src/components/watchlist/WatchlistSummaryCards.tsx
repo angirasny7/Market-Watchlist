@@ -13,12 +13,16 @@ interface WatchlistSummaryCardsProps {
   summary: WatchlistOverviewSummary;
   activeFilter: WatchlistQuickFilter;
   onSelectFilter: (filter: WatchlistQuickFilter) => void;
+  isAllWatchlists?: boolean;
+  watchlistsCount?: number;
 }
 
 export const WatchlistSummaryCards: React.FC<WatchlistSummaryCardsProps> = ({
   summary,
   activeFilter,
   onSelectFilter,
+  isAllWatchlists = true,
+  watchlistsCount = 1,
 }) => {
   const cards: Array<{
     id: WatchlistQuickFilter;
@@ -38,7 +42,9 @@ export const WatchlistSummaryCards: React.FC<WatchlistSummaryCardsProps> = ({
       accentColor: 'text-slate-400 group-hover:text-slate-200',
       activeBorder: 'border-slate-500 bg-slate-800/40',
       activeBg: 'bg-surface-subtle',
-      badgeText: 'All items',
+      badgeText: isAllWatchlists
+        ? `across ${watchlistsCount} ${watchlistsCount === 1 ? 'list' : 'lists'}`
+        : 'in this list',
     },
     {
       id: 'NEED_ATTENTION',
@@ -48,7 +54,7 @@ export const WatchlistSummaryCards: React.FC<WatchlistSummaryCardsProps> = ({
       accentColor: 'text-amber-400 group-hover:text-amber-300',
       activeBorder: 'border-amber-500/60 bg-amber-500/10 shadow-amber-500/10 shadow-lg',
       activeBg: 'bg-surface-subtle',
-      badgeText: 'Critical & High',
+      badgeText: 'high priority',
     },
     {
       id: 'UPCOMING_EVENTS',
@@ -58,7 +64,7 @@ export const WatchlistSummaryCards: React.FC<WatchlistSummaryCardsProps> = ({
       accentColor: 'text-cyan-400 group-hover:text-cyan-300',
       activeBorder: 'border-cyan-500/60 bg-cyan-500/10 shadow-cyan-500/10 shadow-lg',
       activeBg: 'bg-surface-subtle',
-      badgeText: 'Next 14 days',
+      badgeText: 'in the next 14 days',
     },
     {
       id: 'ACTIVE_ALERTS',
@@ -68,7 +74,7 @@ export const WatchlistSummaryCards: React.FC<WatchlistSummaryCardsProps> = ({
       accentColor: 'text-indigo-400 group-hover:text-indigo-300',
       activeBorder: 'border-indigo-500/60 bg-indigo-500/10 shadow-indigo-500/10 shadow-lg',
       activeBg: 'bg-surface-subtle',
-      badgeText: 'Triggers active',
+      badgeText: 'active triggers',
     },
     {
       id: 'UNSEEN_UPDATES',
@@ -78,7 +84,7 @@ export const WatchlistSummaryCards: React.FC<WatchlistSummaryCardsProps> = ({
       accentColor: 'text-rose-400 group-hover:text-rose-300',
       activeBorder: 'border-rose-500/60 bg-rose-500/10 shadow-rose-500/10 shadow-lg',
       activeBg: 'bg-surface-subtle',
-      badgeText: 'Unread feed',
+      badgeText: 'unread updates',
     },
   ];
 

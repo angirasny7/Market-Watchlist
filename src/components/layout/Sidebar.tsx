@@ -17,11 +17,11 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ className, onItemClick }) => {
-  const { watchlist, events, totalMemoryCount, archivedEventsCount, savedEventsCount, digests } = useMarketStore();
+  const { events, digests } = useMarketStore();
 
-  const activeEventsCount = events.length;
-  const criticalEventsCount = events.filter((e) => e.priority === 'CRITICAL').length;
-  const memoryCount = totalMemoryCount > 0 ? totalMemoryCount : (archivedEventsCount + savedEventsCount);
+  const unreadFeedCount = events.filter((e) => !e.read).length;
+  const feedBadgeText = unreadFeedCount > 99 ? '99+' : `${unreadFeedCount}`;
+  const hasUnacknowledgedDigest = digests.some((d) => !d.isAcknowledged);
 
   const navItems = [
     {
@@ -29,40 +29,45 @@ export const Sidebar: React.FC<SidebarProps> = ({ className, onItemClick }) => {
       path: '/',
       icon: LayoutDashboard,
       badge: null,
-      badgeColor: '',
+      badgeAriaLabel: undefined,
+      showDot: false,
       description: 'Unified command center and personalized market delta summary',
     },
     {
       name: 'Attention Feed',
       path: '/feed',
       icon: BellRing,
-      badge: activeEventsCount > 0 ? `${activeEventsCount}` : null,
-      badgeColor: criticalEventsCount > 0 ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30' : 'bg-amber-500/15 text-amber-400 border border-amber-500/30',
-      highlightBadge: criticalEventsCount > 0,
+      badge: unreadFeedCount > 0 ? feedBadgeText : null,
+      badgeAriaLabel: `${unreadFeedCount} unread updates`,
+      badgeColor: 'bg-rose-500/15 text-rose-400 border border-rose-500/30 font-mono',
+      showDot: false,
       description: 'Actionable real-time catalysts and events requiring investor attention',
     },
     {
       name: 'Watchlist',
       path: '/watchlist',
       icon: ListOrdered,
-      badge: `${watchlist.length}`,
-      badgeColor: 'bg-slate-800/80 text-slate-400 border border-slate-700/60',
+      badge: null,
+      badgeAriaLabel: undefined,
+      showDot: false,
       description: 'Monitored portfolio equities with causal delta insights',
     },
     {
       name: 'Market Memory',
       path: '/memory',
       icon: History,
-      badge: memoryCount > 0 ? `${memoryCount}` : null,
-      badgeColor: 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/30',
+      badge: null,
+      badgeAriaLabel: undefined,
+      showDot: hasUnacknowledgedDigest,
       description: 'Personal repository of saved and archived market events.',
     },
     {
       name: 'Market Highlights',
       path: '/highlights',
       icon: TrendingUp,
-      badge: digests.length > 0 ? `${digests.length}` : null,
-      badgeColor: 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30',
+      badge: null,
+      badgeAriaLabel: undefined,
+      showDot: false,
       description: 'Autonomous market intelligence hub.',
     },
   ];
@@ -129,6 +134,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className, onItemClick }) => {
 
                     {item.badge && (
                       <span
+                        aria-label={item.badgeAriaLabel}
                         className={cn(
                           'text-[10px] font-mono font-semibold px-1.5 py-0.5 min-w-[20px] h-5 rounded-full inline-flex items-center justify-center text-center transition-all shrink-0 whitespace-nowrap leading-none',
                           item.badgeColor
@@ -136,6 +142,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ className, onItemClick }) => {
                       >
                         {item.badge}
                       </span>
+                    )}
+
+                    {item.showDot && !item.badge && (
+                      <span
+                        aria-label="Unacknowledged digest available"
+                        className="w-2 h-2 rounded-full bg-emerald-400 shrink-0"
+                      />
                     )}
 
                     {isActive && (

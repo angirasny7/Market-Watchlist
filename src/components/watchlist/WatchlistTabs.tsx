@@ -37,6 +37,8 @@ export const WatchlistTabs: React.FC<WatchlistTabsProps> = ({
           <button
             type="button"
             onClick={() => setActiveWatchlistId('all')}
+            title={`${totalStocksCount} unique stocks across ${userWatchlists.length} ${userWatchlists.length === 1 ? 'list' : 'lists'}`}
+            aria-label={`${totalStocksCount} unique stocks across ${userWatchlists.length} ${userWatchlists.length === 1 ? 'list' : 'lists'}`}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all ${
               activeWatchlistId === 'all'
                 ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shadow-sm'
@@ -45,15 +47,6 @@ export const WatchlistTabs: React.FC<WatchlistTabsProps> = ({
           >
             <Layers className="w-3.5 h-3.5" />
             <span>All Watchlists</span>
-            <span
-              className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full font-semibold ${
-                activeWatchlistId === 'all'
-                  ? 'bg-emerald-500/20 text-emerald-300'
-                  : 'bg-zinc-800 text-zinc-400'
-              }`}
-            >
-              {totalStocksCount}
-            </span>
           </button>
 
           {/* 2. Individual Watchlist Tabs */}
