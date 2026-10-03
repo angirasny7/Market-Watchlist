@@ -108,24 +108,32 @@ export async function runChangeDetectionJob(): Promise<ChangeDetectionResult> {
         });
       }
 
-      // Rule 6: News Catalyst Detection (Earnings & Dividends)
-      for (const newsItem of stock.news) {
-        const headlineLower = newsItem.headline.toLowerCase();
-        if (headlineLower.includes('earnings') || headlineLower.includes('q1') || headlineLower.includes('q2') || headlineLower.includes('q3') || headlineLower.includes('q4') || headlineLower.includes('profit')) {
-          const isPositive = newsItem.sentiment === 'BULLISH' || changePercent >= 0;
-          potentialAnomalies.push({
-            eventType: isPositive ? EventType.EARNINGS_BEAT : EventType.EARNINGS_MISS,
-            reason: `Earnings catalyst detected: "${newsItem.headline}"`,
-          });
-          break;
-        }
+      // Validation before event generation:
+      if (!currentPrice || currentPrice <= 0 || isNaN(currentPrice)) {
+        continue;
+      }
 
-        if (headlineLower.includes('dividend') || headlineLower.includes('bonus') || headlineLower.includes('buyback')) {
-          potentialAnomalies.push({
-            eventType: EventType.DIVIDEND_ANNOUNCED,
-            reason: `Corporate capital distribution action: "${newsItem.headline}"`,
-          });
-          break;
+      // Check sanity: reject > 25% single-day moves without corporate action
+      if (Math.abs(changePercent) > 25.0) {
+        const corporateActions = await prisma.corporateEvent.findMany({
+          where: {
+            stockSymbol: stock.symbol,
+            eventDate: {
+              gte: new Date(Date.now() - 24 * 60 * 60 * 1000),
+              lte: new Date(Date.now() + 24 * 60 * 60 * 1000),
+            },
+          },
+        });
+        if (corporateActions.length === 0) {
+          await prisma.systemJobRun.create({
+            data: {
+              jobName: 'changeDetectionSanityGuard',
+              status: 'FAILED',
+              errorMessage: `Skipped implausible move of ${changePercent.toFixed(2)}% for ${stock.symbol} exceeding 25% single-day limit without corporate action.`,
+              completedAt: new Date(),
+            },
+          }).catch(() => {});
+          continue;
         }
       }
 
@@ -134,6 +142,8 @@ export async function runChangeDetectionJob(): Promise<ChangeDetectionResult> {
       todayStart.setHours(0, 0, 0, 0);
       const todayEnd = new Date();
       todayEnd.setHours(23, 59, 59, 999);
+
+      const baselinePrice = currentPrice - changeAmount;
 
       for (const anomaly of potentialAnomalies) {
         const existingEventToday = await prisma.event.findFirst({
@@ -154,20 +164,28 @@ export async function runChangeDetectionJob(): Promise<ChangeDetectionResult> {
           eventType: anomaly.eventType,
         });
 
+        const metricsData = {
+          attentionScore: scoreResult.score,
+          detectionReason: anomaly.reason,
+          explanation: scoreResult.explanation,
+          baselinePrice: parseFloat(baselinePrice.toFixed(2)),
+          price: currentPrice,
+          eventPrice: currentPrice,
+          changeAmount,
+          changePercent,
+          volume,
+          avgVolume20D,
+          volumeRatio: avgVolume20D > 0 ? parseFloat((volume / avgVolume20D).toFixed(2)) : 1.0,
+          high52w,
+          low52w,
+          updatedAt: new Date().toISOString(),
+        };
+
         if (existingEventToday) {
           // Idempotent update: update metrics if new data is available on the same calendar day
           const updatedMetrics = {
             ...((existingEventToday.metricsDelta as any) || {}),
-            attentionScore: scoreResult.score,
-            detectionReason: anomaly.reason,
-            explanation: scoreResult.explanation,
-            price: currentPrice,
-            changeAmount,
-            changePercent,
-            volume,
-            avgVolume20D,
-            volumeRatio: avgVolume20D > 0 ? parseFloat((volume / avgVolume20D).toFixed(2)) : 1.0,
-            updatedAt: new Date().toISOString(),
+            ...metricsData,
           };
 
           const enrichment = await contextEnrichmentService.enrichEvent(
@@ -199,17 +217,7 @@ export async function runChangeDetectionJob(): Promise<ChangeDetectionResult> {
             eventType: anomaly.eventType,
             priority: scoreResult.priority,
             timestamp: new Date(),
-            metricsDelta: {
-              attentionScore: scoreResult.score,
-              detectionReason: anomaly.reason,
-              explanation: scoreResult.explanation,
-              price: currentPrice,
-              changeAmount,
-              changePercent,
-              volume,
-              avgVolume20D,
-              volumeRatio: avgVolume20D > 0 ? parseFloat((volume / avgVolume20D).toFixed(2)) : 1.0,
-            },
+            metricsDelta: metricsData,
           },
         });
 

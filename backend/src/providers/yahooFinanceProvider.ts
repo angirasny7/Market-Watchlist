@@ -30,7 +30,11 @@ export class YahooFinanceProvider implements IMarketDataProvider {
   };
 
   // Known US stocks
-  private usTickers = new Set(['AAPL', 'MSFT', 'NVDA', 'GOOGL', 'AMZN', 'META', 'TSLA', 'SPY', 'QQQ']);
+  private usTickers = new Set([
+    'AAPL', 'MSFT', 'NVDA', 'GOOGL', 'AMZN', 'META', 'TSLA', 'SPY', 'QQQ',
+    'NFLX', 'AMD', 'INTC', 'CRM', 'ORCL', 'ADBE', 'JPM', 'WMT', 'DIS', 'BA',
+    'BABA', 'NKE', 'HD', 'PG', 'JNJ', 'UNH', 'V', 'MA'
+  ]);
 
   constructor() {
     // Suppress survey notices in stdout
@@ -182,6 +186,66 @@ export class YahooFinanceProvider implements IMarketDataProvider {
         }));
     } catch (err: any) {
       console.error(`[YahooFinanceProvider] Failed to fetch historical bars for ${rawTicker}: ${err.message}`);
+      return [];
+    }
+  }
+
+  /**
+   * Fetch real news articles from Yahoo Finance for symbol
+   */
+  async getNews(symbol: string, count: number = 10): Promise<Array<{
+    headline: string;
+    summary: string;
+    sourceName: string;
+    sourceUrl: string;
+    publishedAt: Date;
+    sentiment: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+  }>> {
+    const rawTicker = symbol.trim().toUpperCase();
+    const yahooTicker = this.resolveYahooTicker(rawTicker);
+
+    // Friendly names for better search discovery on Indian stocks
+    const nameMap: Record<string, string> = {
+      INFY: 'Infosys',
+      TCS: 'Tata Consultancy Services',
+      TATAMOTORS: 'Tata Motors',
+      RELIANCE: 'Reliance Industries',
+      HDFCBANK: 'HDFC Bank',
+      ICICIBANK: 'ICICI Bank',
+      BHARTIARTL: 'Bharti Airtel',
+      SBIN: 'State Bank of India',
+      ITC: 'ITC Limited',
+      LT: 'Larsen Toubro',
+    };
+
+    const query = nameMap[rawTicker] || rawTicker;
+
+    try {
+      const res = await this.yf.search(query, { newsCount: count });
+      const newsItems = res?.news || [];
+
+      return newsItems
+        .filter((n: any) => n.title && n.link && n.link.startsWith('http'))
+        .map((n: any) => {
+          const titleLower = (n.title || '').toLowerCase();
+          let sentiment: 'BULLISH' | 'BEARISH' | 'NEUTRAL' = 'NEUTRAL';
+          if (titleLower.includes('surge') || titleLower.includes('jump') || titleLower.includes('rally') || titleLower.includes('gain') || titleLower.includes('beat') || titleLower.includes('profit') || titleLower.includes('growth')) {
+            sentiment = 'BULLISH';
+          } else if (titleLower.includes('drop') || titleLower.includes('fall') || titleLower.includes('plunge') || titleLower.includes('loss') || titleLower.includes('miss') || titleLower.includes('decline')) {
+            sentiment = 'BEARISH';
+          }
+
+          return {
+            headline: n.title.trim(),
+            summary: n.summary || n.title.trim(),
+            sourceName: n.publisher || 'Financial News',
+            sourceUrl: n.link.trim(),
+            publishedAt: n.providerPublishTime ? new Date(n.providerPublishTime) : new Date(),
+            sentiment,
+          };
+        });
+    } catch (err: any) {
+      console.warn(`[YahooFinanceProvider] News search error for ${rawTicker}: ${err.message}`);
       return [];
     }
   }

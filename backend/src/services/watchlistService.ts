@@ -2,7 +2,7 @@ import { prisma } from '../config/prisma.js';
 import { computeDataFreshness } from './sinceLastVisitService.js';
 import { attentionScoringService } from './attentionScoringService.js';
 import { corporateEventService, UpcomingEventSummary } from './corporateEventService.js';
-import { eventService } from './eventService.js';
+import { eventService, isEventDemo } from './eventService.js';
 
 export interface WatchlistStockOverviewItem {
   symbol: string;
@@ -519,20 +519,17 @@ export class WatchlistService {
       });
 
       if (!allowDemo) {
-        unreadEvents = unreadEvents.filter((e) => {
-          const delta = (e.metricsDelta as any) || {};
-          return !e.id.startsWith('demo_') && !e.id.startsWith('evt_00') && delta.isDemo !== true;
-        });
+        unreadEvents = unreadEvents.filter((e) => !isEventDemo(e));
       }
 
-      // Deduplicate unread events per stock + day + eventType
-      const seenUnreadKeys = new Set<string>();
+      // Unread clusters per stock (unique calendar days with unread events)
+      const seenUnreadDayKeys = new Set<string>();
       const dedupedUnreadEvents: typeof unreadEvents = [];
       for (const ev of unreadEvents) {
         const dayStr = new Date(ev.timestamp).toISOString().split('T')[0];
-        const key = `${ev.stockSymbol}|${dayStr}|${ev.eventType}`;
-        if (!seenUnreadKeys.has(key)) {
-          seenUnreadKeys.add(key);
+        const key = `${ev.stockSymbol}|${dayStr}`;
+        if (!seenUnreadDayKeys.has(key)) {
+          seenUnreadDayKeys.add(key);
           dedupedUnreadEvents.push(ev);
         }
       }

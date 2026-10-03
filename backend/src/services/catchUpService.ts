@@ -319,18 +319,44 @@ export class CatchUpService {
             },
           });
 
+          // Validate daily OHLC consistency
+          if (bar.close < bar.low * 0.99 || bar.close > bar.high * 1.01) {
+            await prisma.systemJobRun.create({
+              data: {
+                jobName: 'catchUpOhlcValidation',
+                status: 'FAILED',
+                errorMessage: `Skipped event for ${symbol} on ${dateStr}: close (${bar.close}) outside daily range [${bar.low}, ${bar.high}].`,
+                completedAt: new Date(),
+              },
+            }).catch(() => {});
+            continue;
+          }
+
+          const metricsData = {
+            attentionScore: anomaly.score,
+            detectionReason: anomaly.reason,
+            baselinePrice: basePrice,
+            baselineDate: prevBar ? prevBar.timestamp.toISOString() : barTime.toISOString(),
+            price: bar.close,
+            eventPrice: bar.close,
+            dayOpen: bar.open,
+            dayHigh: bar.high,
+            dayLow: bar.low,
+            dayClose: bar.close,
+            changePercent: parseFloat(dayChangePercent.toFixed(2)),
+            volume: barVolume,
+            avgVolume20D: Math.round(avgVol20),
+            volumeRatio: avgVol20 > 0 ? parseFloat((barVolume / avgVol20).toFixed(2)) : 1.0,
+            high52w,
+            low52w,
+            updatedAt: new Date().toISOString(),
+          };
+
           if (existingEvent) {
             // Idempotent update: update metrics if already exists for this calendar day
             const updatedMetrics = {
               ...((existingEvent.metricsDelta as any) || {}),
-              attentionScore: anomaly.score,
-              detectionReason: anomaly.reason,
-              price: bar.close,
-              changePercent: parseFloat(dayChangePercent.toFixed(2)),
-              volume: barVolume,
-              avgVolume20D: Math.round(avgVol20),
-              volumeRatio: avgVol20 > 0 ? parseFloat((barVolume / avgVol20).toFixed(2)) : 1.0,
-              updatedAt: new Date().toISOString(),
+              ...metricsData,
             };
             const enrichment = await contextEnrichmentService.enrichEvent(
               {
@@ -356,15 +382,7 @@ export class CatchUpService {
                 eventType: anomaly.eventType,
                 priority: anomaly.priority,
                 timestamp: barTime,
-                metricsDelta: {
-                  attentionScore: anomaly.score,
-                  detectionReason: anomaly.reason,
-                  price: bar.close,
-                  changePercent: parseFloat(dayChangePercent.toFixed(2)),
-                  volume: barVolume,
-                  avgVolume20D: Math.round(avgVol20),
-                  volumeRatio: avgVol20 > 0 ? parseFloat((barVolume / avgVol20).toFixed(2)) : 1.0,
-                },
+                metricsDelta: metricsData,
               },
             });
             const enrichment = await contextEnrichmentService.enrichEvent(created, stock);
@@ -372,13 +390,7 @@ export class CatchUpService {
               where: { id: created.id },
               data: {
                 metricsDelta: {
-                  attentionScore: anomaly.score,
-                  detectionReason: anomaly.reason,
-                  price: bar.close,
-                  changePercent: parseFloat(dayChangePercent.toFixed(2)),
-                  volume: barVolume,
-                  avgVolume20D: Math.round(avgVol20),
-                  volumeRatio: avgVol20 > 0 ? parseFloat((barVolume / avgVol20).toFixed(2)) : 1.0,
+                  ...metricsData,
                   enrichment: enrichment as any,
                 },
               },
@@ -394,10 +406,21 @@ export class CatchUpService {
         const priceAtSince = barAtSince.close;
         const cumChangePct = ((currentStockPrice - priceAtSince) / priceAtSince) * 100;
 
-        // Sanity guard for cumulative move:
+        const corporateActions = await prisma.corporateEvent.findMany({
+          where: {
+            stockSymbol: symbol,
+            eventDate: {
+              gte: since,
+              lte: new Date(),
+            },
+          },
+        });
+        const hasCorporateAction = corporateActions.length > 0;
+
+        // Strict sanity guard for cumulative move:
         // Reject if single-day equivalent move > 25% or cumulative move > 50% without corporate action
-        const maxExpectedMove = Math.min(60, 25 * Math.max(1, daysSince));
-        if (Math.abs(cumChangePct) > maxExpectedMove) {
+        const maxExpectedMove = Math.min(50, 25 * Math.max(1, daysSince));
+        if (Math.abs(cumChangePct) > maxExpectedMove && !hasCorporateAction) {
           await prisma.systemJobRun.create({
             data: {
               jobName: 'catchUpCumulativeSanityGuard',
@@ -409,8 +432,9 @@ export class CatchUpService {
         } else if (Math.abs(cumChangePct) >= 8.0) {
           const isGain = cumChangePct >= 0;
           const cumEventType = isGain ? EventType.PRICE_SURGE : EventType.PRICE_DROP;
-          const signStr = isGain ? '+' : '';
-          const cumReason = `${stock?.companyName || symbol} is ${signStr}${cumChangePct.toFixed(1)}% since your last visit (${priceAtSince.toFixed(2)} → ${currentStockPrice.toFixed(2)}).`;
+          const cumReason = isGain
+            ? `Cumulative price surge since your last visit`
+            : `Cumulative price drop since your last visit`;
 
           // Check if cumulative event already created for today's calendar day
           const todayStart = new Date();
@@ -436,17 +460,24 @@ export class CatchUpService {
             eventType: cumEventType,
           });
 
+          const cumMetricsData = {
+            attentionScore: scoreRes.score,
+            detectionReason: cumReason,
+            baselinePrice: priceAtSince,
+            baselineDate: since.toISOString(),
+            price: currentStockPrice,
+            eventPrice: currentStockPrice,
+            changePercent: parseFloat(cumChangePct.toFixed(2)),
+            isCumulativeReturnEvent: true,
+            volumeRatio: 1.0,
+            updatedAt: new Date().toISOString(),
+          };
+
           if (existingCumEvent) {
             // Idempotent update: update existing cumulative event for today
             const updatedMetrics = {
               ...((existingCumEvent.metricsDelta as any) || {}),
-              attentionScore: scoreRes.score,
-              detectionReason: cumReason,
-              price: currentStockPrice,
-              priceAtSince,
-              changePercent: parseFloat(cumChangePct.toFixed(2)),
-              isCumulativeReturnEvent: true,
-              updatedAt: new Date().toISOString(),
+              ...cumMetricsData,
             };
             const enrichment = await contextEnrichmentService.enrichEvent(
               {
@@ -472,14 +503,7 @@ export class CatchUpService {
                 eventType: cumEventType,
                 priority: scoreRes.priority,
                 timestamp: new Date(),
-                metricsDelta: {
-                  attentionScore: scoreRes.score,
-                  detectionReason: cumReason,
-                  price: currentStockPrice,
-                  priceAtSince,
-                  changePercent: parseFloat(cumChangePct.toFixed(2)),
-                  isCumulativeReturnEvent: true,
-                },
+                metricsDelta: cumMetricsData,
               },
             });
             const enrichment = await contextEnrichmentService.enrichEvent(created, stock);
@@ -487,12 +511,7 @@ export class CatchUpService {
               where: { id: created.id },
               data: {
                 metricsDelta: {
-                  attentionScore: scoreRes.score,
-                  detectionReason: cumReason,
-                  price: currentStockPrice,
-                  priceAtSince,
-                  changePercent: parseFloat(cumChangePct.toFixed(2)),
-                  isCumulativeReturnEvent: true,
+                  ...cumMetricsData,
                   enrichment: enrichment as any,
                 },
               },

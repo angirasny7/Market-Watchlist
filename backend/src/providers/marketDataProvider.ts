@@ -38,11 +38,21 @@ export interface HistoricalBar {
   volume: number;
 }
 
+export interface ProviderNewsItem {
+  headline: string;
+  summary: string;
+  sourceName: string;
+  sourceUrl: string;
+  publishedAt: Date;
+  sentiment: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+}
+
 export interface IMarketDataProvider {
   readonly providerName: string;
   getQuote(symbol: string): Promise<MarketQuote | null>;
   getBatchQuotes(symbols: string[]): Promise<MarketQuote[]>;
   getHistoricalBars(symbol: string, days?: number): Promise<HistoricalBar[]>;
+  getNews?(symbol: string, count?: number): Promise<ProviderNewsItem[]>;
 }
 
 /**

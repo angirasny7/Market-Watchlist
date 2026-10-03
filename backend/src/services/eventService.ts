@@ -2,11 +2,30 @@ import { Priority, EventType } from '@prisma/client';
 import { prisma } from '../config/prisma.js';
 import { contextEnrichmentService } from './contextEnrichmentService.js';
 
-export function isEventDemo(event: { id: string; metricsDelta?: any }): boolean {
+export function isEventDemo(event: { id: string; stockSymbol?: string; stock?: any; metricsDelta?: any }): boolean {
   if (event.id.startsWith('demo_') || event.id.startsWith('evt_00')) return true;
   const delta = (event.metricsDelta as any) || {};
   if (delta.isDemo === true) return true;
-  if (typeof delta.detectionReason === 'string' && delta.detectionReason.includes('Demo')) return true;
+  if (
+    typeof delta.detectionReason === 'string' &&
+    (delta.detectionReason.includes('Demo') || delta.detectionReason.includes('Demonstration'))
+  ) {
+    return true;
+  }
+  // Exclude legacy unadjusted / simulated catalog seeds
+  const price = delta.price ?? delta.eventPrice;
+  if (price && event.stockSymbol) {
+    const sym = event.stockSymbol.toUpperCase();
+    if (sym === 'RELIANCE' && price > 2000) return true;
+    if (sym === 'TATAMOTORS' && price > 700) return true;
+    if (sym === 'INFY' && price > 1600 && typeof delta.detectionReason === 'string' && delta.detectionReason.includes('87.7%')) return true;
+    if (sym === 'TCS' && price > 3500) return true;
+    if (sym === 'ABB' && price > 8000) return true;
+    if (sym === 'SIEMENS' && price > 6000) return true;
+    if (sym === 'GOOGL' && price < 200) return true;
+    if (sym === 'TSLA' && price < 250) return true;
+    if (sym === 'AMD' && price < 170) return true;
+  }
   return false;
 }
 
@@ -117,21 +136,40 @@ export class EventService {
       ? events
       : events.filter((e) => !isEventDemo(e));
 
-    // Calendar-day deduplication by stockSymbol + calendarDay + eventType
-    const seenEventKeys = new Set<string>();
-    const deduplicatedEvents: typeof eligibleEvents = [];
+    // Calendar-day clustering by stockSymbol + calendarDay
+    const clusterMap = new Map<string, typeof eligibleEvents>();
     for (const e of eligibleEvents) {
       const dayStr = new Date(e.timestamp).toISOString().split('T')[0];
-      const key = `${e.stockSymbol}|${dayStr}|${e.eventType}`;
-      if (!seenEventKeys.has(key)) {
-        seenEventKeys.add(key);
-        deduplicatedEvents.push(e);
-      }
+      const key = `${e.stockSymbol}|${dayStr}`;
+      const list = clusterMap.get(key) || [];
+      list.push(e);
+      clusterMap.set(key, list);
+    }
+
+    const deduplicatedEvents: typeof eligibleEvents = [];
+    const clusterReadMap = new Map<string, boolean>();
+
+    for (const [, evts] of clusterMap.entries()) {
+      // Pick highest priority / most recent event as representative of the daily cluster
+      evts.sort((a, b) => {
+        const pOrder: Record<string, number> = { CRITICAL: 4, HIGH: 3, MEDIUM: 2, LOW: 1 };
+        const pDiff = (pOrder[b.priority] || 0) - (pOrder[a.priority] || 0);
+        if (pDiff !== 0) return pDiff;
+        return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+      });
+      const topEvent = evts[0];
+      // A cluster is marked read only if ALL events in that cluster have been read
+      const isClusterRead = options?.userId
+        ? evts.every((ev) => readEventIds.has(ev.id))
+        : evts.every((ev) => Boolean(ev.read));
+
+      deduplicatedEvents.push(topEvent);
+      clusterReadMap.set(topEvent.id, isClusterRead);
     }
 
     const mapped = await Promise.all(
       deduplicatedEvents.map(async (e) => {
-        const isRead = options?.userId ? readEventIds.has(e.id) : Boolean(e.read);
+        const isRead = clusterReadMap.get(e.id) ?? false;
         const delta = (e.metricsDelta as any) || {};
 
         let enrichment = delta.enrichment;
@@ -349,19 +387,14 @@ export class EventService {
 
     const eligibleEvents = allowDemo ? events : events.filter((e) => !isEventDemo(e));
 
-    // Calendar day deduplication for accurate unread count
-    const seenKeys = new Set<string>();
-    let count = 0;
+    // Standard Unit: Unread clusters (one per stock per calendar day)
+    const unreadClusters = new Set<string>();
     for (const ev of eligibleEvents) {
       const dayStr = new Date(ev.timestamp).toISOString().split('T')[0];
-      const key = `${ev.stockSymbol}|${dayStr}|${ev.eventType}`;
-      if (!seenKeys.has(key)) {
-        seenKeys.add(key);
-        count++;
-      }
+      unreadClusters.add(`${ev.stockSymbol}|${dayStr}`);
     }
 
-    return count;
+    return unreadClusters.size;
   }
 }
 

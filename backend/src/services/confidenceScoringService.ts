@@ -98,8 +98,8 @@ export class ConfidenceScoringService {
     let rawScore = newsSupportScore + filingsSupportScore + volumeConfirmationScore + priceMagnitudeScore + multiSourceScore;
 
     if (evidence.length === 0) {
-      // Base confidence strictly reflects market metrics alone, without external catalyst confirmation
-      rawScore = Math.min(28, Math.round(volumeConfirmationScore + priceMagnitudeScore));
+      // Base confidence strictly reflects market metrics alone, without external catalyst confirmation (Strictly Low <= 25)
+      rawScore = Math.min(25, Math.round((volumeConfirmationScore + priceMagnitudeScore) * 0.7));
     }
 
     const finalScore = Math.max(0, Math.min(100, Math.round(rawScore)));

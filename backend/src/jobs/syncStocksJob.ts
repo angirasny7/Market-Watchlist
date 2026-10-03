@@ -17,7 +17,7 @@ export interface SyncStocksResult {
  * updates current prices and volume metrics in the Stock table,
  * and appends historical checkpoints to StockPriceHistory.
  */
-export async function runSyncStocksJob(): Promise<SyncStocksResult> {
+export async function runSyncStocksJob(targetSymbols?: string[]): Promise<SyncStocksResult> {
   const startTime = Date.now();
   const startedAt = new Date();
 
@@ -35,12 +35,16 @@ export async function runSyncStocksJob(): Promise<SyncStocksResult> {
   try {
     const marketProvider = ProviderFactory.getMarketDataProvider();
 
-    // 2. Fetch all registered stocks from database
-    const stocks = await prisma.stock.findMany({
-      select: { symbol: true },
-    });
+    // 2. Fetch stocks to synchronize
+    let symbols = targetSymbols;
+    if (!symbols || symbols.length === 0) {
+      const stocks = await prisma.stock.findMany({
+        select: { symbol: true },
+      });
+      symbols = stocks.map((s) => s.symbol);
+    }
 
-    if (stocks.length === 0) {
+    if (symbols.length === 0) {
       console.log('[SyncStocksJob] No stocks found in database to synchronize.');
       await prisma.systemJobRun.update({
         where: { id: jobRun.id },
@@ -63,12 +67,12 @@ export async function runSyncStocksJob(): Promise<SyncStocksResult> {
     let failedCount = 0;
 
     // 3. Process each ticker independently with isolated error boundaries
-    for (const stock of stocks) {
+    for (const symbol of symbols) {
       try {
-        const quote = await marketProvider.getQuote(stock.symbol);
+        const quote = await marketProvider.getQuote(symbol);
 
         if (!quote) {
-          console.warn(`[SyncStocksJob] Quote not returned for ${stock.symbol}`);
+          console.warn(`[SyncStocksJob] Quote not returned for ${symbol}`);
           failedCount++;
           continue;
         }
@@ -77,7 +81,7 @@ export async function runSyncStocksJob(): Promise<SyncStocksResult> {
 
         // Update master stock record
         await prisma.stock.update({
-          where: { symbol: stock.symbol },
+          where: { symbol },
           data: {
             currentPrice: quote.price,
             changeAmount: quote.changeAmount,
@@ -95,7 +99,7 @@ export async function runSyncStocksJob(): Promise<SyncStocksResult> {
         // Append historical price checkpoint for charts and anomaly scoring
         await prisma.stockPriceHistory.create({
           data: {
-            stockSymbol: stock.symbol,
+            stockSymbol: symbol,
             price: quote.price,
             changePercent: quote.changePercent,
             volume: BigInt(Math.max(0, Math.round(quote.volume))),
@@ -105,16 +109,16 @@ export async function runSyncStocksJob(): Promise<SyncStocksResult> {
 
         // Backfill 30-day historical bars if history is sparse (< 7 checkpoints)
         const historyCount = await prisma.stockPriceHistory.count({
-          where: { stockSymbol: stock.symbol },
+          where: { stockSymbol: symbol },
         });
 
         if (historyCount < 7) {
-          const bars = await marketProvider.getHistoricalBars(stock.symbol, 30);
+          const bars = await marketProvider.getHistoricalBars(symbol, 30);
           if (bars && bars.length > 0) {
             for (const bar of bars) {
               await prisma.stockPriceHistory.create({
                 data: {
-                  stockSymbol: stock.symbol,
+                  stockSymbol: symbol,
                   price: bar.close,
                   changePercent: parseFloat((((bar.close - bar.open) / (bar.open || 1)) * 100).toFixed(2)),
                   volume: BigInt(Math.max(0, Math.round(bar.volume))),
@@ -122,13 +126,13 @@ export async function runSyncStocksJob(): Promise<SyncStocksResult> {
                 },
               });
             }
-            console.log(`[SyncStocksJob] Backfilled ${bars.length} historical bars for ${stock.symbol}`);
+            console.log(`[SyncStocksJob] Backfilled ${bars.length} historical bars for ${symbol}`);
           }
         }
 
         successCount++;
       } catch (tickerErr: any) {
-        console.error(`[SyncStocksJob] Error syncing ticker ${stock.symbol}: ${tickerErr.message}`);
+        console.error(`[SyncStocksJob] Error syncing ticker ${symbol}: ${tickerErr.message}`);
         failedCount++;
       }
     }
@@ -145,13 +149,13 @@ export async function runSyncStocksJob(): Promise<SyncStocksResult> {
       },
     });
 
-    console.log(`[SyncStocksJob:${jobRun.id}] Completed in ${durationMs}ms. Updated ${successCount}/${stocks.length} stocks (${failedCount} failed).`);
+    console.log(`[SyncStocksJob:${jobRun.id}] Completed in ${durationMs}ms. Updated ${successCount}/${symbols.length} stocks (${failedCount} failed).`);
 
     recordStockSyncCompleted();
 
     return {
       jobRunId: jobRun.id,
-      totalTracked: stocks.length,
+      totalTracked: symbols.length,
       successCount,
       failedCount,
       durationMs,

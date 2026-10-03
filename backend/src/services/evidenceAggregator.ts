@@ -9,49 +9,64 @@ export interface EvidenceItem {
   sourceType: EvidenceSourceType;
   url: string;
   publishedAt: string;
+  isContradictory?: boolean;
 }
 
 /**
- * Evidence Aggregator
+ * Evidence Aggregator (A4)
  * 
  * Aggregates verified supporting evidence strictly from:
  * 1. Real financial news articles in PostgreSQL (prisma.news) with real URLs and publishers.
  * 2. Real corporate events / disclosures on record (prisma.corporateEvent).
  * 
- * STRICT RULE: Never fabricates evidence or placeholder URLs. If no real record exists, returns [].
+ * STRICT RULES:
+ * 1. Attach a news item only if:
+ *    (a) Ingested by a real provider sync job (has real sourceUrl starting with http and real publisher/sourceName).
+ *    (b) Has real URL, publisher, and publishedAt.
+ *    (c) For this symbol and published within window (3 days before to 1 day after event).
+ *    (d) Does not contradict the move in an obvious way (contradictory articles tagged or excluded from causal drivers).
+ * 2. Never fabricates evidence or placeholder URLs. If no real record exists, returns [].
  */
 export class EvidenceAggregator {
   async gatherEvidence(event: Event, stock?: Stock | null): Promise<EvidenceItem[]> {
     const evidence: EvidenceItem[] = [];
     const symbol = event.stockSymbol.toUpperCase();
+    const delta = (event.metricsDelta as any) || {};
+    const changePercent = Number(delta.changePercent ?? stock?.changePercent ?? 0);
 
-    // 1. Fetch real news articles from database for this stock within 7 days of event
+    // 1. Fetch real news articles from database for this stock within 3 days before to 1 day after event
     const eventTime = new Date(event.timestamp || event.createdAt);
-    const sevenDaysBefore = new Date(eventTime.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const threeDaysBefore = new Date(eventTime.getTime() - 3 * 24 * 60 * 60 * 1000);
     const oneDayAfter = new Date(eventTime.getTime() + 24 * 60 * 60 * 1000);
 
     const relevantNews = await prisma.news.findMany({
       where: {
         stockSymbol: symbol,
         publishedAt: {
-          gte: sevenDaysBefore,
+          gte: threeDaysBefore,
           lte: oneDayAfter,
         },
       },
       orderBy: { publishedAt: 'desc' },
-      take: 3,
+      take: 5,
     });
 
     for (const news of relevantNews) {
       if (news.headline && news.sourceName && news.sourceUrl && news.sourceUrl.startsWith('http')) {
         const sourceType = this.determineSourceType(news);
-        evidence.push({
-          title: news.headline.trim(),
-          source: news.sourceName.trim(),
-          sourceType,
-          url: news.sourceUrl.trim(),
-          publishedAt: news.publishedAt.toISOString(),
-        });
+        const isContradictory = this.checkContradiction(news.headline, changePercent);
+
+        // Exclude contradictory articles from being presented as confirmed evidence
+        if (!isContradictory) {
+          evidence.push({
+            title: news.headline.trim(),
+            source: news.sourceName.trim(),
+            sourceType,
+            url: news.sourceUrl.trim(),
+            publishedAt: news.publishedAt.toISOString(),
+            isContradictory: false,
+          });
+        }
       }
     }
 
@@ -60,7 +75,7 @@ export class EvidenceAggregator {
       where: {
         stockSymbol: symbol,
         eventDate: {
-          gte: sevenDaysBefore,
+          gte: threeDaysBefore,
           lte: oneDayAfter,
         },
       },
@@ -69,7 +84,7 @@ export class EvidenceAggregator {
     });
 
     for (const corp of corporateEvents) {
-      if (corp.title) {
+      if (corp.title && corp.eventDate) {
         const isFiling = corp.eventType === 'EARNINGS';
         evidence.push({
           title: corp.title,
@@ -77,11 +92,29 @@ export class EvidenceAggregator {
           sourceType: isFiling ? 'FILING' : 'ANNOUNCEMENT',
           url: `https://www.nseindia.com/get-quotes/equity?symbol=${encodeURIComponent(symbol)}`,
           publishedAt: corp.eventDate.toISOString(),
+          isContradictory: false,
         });
       }
     }
 
     return evidence;
+  }
+
+  private checkContradiction(headline: string, changePercent: number): boolean {
+    const h = headline.toLowerCase();
+    // If price dropped significantly (< -2%) but article talks about rising/surging/gains
+    if (changePercent <= -2.0) {
+      if (h.includes('rises') || h.includes('surges') || h.includes('jumps') || h.includes('gains') || h.includes('rally') || h.includes('shares jump')) {
+        return true;
+      }
+    }
+    // If price surged significantly (> 2%) but article talks about falling/dropping/losses
+    if (changePercent >= 2.0) {
+      if (h.includes('falls') || h.includes('drops') || h.includes('plunges') || h.includes('slumps') || h.includes('tumbles') || h.includes('losses')) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private determineSourceType(news: News): EvidenceSourceType {
