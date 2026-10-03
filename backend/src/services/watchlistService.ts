@@ -2,6 +2,7 @@ import { prisma } from '../config/prisma.js';
 import { computeDataFreshness } from './sinceLastVisitService.js';
 import { attentionScoringService } from './attentionScoringService.js';
 import { corporateEventService, UpcomingEventSummary } from './corporateEventService.js';
+import { eventService } from './eventService.js';
 
 export interface WatchlistStockOverviewItem {
   symbol: string;
@@ -489,6 +490,7 @@ export class WatchlistService {
     // Window: last 30 days only. All-time accumulation inflates counts to 100+
     // which pushes nearly every stock to CRITICAL. Filter to a meaningful window.
     const eventWindowDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const allowDemo = process.env.NODE_ENV === 'development' && process.env.SEED_DEMO_EVENTS === 'true';
     let unreadEvents: any[] = [];
     if (distinctSymbols.length > 0) {
       unreadEvents = await prisma.event.findMany({
@@ -497,6 +499,14 @@ export class WatchlistService {
           userReads: { none: { userId } },
           userSaves: { none: { userId } },
           timestamp: { gte: eventWindowDate },
+          ...(allowDemo
+            ? {}
+            : {
+                NOT: [
+                  { id: { startsWith: 'demo_' } },
+                  { id: { in: ['evt_001', 'evt_002', 'evt_003', 'evt_004'] } },
+                ],
+              }),
         },
         select: {
           id: true,
@@ -507,6 +517,13 @@ export class WatchlistService {
         },
         orderBy: { timestamp: 'desc' },
       });
+
+      if (!allowDemo) {
+        unreadEvents = unreadEvents.filter((e) => {
+          const delta = (e.metricsDelta as any) || {};
+          return !e.id.startsWith('demo_') && !e.id.startsWith('evt_00') && delta.isDemo !== true;
+        });
+      }
     }
 
     const unreadEventsBySymbol = new Map<string, any[]>();
@@ -543,10 +560,10 @@ export class WatchlistService {
 
     // 4. Assemble stock items
     // Attention thresholds aligned with attentionScoringService.ts:
-    // CRITICAL: >= 75
-    // HIGH: >= 55
-    // MEDIUM: >= 35
-    // LOW: < 35 (or 0 when no unread events)
+    // CRITICAL: >= 85
+    // HIGH: >= 65
+    // MEDIUM: >= 40
+    // LOW: < 40 (or 0 when no unread events)
     const stockItems: WatchlistStockOverviewItem[] = [];
 
     for (const symbol of distinctSymbols) {
@@ -559,7 +576,7 @@ export class WatchlistService {
         const delta = (ev.metricsDelta as any) || {};
         let score = typeof delta.attentionScore === 'number' ? delta.attentionScore : 0;
         if (!score) {
-          if (ev.priority === 'CRITICAL') score = 80;
+          if (ev.priority === 'CRITICAL') score = 85;
           else if (ev.priority === 'HIGH') score = 65;
           else if (ev.priority === 'MEDIUM') score = 45;
           else score = 20;
@@ -568,9 +585,9 @@ export class WatchlistService {
       }
 
       let attentionLevel: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' = 'LOW';
-      if (maxScore >= 75) attentionLevel = 'CRITICAL';
-      else if (maxScore >= 55) attentionLevel = 'HIGH';
-      else if (maxScore >= 35) attentionLevel = 'MEDIUM';
+      if (maxScore >= 85) attentionLevel = 'CRITICAL';
+      else if (maxScore >= 65) attentionLevel = 'HIGH';
+      else if (maxScore >= 40) attentionLevel = 'MEDIUM';
       else attentionLevel = 'LOW';
 
       const sparklineNumbers = extractSparklineNumbers(stock, range);
@@ -627,7 +644,9 @@ export class WatchlistService {
       ).length,
       upcomingEvents: stockItems.filter((s) => s.nextEvent !== null).length,
       activeAlerts: totalUserActiveAlerts,
-      unseenUpdates: stockItems.reduce((acc, s) => acc + s.unseenUpdatesCount, 0),
+      unseenUpdates: isAll
+        ? await eventService.getUnreadFeedCount(userId)
+        : stockItems.reduce((acc, s) => acc + s.unseenUpdatesCount, 0),
     };
 
     const dataFreshness = await computeDataFreshness();

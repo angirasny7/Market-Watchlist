@@ -36,6 +36,25 @@ export class EventController {
     }
   }
 
+  async getUnreadCount(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) {
+        res.status(401).json({ success: false, message: 'Unauthorized' });
+        return;
+      }
+
+      const count = await eventService.getUnreadFeedCount(userId);
+
+      res.status(200).json({
+        success: true,
+        count,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async getEventsBySymbol(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const userId = req.user?.userId;

@@ -6,6 +6,7 @@ const router = Router();
 
 // All event routes strictly protected with authenticateJwt
 router.get('/', authenticateJwt, (req, res, next) => eventController.getEvents(req, res, next));
+router.get('/unread-count', authenticateJwt, (req, res, next) => eventController.getUnreadCount(req, res, next));
 router.patch('/mark-all-read', authenticateJwt, (req, res, next) => eventController.markAllRead(req, res, next));
 router.patch('/read-all', authenticateJwt, (req, res, next) => eventController.markAllRead(req, res, next));
 router.get('/:symbol', authenticateJwt, (req, res, next) => eventController.getEventsBySymbol(req, res, next));

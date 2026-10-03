@@ -289,6 +289,41 @@ export class EventService {
       data: { acknowledged: true, read: true },
     });
   }
+
+  /**
+   * Single source of truth for user's unread feed events count
+   * Filters strictly: user's monitored watchlist stocks, active 30-day window, real events only, unread & unsaved.
+   */
+  async getUnreadFeedCount(userId: string): Promise<number> {
+    const userStocks = await prisma.watchlistStock.findMany({
+      where: { watchlist: { userId } },
+      select: { stockSymbol: true },
+    });
+    const symbols = Array.from(new Set(userStocks.map((s) => s.stockSymbol)));
+    if (symbols.length === 0) return 0;
+
+    const windowDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const allowDemo = process.env.NODE_ENV === 'development' && process.env.SEED_DEMO_EVENTS === 'true';
+
+    const count = await prisma.event.count({
+      where: {
+        stockSymbol: { in: symbols },
+        timestamp: { gte: windowDate },
+        userReads: { none: { userId } },
+        userSaves: { none: { userId } },
+        ...(allowDemo
+          ? {}
+          : {
+              NOT: [
+                { id: { startsWith: 'demo_' } },
+                { id: { in: ['evt_001', 'evt_002', 'evt_003', 'evt_004'] } },
+              ],
+            }),
+      },
+    });
+
+    return count;
+  }
 }
 
 export const eventService = new EventService();
