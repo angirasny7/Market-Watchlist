@@ -34,6 +34,7 @@ export class CatchUpService {
     });
 
     const since = computeUserSinceTimestamp({
+      previousSessionEndedAt: userState?.previousSessionEndedAt,
       previousSessionAt: userState?.previousSessionAt,
       lastSeenAt: userState?.lastSeenAt,
       lastLoginAt: userState?.lastLoginAt || user?.lastLoginAt,

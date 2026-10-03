@@ -767,6 +767,30 @@ export class FeedService {
         select: { id: true },
       });
       idsToMark = unreadEvents.map((e) => e.id);
+    } else {
+      // Expand cluster member events for the specified items
+      const targetEvents = await prisma.event.findMany({
+        where: { id: { in: idsToMark } },
+        select: { id: true, stockSymbol: true, timestamp: true },
+      });
+
+      const allIds = new Set<string>(idsToMark);
+      for (const ev of targetEvents) {
+        const startOfDay = new Date(ev.timestamp);
+        startOfDay.setUTCHours(0, 0, 0, 0);
+        const endOfDay = new Date(ev.timestamp);
+        endOfDay.setUTCHours(23, 59, 59, 999);
+
+        const siblingEvents = await prisma.event.findMany({
+          where: {
+            stockSymbol: ev.stockSymbol,
+            timestamp: { gte: startOfDay, lte: endOfDay },
+          },
+          select: { id: true },
+        });
+        siblingEvents.forEach((s) => allIds.add(s.id));
+      }
+      idsToMark = Array.from(allIds);
     }
 
     if (idsToMark.length === 0) {

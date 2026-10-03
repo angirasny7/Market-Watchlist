@@ -23,12 +23,14 @@ export interface SinceLastVisitSummary {
 }
 
 export function computeUserSinceTimestamp(userState?: {
+  previousSessionEndedAt?: Date | null;
   previousSessionAt?: Date | null;
   lastSeenAt?: Date | null;
   lastLoginAt?: Date | null;
 } | null): Date {
   const defaultSince = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
   return (
+    userState?.previousSessionEndedAt ||
     userState?.previousSessionAt ||
     userState?.lastSeenAt ||
     userState?.lastLoginAt ||

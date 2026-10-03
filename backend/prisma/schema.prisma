@@ -45,6 +45,8 @@ model UserState {
   previousDeviceName       String?
   previousDeviceType       String?
   previousSessionAt        DateTime?
+  previousSessionEndedAt   DateTime?
+  caughtUpAt               DateTime?
   user                     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, lastActivityAt])
@@ -147,6 +149,7 @@ model Event {
   priority     Priority         @default(MEDIUM)
   timestamp    DateTime         @default(now())
   occurredOn   DateTime?
+  occurredAt   DateTime?
   periodStart  DateTime?
   detectedAt   DateTime         @default(now())
   read         Boolean          @default(false)
@@ -161,6 +164,7 @@ model Event {
 
   @@index([stockSymbol, timestamp(sort: Desc)])
   @@index([occurredOn(sort: Desc)])
+  @@index([occurredAt(sort: Desc)])
   @@index([priority, timestamp(sort: Desc)])
   @@index([eventType])
   @@map("events")

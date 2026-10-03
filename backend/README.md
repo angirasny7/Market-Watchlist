@@ -239,3 +239,27 @@ When a user logs in or views their dashboard after an absence (> 30 minutes sinc
 5. **Gap Digests**: Synthesizes one digest per missed trading day (if gap $\le$ 7 days) or a consolidated summary dossier (if gap > 7 days), with no minimum event threshold.
 6. **Non-blocking Execution**: The dashboard caps reconciliation at ~8 seconds; if historical data takes longer, current data returns with `dataFreshness: { isStale: true }` and background completion updates on the next refresh.
 
+---
+
+## 7. Session & Last-Visit Model
+
+The Attention Feed and Dashboard calculate "What happened while you were away" based on a strict, server-side temporal model:
+
+1. **`lastLogoutAt`**: Recorded explicitly when `POST /api/auth/logout` is called (the frontend fires this on logout and on window close via `navigator.sendBeacon` or `keepalive` fetch).
+2. **`lastActivityAt`**: Maintained by the `activityTracker` middleware, throttled to at most once per minute per user, augmented by lightweight heartbeat pings (`PATCH /api/auth/heartbeat`) while the application tab remains visible.
+3. **Session Demarcation**:
+   - A new session starts upon user login (`POST /api/auth/login`), or when an authenticated request arrives after an inactivity gap exceeding 30 minutes (`now - lastActivityAt > 30 min`).
+4. **`previousSessionEndedAt`**:
+   - Evaluated **once** at the inception of a new session as $\max(\text{lastLogoutAt}, \text{lastActivityAt of previous session}, \text{lastSeenAt})$.
+   - Stored deterministically in `user_states.previousSessionEndedAt`.
+   - **Stability Guarantee**: It is *never* recomputed on page reloads, tab navigation, or subsequent queries during the active session.
+5. **"Since Last Visit" Window**:
+   - Defined precisely as $[\text{previousSessionEndedAt}, \text{now}]$.
+   - If the user closed the browser tab without clicking logout, $\text{previousSessionEndedAt}$ equals their last recorded activity timestamp, never the re-login time.
+6. **Caught-Up Cursor (`caughtUpAt`)**:
+   - The user's catch-up baseline advances *only* when the user explicitly clicks "I'm caught up" (`POST /api/feed/caught-up`), which can be undone within 5 seconds (`POST /api/feed/caught-up/undo`).
+   - Merely logging in, opening the feed, or navigating tabs *never* marks items as read.
+7. **Full Multi-Device Synchronization**:
+   - Read states (`user_event_reads`), saved items (`user_saved_events`), caught-up timestamp (`caughtUpAt`), and session bounds are 100% persisted in PostgreSQL. Logging in on Device B displays the exact same read, unread, and baseline state as Device A.
+
+

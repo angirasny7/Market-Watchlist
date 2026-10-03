@@ -78,19 +78,29 @@ export async function activityTracker(
       const isNewSession = now - lastActivityTime > SESSION_TIMEOUT_MS;
 
       if (isNewSession) {
-        // When a new session starts: previousSessionAt = old lastActivityAt (or lastSeenAt if later)
+        // When a new session starts: previousSessionEndedAt = max(lastLogoutAt, old lastActivityAt, lastSeenAt)
         const oldLastActivity = existingState.lastActivityAt;
-        const lastSeen = existingState.lastSeenAt;
-        let previousSessionAt = oldLastActivity;
-        if (lastSeen && (!oldLastActivity || lastSeen.getTime() > oldLastActivity.getTime())) {
-          previousSessionAt = lastSeen;
+        const oldLastLogout = existingState.lastLogoutAt;
+        const oldLastSeen = existingState.lastSeenAt;
+
+        let previousSessionEndedAt: Date = oldLastActivity;
+        const candidateTimes = [
+          oldLastLogout ? new Date(oldLastLogout).getTime() : null,
+          oldLastActivity ? new Date(oldLastActivity).getTime() : null,
+          oldLastSeen ? new Date(oldLastSeen).getTime() : null,
+        ].filter((t): t is number => typeof t === 'number' && !isNaN(t));
+
+        if (candidateTimes.length > 0) {
+          previousSessionEndedAt = new Date(Math.max(...candidateTimes));
         }
 
         await prisma.userState.update({
           where: { userId },
           data: {
-            previousSessionAt,
+            previousSessionEndedAt,
+            previousSessionAt: previousSessionEndedAt,
             lastActivityAt: new Date(now),
+            lastLoginAt: new Date(now),
           },
         });
         lastActivityRecorded.set(userId, now);

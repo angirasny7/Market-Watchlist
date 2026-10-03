@@ -163,15 +163,23 @@ export class AuthService {
     const now = new Date();
     const detected = parseDeviceInfo(credentials.userAgent, credentials.deviceInfo);
 
-    // Compute previous session timestamp:
-    // Prioritize lastLogoutAt (if logged out), else lastActivityAt, else user.lastLoginAt
+    // Compute previousSessionEndedAt = the end of the user's previous session = max(lastLogoutAt, last activity of previous session)
     const existingState = user.userState;
     const oldLastActivity = existingState?.lastActivityAt;
-    const lastSeen = existingState?.lastSeenAt;
-    const previousSessionTime =
-      (lastSeen && oldLastActivity && lastSeen.getTime() > oldLastActivity.getTime())
-        ? lastSeen
-        : oldLastActivity || existingState?.lastLogoutAt || user.lastLoginAt || null;
+    const oldLastLogout = existingState?.lastLogoutAt;
+    const oldLastSeen = existingState?.lastSeenAt;
+
+    let previousSessionTime: Date | null = null;
+    const candidateTimes = [
+      oldLastLogout ? new Date(oldLastLogout).getTime() : null,
+      oldLastActivity ? new Date(oldLastActivity).getTime() : null,
+      oldLastSeen ? new Date(oldLastSeen).getTime() : null,
+      user.lastLoginAt ? new Date(user.lastLoginAt).getTime() : null,
+    ].filter((t): t is number => typeof t === 'number' && !isNaN(t));
+
+    if (candidateTimes.length > 0) {
+      previousSessionTime = new Date(Math.max(...candidateTimes));
+    }
 
     const previousDeviceType = existingState?.currentDeviceType || null;
     const previousDeviceName = existingState?.currentDeviceName || null;
@@ -192,6 +200,7 @@ export class AuthService {
         lastLoginAt: now,
         lastActivityAt: now,
         previousSessionAt: previousSessionTime,
+        previousSessionEndedAt: previousSessionTime,
         currentDeviceType: detected.type,
         currentDeviceName: detected.name,
         previousDeviceType,
@@ -201,6 +210,7 @@ export class AuthService {
         lastLoginAt: now,
         lastActivityAt: now,
         previousSessionAt: previousSessionTime,
+        previousSessionEndedAt: previousSessionTime,
         currentDeviceType: detected.type,
         currentDeviceName: detected.name,
         previousDeviceType: previousDeviceType || undefined,
