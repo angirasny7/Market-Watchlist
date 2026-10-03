@@ -368,6 +368,9 @@ export const AttentionFeedPage: React.FC = () => {
     savedOnly;
 
   const distinctStockCount = new Set(items.map((i) => i.stockSymbol)).size;
+  const serverNowOffsetMs = summary?.serverNow
+    ? new Date(summary.serverNow).getTime() - Date.now()
+    : 0;
 
   return (
     <PageContainer>
@@ -398,7 +401,9 @@ export const AttentionFeedPage: React.FC = () => {
           onRefresh={handleRefresh}
           isRefreshing={isRefreshing}
           stockCount={distinctStockCount}
+          serverNowOffsetMs={serverNowOffsetMs}
         />
+
 
         {/* 2. Controls & Search Bar */}
         <FeedControlsBar

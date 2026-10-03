@@ -2,7 +2,8 @@
  * Date and Time Formatting Utilities
  * 
  * Supports user activity tracking, localized session timestamps,
- * human-readable relative duration calculations, and user timezone presentation.
+ * human-readable relative duration calculations with server clock offset,
+ * and user timezone presentation.
  */
 
 /**
@@ -15,11 +16,55 @@ export function isFirstLoginSession(previousLoginAt?: string | Date | null): boo
 }
 
 /**
+ * Resolves the user's preferred time zone or defaults to system Intl time zone.
+ */
+export function getUserTimeZone(overrideTz?: string): string {
+  if (overrideTz) return overrideTz;
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Kolkata';
+  } catch {
+    return 'Asia/Kolkata';
+  }
+}
+
+/**
+ * Resolves short timezone abbreviation (e.g., IST, EDT, PDT, UTC, GMT).
+ */
+export function getTimeZoneAbbreviation(date: Date, timeZone?: string): string {
+  const tz = timeZone || getUserTimeZone();
+  const KNOWN_TZ_ABBR: Record<string, string> = {
+    'Asia/Kolkata': 'IST',
+    'Asia/Calcutta': 'IST',
+    'UTC': 'UTC',
+    'GMT': 'GMT',
+  };
+
+  if (KNOWN_TZ_ABBR[tz]) {
+    return KNOWN_TZ_ABBR[tz];
+  }
+
+  try {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      timeZoneName: 'short',
+    });
+    const parts = formatter.formatToParts(date);
+    const tzPart = parts.find((p) => p.type === 'timeZoneName');
+    return tzPart ? tzPart.value : tz;
+  } catch {
+    return 'IST';
+  }
+}
+
+
+/**
  * Formats a user login timestamp into the user's local timezone.
  * Example output: "Sep 4, 2026 • 10:42 PM IST"
- * Returns "First Login Session" if no previous login exists.
  */
-export function formatLastActiveTimestamp(timestamp?: string | Date | null): string {
+export function formatLastActiveTimestamp(
+  timestamp?: string | Date | null,
+  timeZone?: string
+): string {
   if (!timestamp) {
     return 'First Login Session';
   }
@@ -29,30 +74,35 @@ export function formatLastActiveTimestamp(timestamp?: string | Date | null): str
     return 'First Login Session';
   }
 
-  // Use user's local timezone and locale
+  const tz = getUserTimeZone(timeZone);
+
   const datePart = date.toLocaleDateString('en-US', {
+    timeZone: tz,
     month: 'short',
     day: 'numeric',
     year: 'numeric',
   });
 
   const timePart = date.toLocaleTimeString('en-US', {
+    timeZone: tz,
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,
-    timeZoneName: 'short',
   });
 
-  return `${datePart} • ${timePart}`;
+  const tzAbbr = getTimeZoneAbbreviation(date, tz);
+
+  return `${datePart} • ${timePart} ${tzAbbr}`;
 }
 
 /**
- * Computes human-readable relative time from a timestamp to now.
- * Supports compact mode (e.g. "2h ago", "15m ago", "1d ago") and expanded mode (e.g. "2 hours ago").
+ * Computes human-readable relative time from a timestamp to now,
+ * accounting for server clock skew offset.
  */
 export function formatRelativeTime(
   timestamp?: string | Date | null,
-  compact: boolean = false
+  compact: boolean = false,
+  serverNowOffsetMs: number = 0
 ): string {
   if (!timestamp) {
     return 'Just now';
@@ -63,7 +113,9 @@ export function formatRelativeTime(
     return 'Just now';
   }
 
-  const elapsedMs = Math.max(0, Date.now() - date.getTime());
+  // Adjust reference now by server clock offset
+  const effectiveNow = Date.now() + serverNowOffsetMs;
+  const elapsedMs = Math.max(0, effectiveNow - date.getTime());
   const minutes = Math.floor(elapsedMs / (60 * 1000));
   const hours = Math.floor(elapsedMs / (60 * 60 * 1000));
   const days = Math.floor(elapsedMs / (24 * 60 * 60 * 1000));
@@ -75,22 +127,85 @@ export function formatRelativeTime(
     return `${days}d ago`;
   }
 
-  if (minutes < 1) return 'Just now';
+  if (minutes < 1) return 'just now';
   if (minutes === 1) return '1 minute ago';
   if (minutes < 60) return `${minutes} minutes ago`;
   if (hours === 1) return '1 hour ago';
   if (hours < 24) return `${hours} hours ago`;
-  if (days === 1) return 'Yesterday';
+  if (days === 1) return 'yesterday';
   return `${days} days ago`;
 }
 
 /**
- * Formats user absence / last visit into a clear, natural English label (F0.7)
- * Examples:
- * - New / missing session: "Welcome! Here's what we're tracking"
- * - 2 hours ago: "Last visit 2 hours ago"
- * - 2 days ago: "Last visit 2 days ago (Tuesday)"
- * - 19 days ago: "Last visit 19 days ago (14 Sep)"
+ * Shared formatter for Attention Feed session strip & session popover.
+ * 
+ * Rules:
+ * - Brand-new user: "Welcome! Here's what we're tracking"
+ * - Normal logout: "Last visit ended: Sat 3 Oct, 6:00 PM IST · (16 hours ago)"
+ * - Tab closed / inactivity: "Last active: Sat 3 Oct, 5:52 PM IST · (16 hours ago)"
+ */
+export function formatVisitTime(options: {
+  timestamp?: string | Date | null;
+  endReason?: 'logout' | 'inactivity' | 'tab_closed' | string | null;
+  timeZone?: string;
+  serverNowOffsetMs?: number;
+}): {
+  label: string;
+  prefix: string;
+  formattedDate: string;
+  relative: string;
+  timeZoneAbbr: string;
+  isNewUser: boolean;
+} {
+  const { timestamp, endReason, timeZone, serverNowOffsetMs = 0 } = options;
+
+  if (!timestamp) {
+    return {
+      label: "Welcome! Here's what we're tracking",
+      prefix: 'Welcome',
+      formattedDate: '',
+      relative: '',
+      timeZoneAbbr: '',
+      isNewUser: true,
+    };
+  }
+
+  const date = typeof timestamp === 'string' ? new Date(timestamp) : timestamp;
+  if (isNaN(date.getTime())) {
+    return {
+      label: "Welcome! Here's what we're tracking",
+      prefix: 'Welcome',
+      formattedDate: '',
+      relative: '',
+      timeZoneAbbr: '',
+      isNewUser: true,
+    };
+  }
+
+  const tz = getUserTimeZone(timeZone);
+  const weekday = date.toLocaleDateString('en-US', { timeZone: tz, weekday: 'short' });
+  const day = date.toLocaleDateString('en-US', { timeZone: tz, day: 'numeric' });
+  const month = date.toLocaleDateString('en-US', { timeZone: tz, month: 'short' });
+  const time = date.toLocaleTimeString('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true });
+  const tzAbbr = getTimeZoneAbbreviation(date, tz);
+  const relative = formatRelativeTime(date, false, serverNowOffsetMs);
+
+  const prefix = endReason === 'logout' ? 'Last visit ended' : 'Last active';
+  const formattedDate = `${weekday} ${day} ${month}, ${time} ${tzAbbr}`;
+  const label = `${prefix}: ${formattedDate} · (${relative})`;
+
+  return {
+    label,
+    prefix,
+    formattedDate,
+    relative,
+    timeZoneAbbr: tzAbbr,
+    isNewUser: false,
+  };
+}
+
+/**
+ * Formats user absence / last visit into a clear label
  */
 export function formatLastVisitLabel(timestamp?: string | Date | null): string {
   if (!timestamp) {
@@ -130,9 +245,6 @@ export function formatLastVisitLabel(timestamp?: string | Date | null): string {
   return `Last visit ${days} days ago (${dayNum} ${monthShort})`;
 }
 
-/**
- * Generates a human-friendly session summary string.
- */
 export function formatSessionSummary(timestamp?: string | Date | null): string {
   if (isFirstLoginSession(timestamp)) {
     return "Welcome! Here's what we're tracking";
@@ -140,44 +252,25 @@ export function formatSessionSummary(timestamp?: string | Date | null): string {
   return formatLastVisitLabel(timestamp);
 }
 
-/**
- * Formats session strip login time:
- * "Last login: Sat 3 Oct, 6:50 PM (22 hours ago)"
- * or "Welcome! Here's what we're tracking across your watchlists." for first-time session.
- */
-export function formatSessionStripTime(timestamp?: string | Date | null): string {
-  if (!timestamp) {
-    return "Welcome! Here's what we're tracking across your watchlists.";
-  }
-  const date = typeof timestamp === 'string' ? new Date(timestamp) : timestamp;
-  if (isNaN(date.getTime())) {
-    return "Welcome! Here's what we're tracking across your watchlists.";
-  }
-
-  const weekday = date.toLocaleDateString('en-US', { weekday: 'short' });
-  const day = date.getDate();
-  const month = date.toLocaleDateString('en-US', { month: 'short' });
-  const time = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-  const relative = formatRelativeTime(date, false);
-
-  return `Last login: ${weekday} ${day} ${month}, ${time} (${relative})`;
+export function formatSessionStripTime(
+  timestamp?: string | Date | null,
+  endReason?: string | null,
+  timeZone?: string,
+  serverNowOffsetMs: number = 0
+): string {
+  return formatVisitTime({ timestamp, endReason, timeZone, serverNowOffsetMs }).label;
 }
 
-/**
- * Formats a timestamp into a compact baseline label for window summaries:
- * e.g. "Sat 3 Oct, 6:50 PM"
- */
-export function formatWindowBaseline(timestamp?: string | Date | null): string {
+export function formatWindowBaseline(timestamp?: string | Date | null, timeZone?: string): string {
   if (!timestamp) return '';
   const date = typeof timestamp === 'string' ? new Date(timestamp) : timestamp;
   if (isNaN(date.getTime())) return '';
 
-  const weekday = date.toLocaleDateString('en-US', { weekday: 'short' });
-  const day = date.getDate();
-  const month = date.toLocaleDateString('en-US', { month: 'short' });
-  const time = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  const tz = getUserTimeZone(timeZone);
+  const weekday = date.toLocaleDateString('en-US', { timeZone: tz, weekday: 'short' });
+  const day = date.toLocaleDateString('en-US', { timeZone: tz, day: 'numeric' });
+  const month = date.toLocaleDateString('en-US', { timeZone: tz, month: 'short' });
+  const time = date.toLocaleTimeString('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true });
 
   return `${weekday} ${day} ${month}, ${time}`;
 }
-
-

@@ -141,6 +141,9 @@ export interface FeedSummary {
   };
   marketsClosed?: boolean;
   newsCountInWindow?: number;
+  previousSessionStartedAt?: string | null;
+  previousSessionEndReason?: 'logout' | 'inactivity' | 'tab_closed' | string | null;
+  serverNow?: string;
 }
 
 export class FeedService {
@@ -304,7 +307,12 @@ export class FeedService {
 
     // 2. Resolve User State and Since Date
     const userState = await prisma.userState.findUnique({ where: { userId } });
-    const lastSessionAt = userState?.previousSessionAt || userState?.lastSeenAt || new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+    const lastSessionAt =
+      userState?.previousSessionEndedAt ||
+      userState?.previousSessionAt ||
+      userState?.lastSeenAt ||
+      new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+
 
     let windowStartDate: Date;
     switch (options?.window) {
@@ -795,8 +803,12 @@ export class FeedService {
         '30d': feed30d.total,
       },
       marketsClosed,
+      previousSessionStartedAt: (userState as any)?.previousSessionStartedAt?.toISOString() || null,
+      previousSessionEndReason: (userState as any)?.previousSessionEndReason || 'logout',
+      serverNow: new Date().toISOString(),
     };
   }
+
 
   /**
    * POST /feed/mark-read: Mark item or all items read

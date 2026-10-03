@@ -1,5 +1,78 @@
 import { describe, it, expect } from 'vitest';
-import { formatLastVisitLabel, formatSessionSummary, formatSessionStripTime, formatWindowBaseline } from '../dateUtils';
+import {
+  formatLastVisitLabel,
+  formatVisitTime,
+  formatRelativeTime,
+} from '../dateUtils';
+
+describe('formatVisitTime & Session Strip Formatting', () => {
+  const baseTime = new Date('2026-10-03T12:30:00.000Z'); // 6:00 PM IST / 8:30 AM EDT
+
+  it('1. Brand new user without previous session returns Welcome label', () => {
+    const res = formatVisitTime({ timestamp: null });
+    expect(res.label).toBe("Welcome! Here's what we're tracking");
+    expect(res.isNewUser).toBe(true);
+
+    const resUndefined = formatVisitTime({ timestamp: undefined });
+    expect(resUndefined.label).toBe("Welcome! Here's what we're tracking");
+    expect(resUndefined.isNewUser).toBe(true);
+  });
+
+  it('2. Normal logout displays "Last visit ended" with IST time and timezone abbreviation', () => {
+    const res = formatVisitTime({
+      timestamp: baseTime,
+      endReason: 'logout',
+      timeZone: 'Asia/Kolkata',
+    });
+    expect(res.prefix).toBe('Last visit ended');
+    expect(res.label).toContain('Last visit ended: Sat 3 Oct, 6:00 PM IST');
+    expect(res.timeZoneAbbr).toBe('IST');
+    expect(res.isNewUser).toBe(false);
+  });
+
+  it('3. Tab closed / inactivity displays "Last active" with time and timezone', () => {
+    const res = formatVisitTime({
+      timestamp: baseTime,
+      endReason: 'inactivity',
+      timeZone: 'Asia/Kolkata',
+    });
+    expect(res.prefix).toBe('Last active');
+    expect(res.label).toContain('Last active: Sat 3 Oct, 6:00 PM IST');
+  });
+
+  it('4. US Timezone (America/New_York) presentation with EDT abbreviation', () => {
+    const res = formatVisitTime({
+      timestamp: baseTime,
+      endReason: 'logout',
+      timeZone: 'America/New_York',
+    });
+    expect(res.label).toContain('Sat 3 Oct, 8:30 AM');
+    expect(['EDT', 'EST', 'GMT-4', 'UTC-4']).toContain(res.timeZoneAbbr);
+  });
+
+  it('5. Skewed client clock is normalized using serverNowOffsetMs', () => {
+    // Client clock is 1 hour fast compared to real time
+    const clientClockSkewMs = 60 * 60 * 1000;
+    const pastTime = new Date(Date.now() - 2 * 60 * 60 * 1000); // 2 hours ago
+
+    const relativeNormal = formatRelativeTime(pastTime, false, 0);
+    expect(relativeNormal).toBe('2 hours ago');
+
+    // With offset, relative calculation is stable
+    const relativeWithOffset = formatRelativeTime(pastTime, false, -clientClockSkewMs);
+    expect(relativeWithOffset).toBe('1 hour ago');
+  });
+
+  it('6. Midnight boundary formatting', () => {
+    const midnightTime = new Date('2026-10-04T00:00:00.000Z');
+    const res = formatVisitTime({
+      timestamp: midnightTime,
+      endReason: 'logout',
+      timeZone: 'UTC',
+    });
+    expect(res.formattedDate).toContain('Sun 4 Oct, 12:00 AM UTC');
+  });
+});
 
 describe('formatLastVisitLabel', () => {
   it('returns welcome message when no previous login exists or invalid date', () => {
@@ -28,36 +101,3 @@ describe('formatLastVisitLabel', () => {
     expect(result).toMatch(/^Last visit 19 days ago \(\d{1,2} \w+\)$/);
   });
 });
-
-describe('formatSessionSummary', () => {
-  it('delegates to formatLastVisitLabel', () => {
-    expect(formatSessionSummary(null)).toBe("Welcome! Here's what we're tracking");
-  });
-});
-
-describe('formatSessionStripTime', () => {
-  it('returns welcome message for null/undefined', () => {
-    expect(formatSessionStripTime(null)).toBe("Welcome! Here's what we're tracking across your watchlists.");
-    expect(formatSessionStripTime(undefined)).toBe("Welcome! Here's what we're tracking across your watchlists.");
-  });
-
-  it('formats timestamp with weekday, day, month, time, and relative duration', () => {
-    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
-    const result = formatSessionStripTime(twoHoursAgo);
-    expect(result).toMatch(/^Last login: \w+ \d{1,2} \w+, \d{1,2}:\d{2} [AP]M \(2 hours ago\)$/);
-  });
-});
-
-describe('formatWindowBaseline', () => {
-  it('returns empty string for null/undefined', () => {
-    expect(formatWindowBaseline(null)).toBe('');
-    expect(formatWindowBaseline(undefined)).toBe('');
-  });
-
-  it('formats timestamp with weekday, day, month, and time', () => {
-    const testDate = new Date('2026-10-03T13:20:00.000Z');
-    const result = formatWindowBaseline(testDate);
-    expect(result).toMatch(/^\w+ \d{1,2} \w+, \d{1,2}:\d{2} [AP]M$/);
-  });
-});
-

@@ -163,23 +163,44 @@ export class AuthService {
     const now = new Date();
     const detected = parseDeviceInfo(credentials.userAgent, credentials.deviceInfo);
 
-    // Compute previousSessionEndedAt = the end of the user's previous session = max(lastLogoutAt, last activity of previous session)
+    // Compute previousSessionEndedAt = the end of the user's previous session
     const existingState = user.userState;
     const oldLastActivity = existingState?.lastActivityAt;
     const oldLastLogout = existingState?.lastLogoutAt;
     const oldLastSeen = existingState?.lastSeenAt;
+    const oldLastLogin = existingState?.lastLoginAt || user.lastLoginAt;
+
+    // Check if returning within 30 min of previous session activity (continue existing boundary)
+    const isQuickReturn = Boolean(
+      oldLastActivity &&
+      (now.getTime() - new Date(oldLastActivity).getTime() <= 30 * 60 * 1000) &&
+      existingState?.previousSessionEndedAt
+    );
 
     let previousSessionTime: Date | null = null;
-    const candidateTimes = [
-      oldLastLogout ? new Date(oldLastLogout).getTime() : null,
-      oldLastActivity ? new Date(oldLastActivity).getTime() : null,
-      oldLastSeen ? new Date(oldLastSeen).getTime() : null,
-      user.lastLoginAt ? new Date(user.lastLoginAt).getTime() : null,
-    ].filter((t): t is number => typeof t === 'number' && !isNaN(t));
+    let previousSessionStartedAt: Date | null = null;
+    let previousSessionEndReason: string | null = null;
 
-    if (candidateTimes.length > 0) {
-      previousSessionTime = new Date(Math.max(...candidateTimes));
+    if (isQuickReturn && existingState) {
+      previousSessionTime = existingState.previousSessionEndedAt;
+      previousSessionStartedAt = (existingState as any).previousSessionStartedAt || oldLastLogin;
+      previousSessionEndReason = (existingState as any).previousSessionEndReason || 'inactivity';
+    } else {
+      const candidateTimes = [
+        oldLastLogout ? new Date(oldLastLogout).getTime() : null,
+        oldLastActivity ? new Date(oldLastActivity).getTime() : null,
+        oldLastSeen ? new Date(oldLastSeen).getTime() : null,
+      ].filter((t): t is number => typeof t === 'number' && !isNaN(t));
+
+      if (candidateTimes.length > 0) {
+        previousSessionTime = new Date(Math.max(...candidateTimes));
+        previousSessionStartedAt = oldLastLogin ? new Date(oldLastLogin) : null;
+        const logoutMs = oldLastLogout ? new Date(oldLastLogout).getTime() : 0;
+        const activityMs = oldLastActivity ? new Date(oldLastActivity).getTime() : 0;
+        previousSessionEndReason = logoutMs >= activityMs - 60000 ? 'logout' : 'inactivity';
+      }
     }
+
 
     const previousDeviceType = existingState?.currentDeviceType || null;
     const previousDeviceName = existingState?.currentDeviceName || null;
@@ -201,6 +222,8 @@ export class AuthService {
         lastActivityAt: now,
         previousSessionAt: previousSessionTime,
         previousSessionEndedAt: previousSessionTime,
+        previousSessionStartedAt,
+        previousSessionEndReason,
         currentDeviceType: detected.type,
         currentDeviceName: detected.name,
         previousDeviceType,
@@ -211,12 +234,15 @@ export class AuthService {
         lastActivityAt: now,
         previousSessionAt: previousSessionTime,
         previousSessionEndedAt: previousSessionTime,
+        previousSessionStartedAt,
+        previousSessionEndReason,
         currentDeviceType: detected.type,
         currentDeviceName: detected.name,
         previousDeviceType: previousDeviceType || undefined,
         previousDeviceName: previousDeviceName || undefined,
       },
     });
+
 
     const token = jwt.sign(
       { userId: user.id, email: user.email, role: user.role },
@@ -263,6 +289,7 @@ export class AuthService {
       data: {
         lastLogoutAt: now,
         lastActivityAt: now,
+        previousSessionEndReason: 'logout',
       },
     });
   }
@@ -304,8 +331,10 @@ export class AuthService {
       isOnboarded: onboarded,
       userState: user.userState,
       watchlists: user.watchlists,
+      serverNow: new Date().toISOString(),
     };
   }
+
 
   /**
    * Update heartbeat timestamp

@@ -10,6 +10,7 @@ interface SimulationArgs {
   logout?: string;
   login?: string;
   days?: number;
+  confirm?: boolean;
 }
 
 function parseArgs(): SimulationArgs {
@@ -29,10 +30,72 @@ function parseArgs(): SimulationArgs {
     } else if (args[i] === '--user' && args[i + 1]) {
       result.userId = args[i + 1];
       i++;
+    } else if (args[i] === '--confirm') {
+      result.confirm = true;
     }
   }
 
   return result;
+}
+
+/**
+ * Ensures a dedicated simulation user exists with standard watchlist stocks.
+ * Safe simulation user is isolated and never alters real user accounts.
+ */
+export async function getOrCreateSimulationUser() {
+  const simEmail = 'sim_user@marketwatch.test';
+  let user = await prisma.user.findUnique({
+    where: { email: simEmail },
+    include: { userState: true, watchlists: { include: { stocks: true } } },
+  });
+
+  if (!user) {
+    user = await prisma.user.upsert({
+      where: { email: simEmail },
+      create: {
+        email: simEmail,
+        name: 'Simulation User (Isolated)',
+        passwordHash: '$2b$10$simulatedUserPasswordHashNotForLogin',
+        userState: {
+          create: {
+            currentDeviceName: 'Simulated Desktop',
+            currentDeviceType: 'DESKTOP',
+          },
+        },
+        watchlists: {
+          create: {
+            name: 'Simulated Watchlist',
+            isDefault: true,
+          },
+        },
+      },
+      update: {},
+      include: { userState: true, watchlists: { include: { stocks: true } } },
+    });
+
+
+    // Populate standard stock universe into sim user watchlist
+    const standardStocks = ['INFY', 'TCS', 'RELIANCE', 'TATAMOTORS', 'HDFCBANK', 'PERSISTENT', 'COFORGE', 'TSLA', 'AMD', 'NFLX'];
+    const wl = user.watchlists[0];
+    for (const sym of standardStocks) {
+      const stockExists = await prisma.stock.findUnique({ where: { symbol: sym } });
+      if (stockExists) {
+        await prisma.watchlistStock.create({
+          data: {
+            watchlistId: wl.id,
+            stockSymbol: sym,
+          },
+        }).catch(() => {});
+      }
+    }
+
+    user = await prisma.user.findUnique({
+      where: { email: simEmail },
+      include: { userState: true, watchlists: { include: { stocks: true } } },
+    });
+  }
+
+  return user!;
 }
 
 export async function runSessionSimulation(options: {
@@ -40,99 +103,156 @@ export async function runSessionSimulation(options: {
   logoutDate: Date;
   loginDate: Date;
   label?: string;
+  confirm?: boolean;
 }) {
-  const { logoutDate, loginDate, label } = options;
+  const { logoutDate, loginDate, label, confirm } = options;
 
-  // Find target user
-  let user = options.userId
-    ? await prisma.user.findUnique({ where: { id: options.userId } })
-    : await prisma.user.findFirst({
-        where: { email: { not: '' } },
-        include: { userState: true, watchlists: true },
+  let targetUserId = options.userId;
+  let isRealUser = false;
+  let userSnapshot: any = null;
+
+  if (targetUserId) {
+    if (!confirm) {
+      console.warn('⚠️  Targeting an existing user requires --confirm flag to prevent unintentional state modification.');
+      console.warn('   Defaulting to isolated simulation user instead.');
+      const simUser = await getOrCreateSimulationUser();
+      targetUserId = simUser.id;
+    } else {
+      isRealUser = true;
+      const realUser = await prisma.user.findUnique({
+        where: { id: targetUserId },
+        include: { userState: true },
       });
-
-  if (!user) {
-    console.error('❌ No user found to simulate session.');
-    return;
+      if (realUser) {
+        userSnapshot = {
+          lastLoginAt: realUser.lastLoginAt,
+          previousLoginAt: realUser.previousLoginAt,
+          userState: realUser.userState ? { ...realUser.userState } : null,
+        };
+        console.warn(`⚠️  WARNING: Running simulation on user ${realUser.email}. State will be strictly restored.`);
+      }
+    }
+  } else {
+    const simUser = await getOrCreateSimulationUser();
+    targetUserId = simUser.id;
   }
 
-  const userId = user.id;
+  const userId = targetUserId!;
 
-  console.log(`\n======================================================================`);
-  console.log(`🔍 SESSION SIMULATION: ${label || 'Custom Session Window'}`);
-  console.log(`👤 User: ${user.email} (${userId})`);
-  console.log(`🚪 Logout / Previous Session Ended: ${logoutDate.toISOString()} (${logoutDate.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST)`);
-  console.log(`🔑 Login / Current Session Start:   ${loginDate.toISOString()} (${loginDate.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST)`);
-  const gapHours = (loginDate.getTime() - logoutDate.getTime()) / (1000 * 60 * 60);
-  console.log(`⏱️ Absence Gap: ${gapHours.toFixed(1)} hours (${(gapHours / 24).toFixed(2)} days)`);
-  console.log(`======================================================================`);
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { userState: true, watchlists: { include: { stocks: true } } },
+    });
 
-  // 1. Set server-side session state
-  await prisma.user.update({
-    where: { id: userId },
-    data: {
-      previousLoginAt: logoutDate,
-      lastLoginAt: loginDate,
-    },
-  });
+    if (!user) {
+      console.error('❌ User not found for simulation.');
+      return;
+    }
 
-  await prisma.userState.upsert({
-    where: { userId },
-    create: {
-      userId,
-      lastLogoutAt: logoutDate,
-      lastActivityAt: loginDate,
-      lastLoginAt: loginDate,
-      previousSessionAt: logoutDate,
-      previousSessionEndedAt: logoutDate,
-    },
-    update: {
-      lastLogoutAt: logoutDate,
-      lastActivityAt: loginDate,
-      lastLoginAt: loginDate,
-      previousSessionAt: logoutDate,
-      previousSessionEndedAt: logoutDate,
-    },
-  });
+    const absenceMs = loginDate.getTime() - logoutDate.getTime();
+    const absenceHours = (absenceMs / (60 * 60 * 1000)).toFixed(1);
+    const absenceDays = (absenceMs / (24 * 60 * 60 * 1000)).toFixed(2);
 
-  // 2. Run catchUpService
-  console.log(`\n🔄 Running catch-up pipeline for user's monitored stocks...`);
-  const catchUpRes = await catchUpService.catchUpForUser(userId);
-  console.log(`✓ Catch-up completed in ${catchUpRes.durationMs}ms:`, {
-    since: catchUpRes.since,
-    monitoredSymbols: catchUpRes.watchlistSymbols.length,
-    eventsCreated: catchUpRes.eventsCreated,
-    digestsCreated: catchUpRes.digestsCreated,
-  });
+    console.log(`\n======================================================================`);
+    console.log(`🔍 SESSION SIMULATION: ${label || 'Custom Window'}`);
+    console.log(`👤 User: ${user.email} (${user.id})`);
+    console.log(`🚪 Logout / Previous Session Ended: ${logoutDate.toISOString()} (${logoutDate.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST)`);
+    console.log(`🔑 Login / Current Session Start:   ${loginDate.toISOString()} (${loginDate.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST)`);
+    console.log(`⏱️ Absence Gap: ${absenceHours} hours (${absenceDays} days)`);
+    console.log(`======================================================================\n`);
 
-  // 3. Query Feed across all windows
-  const [sinceFeed, feed24h, feed7d, feed30d] = await Promise.all([
-    feedService.getFeed(userId, { window: 'sinceLastVisit', limit: 100 }),
-    feedService.getFeed(userId, { window: '24h', limit: 100 }),
-    feedService.getFeed(userId, { window: '7d', limit: 100 }),
-    feedService.getFeed(userId, { window: '30d', limit: 100 }),
-  ]);
+    // Temporarily set simulation user's session boundary
+    await prisma.userState.upsert({
+      where: { userId },
+      update: {
+        lastLogoutAt: logoutDate,
+        previousSessionAt: logoutDate,
+        previousSessionEndedAt: logoutDate,
+        previousSessionStartedAt: new Date(logoutDate.getTime() - 2 * 60 * 60 * 1000),
+        previousSessionEndReason: 'logout',
+        lastLoginAt: loginDate,
+        lastActivityAt: loginDate,
+      },
+      create: {
+        userId,
+        lastLogoutAt: logoutDate,
+        previousSessionAt: logoutDate,
+        previousSessionEndedAt: logoutDate,
+        previousSessionStartedAt: new Date(logoutDate.getTime() - 2 * 60 * 60 * 1000),
+        previousSessionEndReason: 'logout',
+        lastLoginAt: loginDate,
+        lastActivityAt: loginDate,
+      },
+    });
 
-  console.log(`\n📊 Window Comparison Counts:`);
-  console.table([
-    { Window: 'Since Last Visit', Items: sinceFeed.total, Unread: sinceFeed.unreadCount },
-    { Window: 'Last 24 Hours', Items: feed24h.total, Unread: feed24h.unreadCount },
-    { Window: 'Last 7 Days', Items: feed7d.total, Unread: feed7d.unreadCount },
-    { Window: 'Last 30 Days', Items: feed30d.total, Unread: feed30d.unreadCount },
-  ]);
+    console.log(`🔄 Running catch-up pipeline for user's monitored stocks...`);
+    const catchUpRes = await catchUpService.catchUpForUser(userId);
+    console.log(`✓ Catch-up completed in ${catchUpRes.durationMs}ms:`, {
+      since: catchUpRes.since,
+      monitoredSymbols: catchUpRes.watchlistSymbols.length,
+      eventsCreated: catchUpRes.eventsCreated,
+      digestsCreated: catchUpRes.digestsCreated,
+    });
 
-  console.log(`\n📋 Feed Items in "Since Last Visit" Window (${sinceFeed.items.length} items):`);
-  if (sinceFeed.items.length === 0) {
-    console.log(`  (No events recorded in this gap - e.g. markets closed or no price anomalies)`);
-  } else {
-    const tableData = sinceFeed.items.map((it) => ({
-      Symbol: it.stockSymbol,
-      Priority: it.priorityLabel,
-      Headline: it.headline.length > 45 ? it.headline.substring(0, 42) + '...' : it.headline,
-      TimeLabel: formatEventTime(it),
-      AuditDate: formatEventTooltip(it),
-    }));
-    console.table(tableData);
+    // Query Feed across all windows relative to the simulated login session
+    const [sinceFeed, feed24h, feed7d, feed30d] = await Promise.all([
+      feedService.getFeed(userId, { window: 'sinceLastVisit' }),
+      feedService.getFeed(userId, { window: '24h' }),
+      feedService.getFeed(userId, { window: '7d' }),
+      feedService.getFeed(userId, { window: '30d' }),
+    ]);
+
+    console.log(`\n📊 Window Comparison Counts:`);
+    console.table([
+      { Window: 'Since Last Visit', Items: sinceFeed.total, Unread: sinceFeed.unreadCount },
+      { Window: 'Last 24 Hours', Items: feed24h.total, Unread: feed24h.unreadCount },
+      { Window: 'Last 7 Days', Items: feed7d.total, Unread: feed7d.unreadCount },
+      { Window: 'Last 30 Days', Items: feed30d.total, Unread: feed30d.unreadCount },
+    ]);
+
+    console.log(`\n📋 Feed Items in "Since Last Visit" Window (${sinceFeed.items.length} items):`);
+    if (sinceFeed.items.length === 0) {
+      console.log(`  (No events recorded in this gap - e.g. markets closed or no price anomalies)`);
+    } else {
+      const tableData = sinceFeed.items.slice(0, 30).map((it) => ({
+        Symbol: it.stockSymbol,
+        Priority: it.priorityLabel,
+        Headline: it.headline.length > 45 ? it.headline.substring(0, 42) + '...' : it.headline,
+        TimeLabel: formatEventTime(it),
+        AuditDate: formatEventTooltip(it),
+      }));
+      console.table(tableData);
+    }
+  } finally {
+    if (isRealUser && userSnapshot && options.userId) {
+      // Restore the real user's exact state
+      if (userSnapshot.userState) {
+        await prisma.userState.update({
+          where: { userId: options.userId },
+          data: {
+            lastLoginAt: userSnapshot.userState.lastLoginAt,
+            lastActivityAt: userSnapshot.userState.lastActivityAt,
+            lastLogoutAt: userSnapshot.userState.lastLogoutAt,
+            lastSeenAt: userSnapshot.userState.lastSeenAt,
+            previousSessionAt: userSnapshot.userState.previousSessionAt,
+            previousSessionEndedAt: userSnapshot.userState.previousSessionEndedAt,
+            previousSessionStartedAt: userSnapshot.userState.previousSessionStartedAt,
+            previousSessionEndReason: userSnapshot.userState.previousSessionEndReason,
+            caughtUpAt: userSnapshot.userState.caughtUpAt,
+            preferences: userSnapshot.userState.preferences,
+          },
+        });
+      }
+      await prisma.user.update({
+        where: { id: options.userId },
+        data: {
+          lastLoginAt: userSnapshot.lastLoginAt,
+          previousLoginAt: userSnapshot.previousLoginAt,
+        },
+      });
+      console.log(`\n✓ Original user state restored for ${options.userId}.`);
+    }
   }
 }
 
@@ -146,6 +266,7 @@ async function main() {
       userId: args.userId,
       logoutDate,
       loginDate,
+      confirm: args.confirm,
       label: `Explicit Window: ${args.logout} -> ${args.login}`,
     });
   } else if (args.days) {
@@ -155,44 +276,26 @@ async function main() {
       userId: args.userId,
       logoutDate,
       loginDate,
-      label: `Absence Gap of ${args.days} Days`,
+      confirm: args.confirm,
+      label: `${args.days}-Day Absence Simulation`,
     });
   } else {
-    // Run default suite: User's exact example (Sat 3 Oct 18:50 IST -> Sun 4 Oct 17:00 IST), plus 2, 19, and 90 days!
-    console.log('🚀 Running Complete Test Matrix (User Example + 2d, 19d, 90d gaps)...');
-
-    // Exact user scenario: 2026-10-03T18:50:00+05:30 -> 2026-10-04T17:00:00+05:30
+    // Default: simulate weekend gap
+    const logoutDate = new Date('2026-10-03T13:20:00.000Z');
+    const loginDate = new Date('2026-10-04T11:30:00.000Z');
     await runSessionSimulation({
-      logoutDate: new Date('2026-10-03T18:50:00+05:30'),
-      loginDate: new Date('2026-10-04T17:00:00+05:30'),
-      label: 'USER EXACT SCENARIO: Sat 3 Oct 6:50 PM IST → Sun 4 Oct 5:00 PM IST',
-    });
-
-    // 2 Days Gap
-    await runSessionSimulation({
-      logoutDate: new Date('2026-10-01T18:50:00+05:30'),
-      loginDate: new Date('2026-10-03T18:50:00+05:30'),
-      label: '2 DAYS GAP: Thu 1 Oct 6:50 PM IST → Sat 3 Oct 6:50 PM IST',
-    });
-
-    // 19 Days Gap
-    await runSessionSimulation({
-      logoutDate: new Date('2026-09-14T18:50:00+05:30'),
-      loginDate: new Date('2026-10-03T18:50:00+05:30'),
-      label: '19 DAYS GAP: Mon 14 Sep 6:50 PM IST → Sat 3 Oct 6:50 PM IST',
-    });
-
-    // 90 Days Gap
-    await runSessionSimulation({
-      logoutDate: new Date('2026-07-05T18:50:00+05:30'),
-      loginDate: new Date('2026-10-03T18:50:00+05:30'),
-      label: '90 DAYS GAP: Sun 5 Jul 6:50 PM IST → Sat 3 Oct 6:50 PM IST',
+      userId: args.userId,
+      logoutDate,
+      loginDate,
+      confirm: args.confirm,
+      label: `Default Weekend Gap Simulation (Sat 3 Oct 18:50 IST -> Sun 4 Oct 17:00 IST)`,
     });
   }
 }
 
 main()
-  .catch(console.error)
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+  .catch((e) => {
+    console.error('Simulation error:', e);
+    process.exit(1);
+  })
+  .finally(() => prisma.$disconnect());

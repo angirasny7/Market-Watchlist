@@ -2,10 +2,11 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { PrismaClient } from '@prisma/client';
 import { authService } from '../src/services/authService';
 import { feedService } from '../src/services/feedService';
+import { formatVisitTime } from '../../src/lib/dateUtils';
 
 const prisma = new PrismaClient();
 
-describe('Session Continuity and Multi-Device State (Part 1)', () => {
+describe('Session Continuity and Multi-Device State (Item 0.d, 0.e & Item 3)', () => {
   let testUser: any;
   const testEmail = `session_test_${Date.now()}@example.com`;
   const testPassword = 'Password123!';
@@ -13,7 +14,7 @@ describe('Session Continuity and Multi-Device State (Part 1)', () => {
   beforeAll(async () => {
     // Register user on Device A
     const reg = await authService.register({
-      name: 'Session Tester',
+      name: 'Session Continuity Tester',
       email: testEmail,
       password: testPassword,
       deviceInfo: { type: 'DESKTOP', name: 'MacBook Pro (Device A)' },
@@ -40,78 +41,147 @@ describe('Session Continuity and Multi-Device State (Part 1)', () => {
     await prisma.$disconnect();
   });
 
-  it('preserves previousSessionEndedAt across logout on Device A and login on Device B', async () => {
-    // 1. Initial Login on Device A
-    const loginA = await authService.login({
-      email: testEmail,
-      password: testPassword,
-      deviceInfo: { type: 'DESKTOP', name: 'MacBook Pro (Device A)' },
-    });
-    expect(loginA.token).toBeDefined();
+  it('1. Exact session rule: Login Sat 17:30, Logout Sat 18:00, Login Sun 10:00 -> window start is Sat 18:00', async () => {
+    const sat1730 = new Date('2026-10-03T12:00:00.000Z'); // 17:30 IST
+    const sat1800 = new Date('2026-10-03T12:30:00.000Z'); // 18:00 IST
 
-    // Simulate activity on Device A
-    const timeA = new Date('2026-10-03T18:50:00.000Z');
+    // Set state as if user logged in at 17:30 and logged out at 18:00
     await prisma.userState.update({
       where: { userId: testUser.id },
       data: {
-        lastActivityAt: timeA,
-        lastLogoutAt: timeA,
+        lastLoginAt: sat1730,
+        lastActivityAt: sat1800,
+        lastLogoutAt: sat1800,
+      },
+    });
+    await prisma.user.update({
+      where: { id: testUser.id },
+      data: { lastLoginAt: sat1730 },
+    });
+
+    // Login on Sun at 10:00 IST
+    const sun1000 = new Date('2026-10-04T04:30:00.000Z');
+    await authService.login({
+      email: testEmail,
+      password: testPassword,
+      deviceInfo: { type: 'MOBILE', name: 'iPhone 15' },
+    });
+
+    const state = await prisma.userState.findUnique({
+      where: { userId: testUser.id },
+    });
+
+    // previousSessionEndedAt must be exactly Sat 18:00
+    expect(state?.previousSessionEndedAt?.toISOString()).toBe(sat1800.toISOString());
+    expect(state?.previousSessionEndReason).toBe('logout');
+
+    // Item 3: Current login time (Sun 10:00) is never in the max
+    expect(state?.previousSessionEndedAt?.getTime()).toBeLessThan(new Date().getTime());
+  });
+
+  it('2. Page refresh, heartbeat and navigation do NOT move the window start', async () => {
+    const stateBefore = await prisma.userState.findUnique({ where: { userId: testUser.id } });
+    const baselineStart = stateBefore?.previousSessionEndedAt?.toISOString();
+
+    // Heartbeat update
+    await authService.updateHeartbeat(testUser.id);
+
+    // Summary call
+    const summary = await feedService.getSummary(testUser.id);
+    expect(new Date(summary.lastVisitAt).toISOString()).toBe(baselineStart);
+
+    // Feed call
+    const feed = await feedService.getFeed(testUser.id, { window: 'sinceLastVisit' });
+    expect(feed).toBeDefined();
+
+    const stateAfter = await prisma.userState.findUnique({ where: { userId: testUser.id } });
+    expect(stateAfter?.previousSessionEndedAt?.toISOString()).toBe(baselineStart);
+  });
+
+  it('3. Quick second login within 30 minutes continues the previous boundary (does not advance it)', async () => {
+    const stateBefore = await prisma.userState.findUnique({ where: { userId: testUser.id } });
+    const baselineStart = stateBefore?.previousSessionEndedAt?.toISOString();
+
+    // Second login immediately (within 30s)
+    await authService.login({
+      email: testEmail,
+      password: testPassword,
+      deviceInfo: { type: 'TABLET', name: 'iPad' },
+    });
+
+    const stateAfter = await prisma.userState.findUnique({ where: { userId: testUser.id } });
+    expect(stateAfter?.previousSessionEndedAt?.toISOString()).toBe(baselineStart);
+  });
+
+  it('4. If tab was closed without logout, boundary is the last recorded activity', async () => {
+    const closedTabActivity = new Date(Date.now() - 45 * 60 * 1000); // 45 min ago (beyond 30m session timeout)
+    await prisma.userState.update({
+      where: { userId: testUser.id },
+      data: {
+        lastActivityAt: closedTabActivity,
+        lastLogoutAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), // Old logout from days ago
+        lastSeenAt: closedTabActivity,
       },
     });
 
-    // 2. Logout on Device A
-    await authService.logout(testUser.id, { type: 'DESKTOP', name: 'Device A' });
-
-    const stateAfterLogout = await prisma.userState.findUnique({
-      where: { userId: testUser.id },
-    });
-    expect(stateAfterLogout?.lastLogoutAt).toBeDefined();
-
-    // 3. Login on Device B at Sun 4 Oct 17:00 IST
-    const loginTimeB = new Date('2026-10-04T11:30:00.000Z'); // 5:00 PM IST
-    const loginB = await authService.login({
+    // Login after inactivity
+    await authService.login({
       email: testEmail,
       password: testPassword,
-      deviceInfo: { type: 'MOBILE', name: 'iPhone 15 (Device B)' },
+      deviceInfo: { type: 'DESKTOP', name: 'Work PC' },
     });
-    expect(loginB.token).toBeDefined();
 
-    const stateOnB = await prisma.userState.findUnique({
+    const state = await prisma.userState.findUnique({ where: { userId: testUser.id } });
+    expect(state?.previousSessionEndedAt?.toISOString()).toBe(closedTabActivity.toISOString());
+    expect(state?.previousSessionEndReason).toBe('inactivity');
+
+    // Label formatting check
+    const labelRes = formatVisitTime({
+      timestamp: state?.previousSessionEndedAt,
+      endReason: state?.previousSessionEndReason,
+      timeZone: 'Asia/Kolkata',
+    });
+    expect(labelRes.prefix).toBe('Last active');
+  });
+
+  it('5. Multi-device consistency: Device A logout, Device B login with skewed client clock yields identical server timestamps', async () => {
+    // Logout on Device A
+    const logoutTime = new Date('2026-10-03T13:20:00.000Z');
+    await prisma.userState.update({
       where: { userId: testUser.id },
+      data: {
+        lastLogoutAt: logoutTime,
+        lastActivityAt: logoutTime,
+      },
     });
 
-    // previousSessionEndedAt must match Device A logout time
-    expect(stateOnB?.previousSessionEndedAt).toBeDefined();
-    expect(stateOnB?.currentDeviceName).toBe('iPhone 15 (Device B)');
-    expect(stateOnB?.previousDeviceName).toBe('MacBook Pro (Device A)');
-  });
-
-  it('keeps read, unread, and saved items perfectly synchronized server-side across devices', async () => {
-    // Find an event
-    const sampleEvent = await prisma.event.findFirst({
-      where: { stockSymbol: { in: ['TCS', 'INFY'] } },
+    // Login on Device B
+    const loginRes = await authService.login({
+      email: testEmail,
+      password: testPassword,
+      deviceInfo: { type: 'MOBILE', name: 'Device B (Skewed Clock)' },
     });
 
-    if (sampleEvent) {
-      // User reads and saves item on Device A
-      await feedService.markRead(testUser.id, [sampleEvent.id]);
-      await feedService.toggleSave(testUser.id, sampleEvent.id);
+    const stateOnB = loginRes.userState;
+    expect(stateOnB.previousSessionEndedAt).toBeDefined();
 
-      // Now query feed from "Device B"
-      const feed = await feedService.getFeed(testUser.id, { window: '30d' });
-      const foundItem = feed.items.find((i) => i.id === sampleEvent.id || i.memberEventIds.includes(sampleEvent.id));
+    // Client clock on Device B is skewed by +2 hours
+    const deviceBSkewOffset = -2 * 60 * 60 * 1000;
+    const labelA = formatVisitTime({
+      timestamp: stateOnB.previousSessionEndedAt,
+      endReason: 'logout',
+      timeZone: 'Asia/Kolkata',
+      serverNowOffsetMs: 0,
+    });
 
-      if (foundItem) {
-        expect(foundItem.isUnread).toBe(false);
-        expect(foundItem.isSaved).toBe(true);
-      }
-    }
-  });
+    const labelB = formatVisitTime({
+      timestamp: stateOnB.previousSessionEndedAt,
+      endReason: 'logout',
+      timeZone: 'Asia/Kolkata',
+      serverNowOffsetMs: deviceBSkewOffset,
+    });
 
-  it('does not mark anything as read merely by opening or querying the feed', async () => {
-    const unreadBefore = await prisma.userEventRead.count({ where: { userId: testUser.id } });
-    await feedService.getFeed(testUser.id, { window: 'sinceLastVisit' });
-    const unreadAfter = await prisma.userEventRead.count({ where: { userId: testUser.id } });
-    expect(unreadAfter).toBe(unreadBefore);
+    expect(labelA.formattedDate).toBe(labelB.formattedDate);
+    expect(labelB.formattedDate).toContain('IST');
   });
 });

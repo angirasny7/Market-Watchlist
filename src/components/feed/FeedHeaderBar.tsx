@@ -3,11 +3,20 @@ import { FeedSummary, FeedTimeWindow } from '../../types/feed';
 import {
   CheckCheck,
   RefreshCw,
-  Info,
   X,
+  Clock,
+  Calendar,
+  ShieldCheck,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { formatSessionStripTime, formatWindowBaseline, formatRelativeTime } from '../../lib/dateUtils';
+import {
+  formatVisitTime,
+  formatWindowBaseline,
+  formatRelativeTime,
+  formatLastActiveTimestamp,
+  getUserTimeZone,
+  getTimeZoneAbbreviation,
+} from '../../lib/dateUtils';
 
 interface FeedHeaderBarProps {
   summary: FeedSummary | null;
@@ -18,6 +27,7 @@ interface FeedHeaderBarProps {
   onRefresh: () => void;
   isRefreshing: boolean;
   stockCount?: number;
+  serverNowOffsetMs?: number;
 }
 
 export const FeedHeaderBar: React.FC<FeedHeaderBarProps> = ({
@@ -29,22 +39,39 @@ export const FeedHeaderBar: React.FC<FeedHeaderBarProps> = ({
   onRefresh,
   isRefreshing,
   stockCount = 0,
+  serverNowOffsetMs = 0,
 }) => {
   const [isStatusPopoverOpen, setIsStatusPopoverOpen] = useState(false);
-  const popoverRef = useRef<HTMLDivElement>(null);
+  const [isSessionPopoverOpen, setIsSessionPopoverOpen] = useState(false);
+  const [, setTick] = useState(0); // 60s re-render ticker for relative labels
 
-  // Close popover on outside click or Escape
+  const statusPopoverRef = useRef<HTMLDivElement>(null);
+  const sessionPopoverRef = useRef<HTMLDivElement>(null);
+
+  // Auto-refresh relative labels every 60s without refetching data
+  useEffect(() => {
+    const timer = setInterval(() => setTick((t) => t + 1), 60000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Close popovers on outside click or Escape
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+      if (statusPopoverRef.current && !statusPopoverRef.current.contains(e.target as Node)) {
         setIsStatusPopoverOpen(false);
+      }
+      if (sessionPopoverRef.current && !sessionPopoverRef.current.contains(e.target as Node)) {
+        setIsSessionPopoverOpen(false);
       }
     };
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setIsStatusPopoverOpen(false);
+      if (e.key === 'Escape') {
+        setIsStatusPopoverOpen(false);
+        setIsSessionPopoverOpen(false);
+      }
     };
 
-    if (isStatusPopoverOpen) {
+    if (isStatusPopoverOpen || isSessionPopoverOpen) {
       document.addEventListener('mousedown', handleClickOutside);
       document.addEventListener('keydown', handleKeyDown);
     }
@@ -52,7 +79,7 @@ export const FeedHeaderBar: React.FC<FeedHeaderBarProps> = ({
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isStatusPopoverOpen]);
+  }, [isStatusPopoverOpen, isSessionPopoverOpen]);
 
   // Window Tabs with live counts
   const windowTabs: { id: FeedTimeWindow; label: string; count?: number }[] = [
@@ -105,18 +132,92 @@ export const FeedHeaderBar: React.FC<FeedHeaderBarProps> = ({
     return `Last 30 days: ${updatesStr} across ${stocksStr}${attention > 0 ? ` · ${attention} need${attention === 1 ? 's' : ''} attention` : ''}`;
   };
 
-  const sessionStripText = formatSessionStripTime(summary?.lastVisitAt);
+  const visitTimeInfo = formatVisitTime({
+    timestamp: summary?.lastVisitAt,
+    endReason: summary?.previousSessionEndReason,
+    serverNowOffsetMs,
+  });
+
+  const userTz = getUserTimeZone();
+  const tzAbbr = getTimeZoneAbbreviation(new Date(), userTz);
 
   return (
     <div className="space-y-3 pb-1">
       {/* 1. Compact Session & Status Strip */}
       <div className="flex items-center justify-between gap-3 px-3.5 py-2 rounded-xl bg-surface/80 border border-border/80 text-xs text-slate-300">
-        <div className="flex items-center gap-2 truncate">
-          <span className="truncate font-medium">{sessionStripText}</span>
+        {/* Left: Interactive Visit Label with Session Popover */}
+        <div className="relative min-w-0" ref={sessionPopoverRef}>
+          <button
+            type="button"
+            onClick={() => setIsSessionPopoverOpen((prev) => !prev)}
+            aria-expanded={isSessionPopoverOpen}
+            aria-label="View session visit details"
+            className="flex items-center gap-1.5 truncate font-medium hover:text-white transition-colors cursor-pointer text-left focus:outline-none focus-visible:underline"
+          >
+            <Clock className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+            <span className="truncate">{visitTimeInfo.label}</span>
+          </button>
+
+          {/* Session Visit Popover */}
+          {isSessionPopoverOpen && (
+            <div className="absolute left-0 top-full mt-2 w-80 p-3.5 rounded-xl bg-surface-elevated border border-border shadow-2xl z-40 space-y-2.5 animate-fade-in text-left">
+              <div className="flex items-center justify-between border-b border-border/60 pb-2">
+                <span className="text-xs font-bold text-slate-100 flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-indigo-400" />
+                  Previous Session Details
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsSessionPopoverOpen(false)}
+                  className="text-slate-400 hover:text-slate-200"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              <div className="space-y-1.5 text-[11px] text-slate-300">
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Previous Login:</span>
+                  <span className="font-mono text-slate-200">
+                    {summary?.previousSessionStartedAt
+                      ? formatLastActiveTimestamp(summary.previousSessionStartedAt, userTz)
+                      : 'Earlier Session'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Previous Visit End:</span>
+                  <span className="font-mono text-slate-200">
+                    {summary?.lastVisitAt
+                      ? formatLastActiveTimestamp(summary.lastVisitAt, userTz)
+                      : 'Not recorded'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Session End Type:</span>
+                  <span className="font-semibold text-slate-200">
+                    {summary?.previousSessionEndReason === 'logout'
+                      ? 'Manual Logout'
+                      : summary?.previousSessionEndReason === 'tab_closed'
+                      ? 'Tab Closed'
+                      : 'Inactivity Demarcation'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Time Zone:</span>
+                  <span className="font-mono text-indigo-300">
+                    {userTz} ({tzAbbr})
+                  </span>
+                </div>
+                <div className="pt-2 text-[11px] text-indigo-300/90 font-medium border-t border-border/40">
+                  Everything after this time appears under 'Since last visit'.
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Status Pill with Popover */}
-        <div className="relative flex-shrink-0" ref={popoverRef}>
+        {/* Right: Status Pill with Signal Status Popover */}
+        <div className="relative flex-shrink-0" ref={statusPopoverRef}>
           <button
             type="button"
             onClick={() => setIsStatusPopoverOpen((prev) => !prev)}
@@ -140,7 +241,7 @@ export const FeedHeaderBar: React.FC<FeedHeaderBarProps> = ({
             <div className="absolute right-0 top-full mt-2 w-72 p-3.5 rounded-xl bg-surface-elevated border border-border shadow-2xl z-40 space-y-2.5 animate-fade-in text-left">
               <div className="flex items-center justify-between border-b border-border/60 pb-2">
                 <span className="text-xs font-bold text-slate-100 flex items-center gap-1.5">
-                  <Info className="w-3.5 h-3.5 text-indigo-400" />
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
                   Signal & Market Status
                 </span>
                 <button
@@ -162,12 +263,19 @@ export const FeedHeaderBar: React.FC<FeedHeaderBarProps> = ({
                 <div className="flex justify-between">
                   <span className="text-slate-400">Last Synced:</span>
                   <span className="font-mono text-slate-200">
-                    {summary?.lastSyncedAt ? formatRelativeTime(summary.lastSyncedAt, false) : 'Recently'}
+                    {summary?.lastSyncedAt
+                      ? formatRelativeTime(summary.lastSyncedAt, false, serverNowOffsetMs)
+                      : 'Recently'}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-400">Markets:</span>
-                  <span className={cn('font-semibold', summary?.marketsClosed ? 'text-amber-400' : 'text-emerald-400')}>
+                  <span
+                    className={cn(
+                      'font-semibold',
+                      summary?.marketsClosed ? 'text-amber-400' : 'text-emerald-400'
+                    )}
+                  >
                     {summary?.marketsClosed ? 'Markets Closed' : 'Markets Open'}
                   </span>
                 </div>
@@ -211,7 +319,7 @@ export const FeedHeaderBar: React.FC<FeedHeaderBarProps> = ({
           <button
             type="button"
             onClick={onMarkCaughtUp}
-            disabled={isMarkingCaughtUp || (summary?.unreadClusters === 0)}
+            disabled={isMarkingCaughtUp || summary?.unreadClusters === 0}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition-all shadow-md shadow-indigo-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <CheckCheck className={cn('w-3.5 h-3.5', isMarkingCaughtUp && 'animate-bounce')} />

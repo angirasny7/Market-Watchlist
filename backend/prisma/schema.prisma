@@ -46,6 +46,8 @@ model UserState {
   previousDeviceType       String?
   previousSessionAt        DateTime?
   previousSessionEndedAt   DateTime?
+  previousSessionStartedAt DateTime?
+  previousSessionEndReason String?
   caughtUpAt               DateTime?
   user                     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 

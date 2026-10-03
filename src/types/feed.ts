@@ -135,6 +135,10 @@ export interface FeedSummary {
   };
   marketsClosed?: boolean;
   newsCountInWindow?: number;
+  previousSessionStartedAt?: string | null;
+  previousSessionEndReason?: 'logout' | 'inactivity' | 'tab_closed' | string | null;
+  serverNow?: string;
 }
 
 export type FeedTimeWindow = 'sinceLastVisit' | '24h' | '7d' | '30d';
+
