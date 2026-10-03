@@ -1,15 +1,9 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import {
-  LayoutDashboard,
-  BellRing,
-  ListOrdered,
-  History,
-  TrendingUp,
-  Zap,
-} from 'lucide-react';
+import { Zap } from 'lucide-react';
 import { useMarketStore } from '../../store/useMarketStore';
 import { cn } from '../../lib/utils';
+import { MAIN_NAV_ITEMS } from '../../config/navigation';
 
 interface SidebarProps {
   className?: string;
@@ -23,54 +17,33 @@ export const Sidebar: React.FC<SidebarProps> = ({ className, onItemClick }) => {
   const feedBadgeText = unreadFeedCount > 99 ? '99+' : `${unreadFeedCount}`;
   const hasUnacknowledgedDigest = digests.some((d) => !d.isAcknowledged);
 
-  const navItems = [
-    {
-      name: 'Dashboard',
-      path: '/',
-      icon: LayoutDashboard,
+  const navItems = MAIN_NAV_ITEMS.map((item) => {
+    if (item.id === 'feed') {
+      return {
+        ...item,
+        badge: unreadFeedCount > 0 ? feedBadgeText : null,
+        badgeAriaLabel: `${unreadFeedCount} unread updates`,
+        badgeColor: 'bg-rose-500/15 text-rose-400 border border-rose-500/30 font-mono',
+        showDot: false,
+      };
+    }
+    if (item.id === 'memory') {
+      return {
+        ...item,
+        badge: null,
+        badgeAriaLabel: undefined,
+        badgeColor: undefined,
+        showDot: hasUnacknowledgedDigest,
+      };
+    }
+    return {
+      ...item,
       badge: null,
       badgeAriaLabel: undefined,
+      badgeColor: undefined,
       showDot: false,
-      description: 'Unified command center and personalized market delta summary',
-    },
-    {
-      name: 'Attention Feed',
-      path: '/feed',
-      icon: BellRing,
-      badge: unreadFeedCount > 0 ? feedBadgeText : null,
-      badgeAriaLabel: `${unreadFeedCount} unread updates`,
-      badgeColor: 'bg-rose-500/15 text-rose-400 border border-rose-500/30 font-mono',
-      showDot: false,
-      description: 'Actionable real-time catalysts and events requiring investor attention',
-    },
-    {
-      name: 'Watchlist',
-      path: '/watchlist',
-      icon: ListOrdered,
-      badge: null,
-      badgeAriaLabel: undefined,
-      showDot: false,
-      description: 'Monitored portfolio equities with causal delta insights',
-    },
-    {
-      name: 'Market Memory',
-      path: '/memory',
-      icon: History,
-      badge: null,
-      badgeAriaLabel: undefined,
-      showDot: hasUnacknowledgedDigest,
-      description: 'Personal repository of saved and archived market events.',
-    },
-    {
-      name: 'Market Highlights',
-      path: '/highlights',
-      icon: TrendingUp,
-      badge: null,
-      badgeAriaLabel: undefined,
-      showDot: false,
-      description: 'Autonomous market intelligence hub.',
-    },
-  ];
+    };
+  });
 
   return (
     <aside
@@ -107,6 +80,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className, onItemClick }) => {
               <NavLink
                 key={item.path}
                 to={item.path}
+                end={item.path === '/'}
                 title={item.description}
                 onClick={onItemClick}
                 className={({ isActive }) =>
