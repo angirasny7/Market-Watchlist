@@ -7,6 +7,7 @@ import { useMarketStore } from '../../store/useMarketStore';
 import { ExternalLink, CheckCircle2, Sparkles } from 'lucide-react';
 
 import { BottomTabBar } from './BottomTabBar';
+import { authService } from '../../services/authService';
 
 export const AppLayout: React.FC = () => {
   const {
@@ -23,6 +24,14 @@ export const AppLayout: React.FC = () => {
   useEffect(() => {
     fetchMarketData();
   }, [fetchMarketData]);
+
+  useEffect(() => {
+    // 60s heartbeat to record active user presence
+    const interval = setInterval(() => {
+      authService.heartbeat().catch(() => {});
+    }, 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   const activeDigest = digests.find((d) => d.id === selectedDigestId);
   const digestEvents = activeDigest ? getDigestEvents(activeDigest.id) : [];

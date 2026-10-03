@@ -274,3 +274,21 @@ export function formatWindowBaseline(timestamp?: string | Date | null, timeZone?
 
   return `${weekday} ${day} ${month}, ${time}`;
 }
+
+export function formatPublishedTimestamp(
+  timestamp?: string | Date | null,
+  timeZone?: string
+): string {
+  if (!timestamp) return '';
+  const date = typeof timestamp === 'string' ? new Date(timestamp) : timestamp;
+  if (isNaN(date.getTime())) return '';
+
+  const tz = getUserTimeZone(timeZone);
+  const weekday = date.toLocaleDateString('en-US', { timeZone: tz, weekday: 'short' });
+  const day = date.toLocaleDateString('en-US', { timeZone: tz, day: 'numeric' });
+  const month = date.toLocaleDateString('en-US', { timeZone: tz, month: 'short' });
+  const time = date.toLocaleTimeString('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true });
+  const tzAbbr = getTimeZoneAbbreviation(date, tz);
+
+  return `Published ${weekday} ${day} ${month}, ${time} ${tzAbbr}`;
+}

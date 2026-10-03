@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { formatEventTime, formatEventTooltip } from '../../lib/formatEventTime';
+import { formatPublishedTimestamp } from '../../lib/dateUtils';
 
 interface FeedDetailsDrawerProps {
   isOpen: boolean;
@@ -554,9 +555,9 @@ export const FeedDetailsDrawer: React.FC<FeedDetailsDrawerProps> = ({
                                 <h5 className="text-xs sm:text-sm font-semibold text-slate-200 group-hover:text-indigo-200 transition-colors leading-snug">
                                   {src.title}
                                 </h5>
-                                <div className="text-[11px] text-slate-500 flex items-center gap-1">
-                                  <Clock className="w-3 h-3" />
-                                  <span>{new Date(src.publishedAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                                <div className="text-[11px] text-slate-400 flex items-center gap-1 font-mono">
+                                  <Clock className="w-3 h-3 text-slate-500" />
+                                  <span>{formatPublishedTimestamp(src.publishedAt)}</span>
                                 </div>
                               </div>
                               <ExternalLink className="w-4 h-4 text-slate-500 group-hover:text-indigo-400 flex-shrink-0 transition-colors" />

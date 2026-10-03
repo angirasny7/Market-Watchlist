@@ -68,10 +68,32 @@ export function isExchangeOpen(exchange: string): boolean {
 
 // ── Internal helpers ──
 
+export const NSE_HOLIDAY_MAP: Record<string, string> = {
+  '2026-01-26': 'Republic Day',
+  '2026-02-17': 'Mahashivratri',
+  '2026-03-03': 'Holi',
+  '2026-03-20': 'Id-Ul-Fitr',
+  '2026-03-27': 'Shri Ram Navami',
+  '2026-04-03': 'Good Friday',
+  '2026-04-14': 'Ambedkar Jayanti',
+  '2026-05-01': 'Maharashtra Day',
+  '2026-05-27': 'Bakri Id',
+  '2026-08-15': 'Independence Day',
+  '2026-09-14': 'Ganesh Chaturthi',
+  '2026-10-02': 'Mahatma Gandhi Jayanti',
+  '2026-10-20': 'Dussehra',
+  '2026-11-08': 'Diwali (Laxmi Pujan)',
+  '2026-11-24': 'Gurunanak Jayanti',
+  '2026-12-25': 'Christmas',
+};
+
 function getIndianMarketStatus(exchange: string): ExchangeStatus {
   const now = new Date();
   const formatter = new Intl.DateTimeFormat('en-US', {
     timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
     hour: 'numeric',
     minute: 'numeric',
     hour12: false,
@@ -80,15 +102,23 @@ function getIndianMarketStatus(exchange: string): ExchangeStatus {
 
   const parts = formatter.formatToParts(now);
   const weekday = parts.find((p) => p.type === 'weekday')?.value;
+  const year = parts.find((p) => p.type === 'year')?.value;
+  const month = parts.find((p) => p.type === 'month')?.value;
+  const day = parts.find((p) => p.type === 'day')?.value;
+  const dateKey = `${year}-${month}-${day}`;
+
   const hour = parseInt(parts.find((p) => p.type === 'hour')?.value || '0', 10);
   const minute = parseInt(parts.find((p) => p.type === 'minute')?.value || '0', 10);
   const totalMinutes = hour * 60 + minute;
 
   const isWeekend = weekday === 'Sat' || weekday === 'Sun';
+  const holidayName = NSE_HOLIDAY_MAP[dateKey];
+  const isHoliday = Boolean(holidayName);
+
   // NSE/BSE: 09:15 (555 min) to 15:30 (930 min) IST
   const isMarketOpenTime = totalMinutes >= 555 && totalMinutes <= 930;
 
-  if (!isWeekend && isMarketOpenTime) {
+  if (!isWeekend && !isHoliday && isMarketOpenTime) {
     return {
       isOpen: true,
       label: `${exchange} Open`,
@@ -98,10 +128,17 @@ function getIndianMarketStatus(exchange: string): ExchangeStatus {
     };
   }
 
+  let subtext = `Opens 09:15 IST`;
+  if (isWeekend) {
+    subtext = `Weekend • Opens Mon 09:15 IST`;
+  } else if (isHoliday) {
+    subtext = `Holiday (${holidayName}) • Opens next trading day`;
+  }
+
   return {
     isOpen: false,
     label: `${exchange} Closed`,
-    subtext: isWeekend ? `Weekend • Opens Mon 09:15 IST` : `Opens 09:15 IST`,
+    subtext,
     exchange,
     group: 'IN',
   };
