@@ -9,6 +9,8 @@
  * 5. NEVER show a bare clock time without a date.
  */
 
+import { isExchangeTradingDay } from '../data/tradingCalendar2026';
+
 export interface EventTimeContext {
   occurredOn?: string | Date | null;
   periodStart?: string | Date | null;
@@ -121,8 +123,11 @@ export function formatEventTime(item: EventTimeContext, now: Date = new Date()):
   // 2. Cumulative "Since Last Visit" Events
   if (isCumulative) {
     const startDate = periodStart || occurred;
+    if (periodStart && occurred && periodStart.getTime() !== occurred.getTime()) {
+      return `${formatDayMonth(periodStart, true)} close -> ${formatDayMonth(occurred, true)} close`;
+    }
     if (startDate) {
-      return `Since ${formatDayMonth(startDate, true)}`;
+      return `Since ${formatDayMonth(startDate, true)} close`;
     }
     return 'Since last visit';
   }
@@ -159,10 +164,13 @@ export function formatEventTime(item: EventTimeContext, now: Date = new Date()):
   // 4. Single-Day Price / Volume moves (End-of-day close moves)
   if (occurred) {
     const diffDays = getDayDiff(occurred, now);
-    if (diffDays === 0) {
+    const isTradingDay = isExchangeTradingDay(item.exchange || 'NSE', now);
+    
+    // Only use "Today close" if today was a real trading day for this exchange
+    if (diffDays === 0 && isTradingDay) {
       return 'Today close';
     }
-    if (diffDays === 1) {
+    if (diffDays === 1 && isTradingDay) {
       return 'Yesterday close';
     }
     return `${formatDayMonth(occurred, true)} close`;

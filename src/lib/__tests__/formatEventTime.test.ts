@@ -4,35 +4,38 @@ import { formatEventTime, formatEventTooltip } from '../formatEventTime';
 describe('formatEventTime', () => {
   const fixedNow = new Date('2026-10-03T12:00:00Z');
 
-  it('formats cumulative "since last visit" events using periodStart', () => {
+  it('formats cumulative "since last visit" events using baseline and end close dates', () => {
     const item = {
       isCumulative: true,
       periodStart: '2026-10-01T00:00:00Z',
-      occurredOn: '2026-10-02T18:30:00Z',
+      occurredOn: '2026-10-02T10:00:00Z',
       eventType: 'PRICE_SURGE',
       exchange: 'NSE',
     };
     const result = formatEventTime(item, fixedNow);
-    expect(result).toBe('Since Thu 1 Oct');
+    expect(result).toBe('Thu 1 Oct close -> Fri 2 Oct close');
   });
 
-  it('formats single-day price/volume move from yesterday as Yesterday close', () => {
+  it('formats single-day price/volume move from yesterday (trading day) as Yesterday close', () => {
+    // When now is a trading day (e.g. Wednesday), Tuesday move is Yesterday close
+    const wednesdayNow = new Date('2026-09-30T12:00:00Z');
     const item = {
-      occurredOn: '2026-10-02T12:00:00Z',
+      occurredOn: '2026-09-29T12:00:00Z',
       eventType: 'PRICE_DROP',
       exchange: 'NSE',
     };
-    const result = formatEventTime(item, fixedNow);
+    const result = formatEventTime(item, wednesdayNow);
     expect(result).toBe('Yesterday close');
   });
 
-  it('formats single-day price/volume move from today as Today close', () => {
+  it('formats single-day price/volume move from today (trading day) as Today close', () => {
+    const wednesdayNow = new Date('2026-09-30T12:00:00Z');
     const item = {
-      occurredOn: '2026-10-03T08:00:00Z',
+      occurredOn: '2026-09-30T08:00:00Z',
       eventType: 'PRICE_SURGE',
       exchange: 'NSE',
     };
-    const result = formatEventTime(item, fixedNow);
+    const result = formatEventTime(item, wednesdayNow);
     expect(result).toBe('Today close');
   });
 

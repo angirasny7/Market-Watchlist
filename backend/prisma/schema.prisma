@@ -156,6 +156,7 @@ model Event {
   detectedAt   DateTime         @default(now())
   read         Boolean          @default(false)
   acknowledged Boolean          @default(false)
+  isSimulated  Boolean          @default(false)
   metricsDelta Json
   createdAt    DateTime         @default(now())
   digestEvents DigestEvent[]
@@ -203,6 +204,7 @@ model Digest {
   benchmarkCloses       Json
   forwardPerformanceMap Json?
   read                  Boolean          @default(false)
+  isSimulated           Boolean          @default(false)
   createdAt             DateTime         @default(now())
   digestEvents          DigestEvent[]
   digestInsights        DigestInsight[]

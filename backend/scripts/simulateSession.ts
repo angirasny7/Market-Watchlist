@@ -1,9 +1,7 @@
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../src/config/prisma.js';
 import { catchUpService } from '../src/services/catchUpService.js';
 import { feedService } from '../src/services/feedService.js';
 import { formatEventTime, formatEventTooltip } from '../../src/lib/formatEventTime.js';
-
-const prisma = new PrismaClient();
 
 interface SimulationArgs {
   userId?: string;
@@ -293,9 +291,11 @@ async function main() {
   }
 }
 
-main()
-  .catch((e) => {
-    console.error('Simulation error:', e);
-    process.exit(1);
-  })
-  .finally(() => prisma.$disconnect());
+if (process.argv[1] && (process.argv[1].includes('simulateSession.ts') || process.argv[1].includes('simulateSession.js'))) {
+  main()
+    .catch((e) => {
+      console.error('Simulation error:', e);
+      process.exit(1);
+    })
+    .finally(() => prisma.$disconnect());
+}
