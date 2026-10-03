@@ -25,6 +25,7 @@ model User {
   watchlists      Watchlist[]
   alerts          Alert[]
   notifications   Notification[]
+  events          Event[]
 
   @@map("users")
 }
@@ -157,15 +158,18 @@ model Event {
   read         Boolean          @default(false)
   acknowledged Boolean          @default(false)
   isSimulated  Boolean          @default(false)
+  userId       String?
   metricsDelta Json
   createdAt    DateTime         @default(now())
   digestEvents DigestEvent[]
   stock        Stock            @relation(fields: [stockSymbol], references: [symbol])
+  user         User?            @relation(fields: [userId], references: [id], onDelete: Cascade)
   insights     Insight[]
   userReads    UserEventRead[]
   userSaves    UserSavedEvent[]
 
   @@index([stockSymbol, timestamp(sort: Desc)])
+  @@index([userId])
   @@index([occurredOn(sort: Desc)])
   @@index([occurredAt(sort: Desc)])
   @@index([priority, timestamp(sort: Desc)])

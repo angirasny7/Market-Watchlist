@@ -19,19 +19,17 @@ async function main() {
     console.log(`Auditing all ${symbols.length} unique monitored stocks across ALL users in database.\n`);
   } else {
     if (!userId) {
-      // Find primary user (e.g. Alex N or user with multiple watchlists)
-      targetUser = await prisma.user.findFirst({
-        where: { email: 'alex@example.com' },
-      });
-      if (!targetUser) {
-        targetUser = await prisma.user.findFirst({
-          where: { watchlists: { some: { stocks: { some: {} } } } },
-        });
-      }
-      userId = targetUser?.id;
-    } else {
-      targetUser = await prisma.user.findUnique({ where: { id: userId } });
+      console.error('Error: Please specify --user <email or userId> or pass --all to audit all stocks.');
+      process.exit(1);
     }
+    targetUser = await prisma.user.findFirst({
+      where: { OR: [{ id: userId }, { email: userId }] },
+    });
+    if (!targetUser) {
+      console.error(`User '${userId}' not found.`);
+      process.exit(1);
+    }
+    userId = targetUser.id;
 
     if (targetUser) {
       const userWatchlistStocks = await prisma.watchlistStock.findMany({

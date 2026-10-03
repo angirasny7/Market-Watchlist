@@ -100,18 +100,25 @@ export class SinceLastVisitService {
     const watchlistSymbols = new Set(watchlistStocks.map((w) => w.stockSymbol));
     const watchlistArray = Array.from(watchlistSymbols);
 
+    const hasPreviousSession = Boolean(
+      userState?.previousSessionEndedAt ||
+      userState?.previousSessionAt ||
+      userState?.lastLogoutAt
+    );
+
     const lastActivity = computeUserSinceTimestamp({
+      previousSessionEndedAt: userState?.previousSessionEndedAt,
       previousSessionAt: userState?.previousSessionAt,
       lastSeenAt: userState?.lastSeenAt,
       lastLoginAt: userState?.lastLoginAt || user?.lastLoginAt,
     });
 
     // 3. Format away duration
-    const elapsedMs = Math.max(0, Date.now() - lastActivity.getTime());
-    const awayDuration = this.formatDuration(elapsedMs);
+    const elapsedMs = hasPreviousSession ? Math.max(0, Date.now() - lastActivity.getTime()) : 0;
+    const awayDuration = hasPreviousSession ? this.formatDuration(elapsedMs) : '0m';
 
-    // If user has NO stocks in their watchlist, return strictly empty intelligence
-    if (watchlistArray.length === 0) {
+    // If user has NO stocks in their watchlist or is in their first session, return strictly empty intelligence
+    if (!hasPreviousSession || watchlistArray.length === 0) {
       return {
         awayDuration,
         awayDurationMs: elapsedMs,
@@ -120,7 +127,7 @@ export class SinceLastVisitService {
         criticalEventsCount: 0,
         watchlistEventsCount: 0,
         watchlistCriticalCount: 0,
-        watchlistSymbols: [],
+        watchlistSymbols: watchlistArray,
         newEvents: [],
         criticalEvents: [],
         newInsights: [],
@@ -135,6 +142,9 @@ export class SinceLastVisitService {
     const rawEvents = await prisma.event.findMany({
       where: {
         stockSymbol: { in: watchlistArray },
+        AND: [
+          { OR: [{ userId: null }, { userId }] },
+        ],
         ...(allowDemo
           ? {}
           : {

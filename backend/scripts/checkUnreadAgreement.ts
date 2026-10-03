@@ -5,11 +5,17 @@ import { watchlistService } from '../src/services/watchlistService.js';
 const prisma = new PrismaClient();
 
 async function main() {
+  const userArg = process.argv.slice(2).find((a, i, arr) => arr[i - 1] === '--user') || process.argv.slice(2)[0];
+  if (!userArg) {
+    console.error('Usage: npx tsx backend/scripts/checkUnreadAgreement.ts --user <email or userId>');
+    process.exit(1);
+  }
+
   const user = await prisma.user.findFirst({
-    where: { email: 'alex@example.com' },
+    where: { OR: [{ email: userArg }, { id: userArg }] },
   });
   if (!user) {
-    console.error('User alex@example.com not found');
+    console.error(`User '${userArg}' not found.`);
     return;
   }
 

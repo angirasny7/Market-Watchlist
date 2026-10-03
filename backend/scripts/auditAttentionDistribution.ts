@@ -4,11 +4,21 @@ import { attentionScoringService } from '../src/services/attentionScoringService
 const prisma = new PrismaClient();
 
 async function main() {
-  const user = await prisma.user.findFirst({
-    where: { email: 'alex@example.com' },
-  });
+  const userArg = process.argv.slice(2).find((a, i, arr) => arr[i - 1] === '--user') || process.argv.slice(2)[0];
+  if (!userArg) {
+    console.error('Usage: npx tsx backend/scripts/auditAttentionDistribution.ts --user <email or userId>');
+    process.exit(1);
+  }
 
-  const userId = user?.id;
+  const user = await prisma.user.findFirst({
+    where: { OR: [{ email: userArg }, { id: userArg }] },
+  });
+  if (!user) {
+    console.error(`User '${userArg}' not found.`);
+    process.exit(1);
+  }
+
+  const userId = user.id;
   const userWatchlists = await prisma.watchlistStock.findMany({
     where: { watchlist: { userId } },
     select: { stockSymbol: true },

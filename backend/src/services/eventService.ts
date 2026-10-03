@@ -86,8 +86,12 @@ export class EventService {
       } else {
         where.stockSymbol = { in: Array.from(userWatchlistSymbols) };
       }
+      where.AND = [{ OR: [{ userId: null }, { userId: options.userId }] }];
     } else if (options?.symbol) {
       where.stockSymbol = options.symbol.toUpperCase();
+      where.userId = null;
+    } else {
+      where.userId = null;
     }
 
     if (options?.priority) {
@@ -109,8 +113,17 @@ export class EventService {
       const userState = await prisma.userState.findUnique({
         where: { userId: options.userId },
       });
+      const hasPreviousSession = Boolean(
+        userState?.previousSessionEndedAt ||
+        userState?.previousSessionAt ||
+        userState?.lastLogoutAt
+      );
+      if (!hasPreviousSession) {
+        return []; // Brand-new user on first session has no "since last visit" events
+      }
       const defaultSince = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
       const since =
+        userState?.previousSessionEndedAt ||
         userState?.previousSessionAt ||
         userState?.lastSeenAt ||
         userState?.lastLoginAt ||
@@ -218,6 +231,19 @@ export class EventService {
    * Save event for later for specific authenticated user
    */
   async saveEventForLater(id: string, userId: string) {
+    const event = await prisma.event.findFirst({
+      where: {
+        id,
+        OR: [{ userId: null }, { userId }],
+      },
+    });
+
+    if (!event) {
+      const error: any = new Error('Event not found or unauthorized');
+      error.statusCode = 404;
+      throw error;
+    }
+
     return prisma.userSavedEvent.upsert({
       where: {
         userId_eventId: { userId, eventId: id },
@@ -237,6 +263,19 @@ export class EventService {
    */
   async markEventRead(id: string, userId?: string) {
     if (userId) {
+      const event = await prisma.event.findFirst({
+        where: {
+          id,
+          OR: [{ userId: null }, { userId }],
+        },
+      });
+
+      if (!event) {
+        const error: any = new Error('Event not found or unauthorized');
+        error.statusCode = 404;
+        throw error;
+      }
+
       return prisma.userEventRead.upsert({
         where: {
           userId_eventId: { userId, eventId: id },

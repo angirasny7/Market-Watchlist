@@ -307,12 +307,22 @@ export class FeedService {
 
     // 2. Resolve User State and Since Date
     const userState = await prisma.userState.findUnique({ where: { userId } });
+    const hasPreviousSession = Boolean(
+      userState?.previousSessionEndedAt ||
+      userState?.previousSessionAt ||
+      userState?.lastLogoutAt
+    );
+
+    // If user is brand new with no previous session, sinceLastVisit has 0 items
+    if (options?.window === 'sinceLastVisit' && !hasPreviousSession) {
+      return { items: [], nextCursor: null, hasMore: false, total: 0, unreadCount: 0 };
+    }
+
     const lastSessionAt =
       userState?.previousSessionEndedAt ||
       userState?.previousSessionAt ||
       userState?.lastSeenAt ||
       new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
-
 
     let windowStartDate: Date;
     switch (options?.window) {
@@ -342,9 +352,12 @@ export class FeedService {
     const savedEventIds = new Set(userSaves.map((s) => s.eventId));
     const alertSymbols = new Set(userAlerts.map((a) => a.stockSymbol));
 
-    // 4. Query Events for monitored symbols within window
+    // 4. Query Events for monitored symbols within window with multi-user isolation
     const whereClause: any = {
       stockSymbol: { in: monitoredSymbols },
+      AND: [
+        { OR: [{ userId: null }, { userId }] },
+      ],
       OR: [
         { occurredAt: { gte: windowStartDate } },
         { AND: [{ occurredAt: null }, { occurredOn: { gte: windowStartDate } }] },
@@ -546,6 +559,7 @@ export class FeedService {
     });
 
     if (!event) return null;
+    if (event.userId && event.userId !== userId) return null;
 
     const stock = event.stock;
     const delta = (event.metricsDelta as any) || {};
@@ -726,13 +740,21 @@ export class FeedService {
   ): Promise<FeedSummary> {
     const selectedWindow = options?.window || 'sinceLastVisit';
     const userState = await prisma.userState.findUnique({ where: { userId } });
+    const hasPreviousSession = Boolean(
+      userState?.previousSessionEndedAt ||
+      userState?.previousSessionAt ||
+      userState?.lastLogoutAt
+    );
 
     const lastSessionAt =
       userState?.previousSessionEndedAt ||
       userState?.previousSessionAt ||
       userState?.lastSeenAt ||
-      new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
-    const daysSinceLastVisit = Math.max(1, Math.round((Date.now() - lastSessionAt.getTime()) / (24 * 60 * 60 * 1000)));
+      userState?.lastLoginAt ||
+      new Date();
+    const daysSinceLastVisit = hasPreviousSession
+      ? Math.max(1, Math.round((Date.now() - lastSessionAt.getTime()) / (24 * 60 * 60 * 1000)))
+      : 0;
 
     // Fetch feed for the selected window as well as all windows
     const [selectedFeed, sinceFeed, feed24h, feed7d, feed30d] = await Promise.all([
@@ -828,6 +850,7 @@ export class FeedService {
       const unreadEvents = await prisma.event.findMany({
         where: {
           stockSymbol: { in: symbols },
+          AND: [{ OR: [{ userId: null }, { userId }] }],
           timestamp: { gte: windowDate },
           userReads: { none: { userId } },
         },
@@ -835,13 +858,16 @@ export class FeedService {
       });
       idsToMark = unreadEvents.map((e) => e.id);
     } else {
-      // Expand cluster member events for the specified items
+      // Expand cluster member events for the specified items (strictly accessible by user)
       const targetEvents = await prisma.event.findMany({
-        where: { id: { in: idsToMark } },
+        where: {
+          id: { in: idsToMark },
+          AND: [{ OR: [{ userId: null }, { userId }] }],
+        },
         select: { id: true, stockSymbol: true, timestamp: true },
       });
 
-      const allIds = new Set<string>(idsToMark);
+      const allIds = new Set<string>(targetEvents.map((t) => t.id));
       for (const ev of targetEvents) {
         const startOfDay = new Date(ev.timestamp);
         startOfDay.setUTCHours(0, 0, 0, 0);
@@ -851,6 +877,7 @@ export class FeedService {
         const siblingEvents = await prisma.event.findMany({
           where: {
             stockSymbol: ev.stockSymbol,
+            AND: [{ OR: [{ userId: null }, { userId }] }],
             timestamp: { gte: startOfDay, lte: endOfDay },
           },
           select: { id: true },
@@ -908,6 +935,19 @@ export class FeedService {
    * POST /feed/items/:id/save: Toggle saved state
    */
   async toggleSave(userId: string, eventId: string): Promise<{ isSaved: boolean }> {
+    const event = await prisma.event.findFirst({
+      where: {
+        id: eventId,
+        OR: [{ userId: null }, { userId }],
+      },
+    });
+
+    if (!event) {
+      const error: any = new Error('Event not found or unauthorized');
+      error.statusCode = 404;
+      throw error;
+    }
+
     const existing = await prisma.userSavedEvent.findUnique({
       where: {
         userId_eventId: { userId, eventId },

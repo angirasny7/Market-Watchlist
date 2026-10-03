@@ -3,15 +3,16 @@ import { feedService } from '../services/feedService.js';
 import { prisma } from '../config/prisma.js';
 
 export class FeedController {
-  private async resolveUserId(req: Request): Promise<string> {
+  private resolveUserId(req: any): string {
+    const authUserId = req.user?.userId;
+    if (authUserId) return authUserId;
+
     const headerUserId = req.headers['x-user-id'] as string;
     if (headerUserId) return headerUserId;
 
-    // Default to the primary user Alex N
-    const defaultUser = await prisma.user.findFirst({
-      where: { email: 'alex@example.com' },
-    });
-    return defaultUser?.id || 'e67e428e-39ec-4601-8589-c9ad81d58078';
+    const err: any = new Error('Authentication required');
+    err.statusCode = 401;
+    throw err;
   }
 
   /**

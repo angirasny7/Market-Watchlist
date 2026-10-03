@@ -141,6 +141,13 @@ export class DigestService {
   }
 
   async markDigestRead(id: string, userId?: string) {
+    const d = await prisma.digest.findUnique({ where: { id } });
+    if (!d) {
+      const error: any = new Error('Digest not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
     if (userId) {
       await prisma.userDigestRead.upsert({
         where: {
@@ -173,6 +180,13 @@ export class DigestService {
   }
 
   async viewDigest(id: string, userId: string) {
+    const d = await prisma.digest.findUnique({ where: { id } });
+    if (!d) {
+      const error: any = new Error('Digest not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
     await prisma.userDigestRead.upsert({
       where: {
         userId_digestId: { userId, digestId: id },

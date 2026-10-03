@@ -1,7 +1,10 @@
 import { Router } from 'express';
 import { feedController } from '../controllers/feedController.js';
+import { optionalAuthenticateJwt } from '../middleware/auth.js';
 
 const router = Router();
+
+router.use(optionalAuthenticateJwt);
 
 router.get('/', (req, res, next) => feedController.getFeed(req, res, next));
 router.get('/summary', (req, res, next) => feedController.getSummary(req, res, next));

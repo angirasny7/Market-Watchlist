@@ -450,6 +450,7 @@ export class CatchUpService {
             where: {
               stockSymbol: symbol,
               eventType: cumEventType,
+              userId,
               timestamp: {
                 gte: todayStart,
                 lte: todayEnd,
@@ -509,6 +510,7 @@ export class CatchUpService {
                 stockSymbol: symbol,
                 eventType: cumEventType,
                 priority: scoreRes.priority,
+                userId,
                 timestamp: new Date(),
                 occurredOn: new Date(),
                 occurredAt: new Date(),
