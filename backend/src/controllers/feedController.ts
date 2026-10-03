@@ -7,10 +7,7 @@ export class FeedController {
     const authUserId = req.user?.userId;
     if (authUserId) return authUserId;
 
-    const headerUserId = req.headers['x-user-id'] as string;
-    if (headerUserId) return headerUserId;
-
-    const err: any = new Error('Authentication required');
+    const err: any = new Error('Unauthorized: Authentication required via Bearer JWT');
     err.statusCode = 401;
     throw err;
   }

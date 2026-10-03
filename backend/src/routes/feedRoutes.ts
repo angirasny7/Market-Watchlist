@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import { feedController } from '../controllers/feedController.js';
-import { optionalAuthenticateJwt } from '../middleware/auth.js';
+import { authenticateJwt } from '../middleware/auth.js';
 
 const router = Router();
 
-router.use(optionalAuthenticateJwt);
+// All feed routes strictly protected with authenticateJwt
+router.use(authenticateJwt);
 
 router.get('/', (req, res, next) => feedController.getFeed(req, res, next));
 router.get('/summary', (req, res, next) => feedController.getSummary(req, res, next));
@@ -15,3 +16,4 @@ router.post('/items/:id/save', (req, res, next) => feedController.toggleSave(req
 router.post('/caught-up', (req, res, next) => feedController.markCaughtUp(req, res, next));
 
 export default router;
+
