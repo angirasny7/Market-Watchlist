@@ -1,6 +1,7 @@
 /**
  * Shared Money & Currency Formatter (F0.6)
- * Uses Intl.NumberFormat with currency codes (e.g. INR, USD) to avoid double currency symbols.
+ * Uses Intl.NumberFormat with normalized currency codes (e.g. INR, USD, EUR, GBP)
+ * to avoid double currency symbols and handle missing or unknown values safely.
  */
 
 export interface FormatMoneyOptions {
@@ -9,21 +10,42 @@ export interface FormatMoneyOptions {
   fallback?: string;
 }
 
-export function normalizeCurrencyCode(curr?: string): { code: string; symbol: string } {
-  if (!curr) return { code: 'INR', symbol: '₹' };
-  const trimmed = curr.trim();
-  if (trimmed === '₹' || trimmed.toUpperCase() === 'INR') {
+const SYMBOL_TO_CODE: Record<string, { code: string; symbol: string }> = {
+  '₹': { code: 'INR', symbol: '₹' },
+  'INR': { code: 'INR', symbol: '₹' },
+  '$': { code: 'USD', symbol: '$' },
+  'USD': { code: 'USD', symbol: '$' },
+  '€': { code: 'EUR', symbol: '€' },
+  'EUR': { code: 'EUR', symbol: '€' },
+  '£': { code: 'GBP', symbol: '£' },
+  'GBP': { code: 'GBP', symbol: '£' },
+  '¥': { code: 'JPY', symbol: '¥' },
+  'JPY': { code: 'JPY', symbol: '¥' },
+};
+
+export function normalizeCurrencyCode(curr?: string | null): { code: string; symbol: string } {
+  if (!curr || typeof curr !== 'string') {
     return { code: 'INR', symbol: '₹' };
   }
-  if (trimmed === '$' || trimmed.toUpperCase() === 'USD') {
-    return { code: 'USD', symbol: '$' };
+
+  const trimmed = curr.trim();
+  if (!trimmed) {
+    return { code: 'INR', symbol: '₹' };
   }
-  if (trimmed === '€' || trimmed.toUpperCase() === 'EUR') {
-    return { code: 'EUR', symbol: '€' };
+
+  const upper = trimmed.toUpperCase();
+  if (SYMBOL_TO_CODE[trimmed]) {
+    return SYMBOL_TO_CODE[trimmed];
   }
-  if (trimmed === '£' || trimmed.toUpperCase() === 'GBP') {
-    return { code: 'GBP', symbol: '£' };
+  if (SYMBOL_TO_CODE[upper]) {
+    return SYMBOL_TO_CODE[upper];
   }
+
+  // If it's a 3-letter currency code (e.g., CAD, AUD, CHF)
+  if (/^[A-Z]{3}$/.test(upper)) {
+    return { code: upper, symbol: upper };
+  }
+
   return { code: 'INR', symbol: trimmed };
 }
 
@@ -51,10 +73,11 @@ export function formatMoney(
     });
     return formatter.format(amount);
   } catch {
-    const numStr = amount.toLocaleString(code === 'INR' ? 'en-IN' : 'en-US', {
+    // Graceful fallback on unsupported Intl currency codes or environment limitations
+    const numStr = amount.toLocaleString('en-US', {
       minimumFractionDigits: minDigits,
       maximumFractionDigits: maxDigits,
     });
-    return `${symbol}${numStr}`;
+    return `${symbol} ${numStr}`;
   }
 }
