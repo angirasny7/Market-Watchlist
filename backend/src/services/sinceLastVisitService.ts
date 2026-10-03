@@ -128,10 +128,19 @@ export class SinceLastVisitService {
     }
 
     // 4. Find events created while away strictly for user's tracked watchlist stocks
-    // REMOVED fallbacks to historical events to avoid hiding staleness
+    const allowDemo = process.env.NODE_ENV === 'development' && process.env.SEED_DEMO_EVENTS === 'true';
+
     const rawEvents = await prisma.event.findMany({
       where: {
         stockSymbol: { in: watchlistArray },
+        ...(allowDemo
+          ? {}
+          : {
+              NOT: [
+                { id: { startsWith: 'demo_' } },
+                { id: { in: ['evt_001', 'evt_002', 'evt_003', 'evt_004'] } },
+              ],
+            }),
         OR: [
           { timestamp: { gte: lastActivity } },
           { createdAt: { gte: lastActivity } },
@@ -154,6 +163,15 @@ export class SinceLastVisitService {
 
     // Map and tag events with inWatchlist and isolated read metadata
     const newEvents = rawEvents
+      .filter((e) => {
+        if (!allowDemo) {
+          const delta = (e.metricsDelta as any) || {};
+          if (e.id.startsWith('demo_') || e.id.startsWith('evt_00') || delta.isDemo === true) {
+            return false;
+          }
+        }
+        return true;
+      })
       .map((e) => ({
         ...e,
         read: readEventIds.has(e.id),
@@ -174,10 +192,18 @@ export class SinceLastVisitService {
     const watchlistCritical = criticalEvents;
 
     // 5. Find insights generated strictly for user's tracked watchlist stocks
-    // REMOVED fallbacks to historical insights to avoid hiding staleness
     const rawInsights = await prisma.insight.findMany({
       where: {
         stockSymbol: { in: watchlistArray },
+        ...(allowDemo
+          ? {}
+          : {
+              NOT: [
+                { id: { in: ['ins_001', 'ins_002', 'ins_003', 'ins_004'] } },
+                { relatedEventId: { in: ['evt_001', 'evt_002', 'evt_003', 'evt_004'] } },
+                { relatedEventId: { startsWith: 'demo_' } },
+              ],
+            }),
         OR: [
           { createdAt: { gte: lastActivity } },
           { event: { timestamp: { gte: lastActivity } } },

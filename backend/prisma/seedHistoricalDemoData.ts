@@ -79,6 +79,7 @@ async function main() {
             priority: Priority.HIGH,
             timestamp: eventTimestamp,
             metricsDelta: {
+              isDemo: true,
               price: basePrice,
               changePercent: 3.5,
               volumeRatio: 2.1,

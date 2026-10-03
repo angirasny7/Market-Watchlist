@@ -435,6 +435,7 @@ async function main() {
       read: false,
       acknowledged: false,
       metricsDelta: {
+        isDemo: true,
         currentPrice: 1145.20,
         previousPrice: 1039.40,
         changePercent: 10.18,
@@ -472,6 +473,7 @@ async function main() {
       read: false,
       acknowledged: false,
       metricsDelta: {
+        isDemo: true,
         currentPrice: 1942.50,
         previousPrice: 1865.90,
         changePercent: 4.11,
@@ -509,6 +511,7 @@ async function main() {
       read: false,
       acknowledged: false,
       metricsDelta: {
+        isDemo: true,
         currentPrice: 4520.10,
         previousPrice: 4177.60,
         changePercent: 8.19,
@@ -546,6 +549,7 @@ async function main() {
       read: true,
       acknowledged: true,
       metricsDelta: {
+        isDemo: true,
         currentPrice: 1654.00,
         previousPrice: 1635.80,
         changePercent: 1.11,

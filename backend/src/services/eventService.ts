@@ -2,6 +2,14 @@ import { Priority, EventType } from '@prisma/client';
 import { prisma } from '../config/prisma.js';
 import { contextEnrichmentService } from './contextEnrichmentService.js';
 
+export function isEventDemo(event: { id: string; metricsDelta?: any }): boolean {
+  if (event.id.startsWith('demo_') || event.id.startsWith('evt_00')) return true;
+  const delta = (event.metricsDelta as any) || {};
+  if (delta.isDemo === true) return true;
+  if (typeof delta.detectionReason === 'string' && delta.detectionReason.includes('Demo')) return true;
+  return false;
+}
+
 export class EventService {
   /**
    * Fetch market events with per-user read derivation and watchlist affinity
@@ -17,6 +25,15 @@ export class EventService {
     limit?: number;
   }) {
     const where: any = {};
+    const allowDemo = process.env.NODE_ENV === 'development' && process.env.SEED_DEMO_EVENTS === 'true';
+
+    // Filter out demo events if not explicitly allowed in development
+    if (!allowDemo) {
+      where.NOT = [
+        { id: { startsWith: 'demo_' } },
+        { id: { in: ['evt_001', 'evt_002', 'evt_003', 'evt_004'] } },
+      ];
+    }
 
     let userWatchlistSymbols = new Set<string>();
     let readEventIds = new Set<string>();
@@ -99,8 +116,12 @@ export class EventService {
       },
     });
 
+    const eligibleEvents = allowDemo
+      ? events
+      : events.filter((e) => !isEventDemo(e));
+
     const mapped = await Promise.all(
-      events.map(async (e) => {
+      eligibleEvents.map(async (e) => {
         const isRead = options?.userId ? readEventIds.has(e.id) : Boolean(e.read);
         const delta = (e.metricsDelta as any) || {};
 
@@ -112,6 +133,7 @@ export class EventService {
         return {
           ...e,
           read: isRead,
+          isDemo: isEventDemo(e),
           inWatchlist: userWatchlistSymbols.has(e.stockSymbol),
           enrichment,
           stock: {

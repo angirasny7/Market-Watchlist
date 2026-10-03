@@ -79,6 +79,15 @@ export const TriadEventCard: React.FC<TriadEventCardProps> = ({
               {scoreInfo.label}
             </span>
 
+            {Boolean((event as any).isDemo) && (
+              <span
+                className="text-[11px] font-medium px-2 py-0.5 rounded-full border bg-violet-500/10 text-violet-400 border-violet-500/20"
+                title="Demonstration Event"
+              >
+                Demo
+              </span>
+            )}
+
             <span className="font-semibold text-slate-100 text-sm sm:text-base">
               {event.companyName}
             </span>
