@@ -37,7 +37,7 @@ export const AlertFormModal: React.FC<AlertFormModalProps> = ({
       const initialSymbol = targetSymbol || stocks[0]?.symbol || '';
       setSelectedSymbol(initialSymbol);
       const stock = stocks.find((s) => s.symbol === initialSymbol);
-      if (stock) {
+      if (stock && stock.currentPrice !== null) {
         // Pre-fill target price slightly above current price
         setTargetValue((stock.currentPrice * 1.02).toFixed(2));
       } else {
@@ -81,9 +81,9 @@ export const AlertFormModal: React.FC<AlertFormModalProps> = ({
     const stock = stocks.find((s) => s.symbol === newSymbol);
     if (stock) {
       if (alertType === 'PRICE_ABOVE') {
-        setTargetValue((stock.currentPrice * 1.02).toFixed(2));
+        setTargetValue(stock.currentPrice !== null ? (stock.currentPrice * 1.02).toFixed(2) : '');
       } else if (alertType === 'PRICE_BELOW') {
-        setTargetValue((stock.currentPrice * 0.98).toFixed(2));
+        setTargetValue(stock.currentPrice !== null ? (stock.currentPrice * 0.98).toFixed(2) : '');
       } else if (alertType === 'DAY_CHANGE_PCT') {
         setTargetValue('5.0');
       } else if (alertType === 'ATTENTION_LEVEL' || alertType === 'ATTENTION_SCORE') {
@@ -98,9 +98,9 @@ export const AlertFormModal: React.FC<AlertFormModalProps> = ({
     setAlertType(type);
     if (!activeStock) return;
     if (type === 'PRICE_ABOVE') {
-      setTargetValue((activeStock.currentPrice * 1.02).toFixed(2));
+      setTargetValue(activeStock.currentPrice !== null ? (activeStock.currentPrice * 1.02).toFixed(2) : '');
     } else if (type === 'PRICE_BELOW') {
-      setTargetValue((activeStock.currentPrice * 0.98).toFixed(2));
+      setTargetValue(activeStock.currentPrice !== null ? (activeStock.currentPrice * 0.98).toFixed(2) : '');
     } else if (type === 'DAY_CHANGE_PCT') {
       setTargetValue('5.0');
     } else if (type === 'ATTENTION_LEVEL' || type === 'ATTENTION_SCORE') {
@@ -263,7 +263,7 @@ export const AlertFormModal: React.FC<AlertFormModalProps> = ({
             >
               {stocks.map((s) => (
                 <option key={s.symbol} value={s.symbol}>
-                  {s.symbol} — {s.companyName} ({s.currency}{s.currentPrice.toFixed(2)})
+                  {s.symbol} — {s.companyName} ({s.currency}{s.currentPrice !== null ? s.currentPrice.toFixed(2) : '—'})
                 </option>
               ))}
             </select>
@@ -275,16 +275,20 @@ export const AlertFormModal: React.FC<AlertFormModalProps> = ({
               <span className="text-text-muted">Current Market Price:</span>
               <div className="flex items-center gap-2 font-mono">
                 <span className="text-text-primary font-semibold">
-                  {currency}{activeStock.currentPrice.toFixed(2)}
+                  {currency}{activeStock.currentPrice !== null ? activeStock.currentPrice.toFixed(2) : '—'}
                 </span>
-                <span
-                  className={
-                    activeStock.changePercent >= 0 ? 'text-emerald-400' : 'text-red-400'
-                  }
-                >
-                  {activeStock.changePercent >= 0 ? '+' : ''}
-                  {activeStock.changePercent.toFixed(2)}%
-                </span>
+                {activeStock.changePercent !== null ? (
+                  <span
+                    className={
+                      activeStock.changePercent >= 0 ? 'text-emerald-400' : 'text-red-400'
+                    }
+                  >
+                    {activeStock.changePercent >= 0 ? '+' : ''}
+                    {activeStock.changePercent.toFixed(2)}%
+                  </span>
+                ) : (
+                  <span className="text-text-muted">—</span>
+                )}
               </div>
             </div>
           )}

@@ -631,7 +631,10 @@ describe('Backend Watchlist and Alert Rules Test Suite', () => {
       expect(stockItem).toBeDefined();
       expect(stockItem?.symbol).toBe(noQuoteSymbol);
       expect(stockItem?.companyName).toBe('No Quote Corp');
-      expect(stockItem?.currentPrice).toBe(0);
+      expect(stockItem?.currentPrice).toBeNull();
+      expect(stockItem?.changeAmount).toBeNull();
+      expect(stockItem?.changePercent).toBeNull();
+      expect(overview.summary.totalStocks).toBe(overview.stocks.length);
 
       // Clean up
       await prisma.watchlistStock.deleteMany({

@@ -132,16 +132,16 @@ describe('watchlistFilters', () => {
     expect(result.map((s) => s.symbol)).toEqual(['RELIANCE', 'TCS']);
   });
 
-  it('preserves stocks with 0 or missing prices when filtering by search and all categories', () => {
+  it('preserves stocks with null prices when filtering by search and all categories', () => {
     const stockWithNoPrice: WatchlistStockItem = {
       symbol: 'UNLISTED',
       companyName: 'Unlisted Entity',
       sector: 'General',
       exchange: 'NSE',
       currency: '₹',
-      currentPrice: 0,
-      changeAmount: 0,
-      changePercent: 0,
+      currentPrice: null,
+      changeAmount: null,
+      changePercent: null,
       isPinned: false,
       addedAt: '2026-03-01T00:00:00Z',
       attentionLevel: 'LOW',
@@ -157,6 +157,76 @@ describe('watchlistFilters', () => {
     const filtered = filterAndSortWatchlist(combined, { search: 'unlisted' });
     expect(filtered).toHaveLength(1);
     expect(filtered[0].symbol).toBe('UNLISTED');
+    expect(filtered[0].currentPrice).toBeNull();
+    expect(filtered[0].changePercent).toBeNull();
+
+    // Still appears in Total Stocks list
+    const allFiltered = filterAndSortWatchlist(combined, { quickFilter: 'ALL' });
+    expect(allFiltered).toHaveLength(4);
+    expect(allFiltered.map((s) => s.symbol)).toContain('UNLISTED');
+  });
+
+  it('excludes stocks with null changePercent from GAINERS and LOSERS filters', () => {
+    const stockWithNoPrice: WatchlistStockItem = {
+      symbol: 'UNLISTED',
+      companyName: 'Unlisted Entity',
+      sector: 'General',
+      exchange: 'NSE',
+      currency: '₹',
+      currentPrice: null,
+      changeAmount: null,
+      changePercent: null,
+      isPinned: false,
+      addedAt: '2026-03-01T00:00:00Z',
+      attentionLevel: 'LOW',
+      attentionScore: 0,
+      unseenUpdatesCount: 0,
+      nextEvent: null,
+      activeAlertCount: 0,
+      sparkline: [],
+      watchlistIds: ['wl-1'],
+    };
+
+    const combined = [...sampleStocks, stockWithNoPrice];
+    const gainers = filterWatchlistStocks(combined, { dropdownFilter: 'GAINERS' });
+    expect(gainers.map((s) => s.symbol)).not.toContain('UNLISTED');
+    expect(gainers.map((s) => s.symbol)).toEqual(['TCS', 'RELIANCE']);
+
+    const losers = filterWatchlistStocks(combined, { dropdownFilter: 'LOSERS' });
+    expect(losers.map((s) => s.symbol)).not.toContain('UNLISTED');
+    expect(losers.map((s) => s.symbol)).toEqual(['INFY']);
+  });
+
+  it('sorts numeric fields with null values placed last', () => {
+    const stockWithNoPrice: WatchlistStockItem = {
+      symbol: 'UNLISTED',
+      companyName: 'Unlisted Entity',
+      sector: 'General',
+      exchange: 'NSE',
+      currency: '₹',
+      currentPrice: null,
+      changeAmount: null,
+      changePercent: null,
+      isPinned: false,
+      addedAt: '2026-03-01T00:00:00Z',
+      attentionLevel: 'LOW',
+      attentionScore: 0,
+      unseenUpdatesCount: 0,
+      nextEvent: null,
+      activeAlertCount: 0,
+      sparkline: [],
+      watchlistIds: ['wl-1'],
+    };
+
+    const combined = [...sampleStocks, stockWithNoPrice];
+    const sortedPriceAsc = sortWatchlistStocks(combined, 'PRICE_ASC', false);
+    expect(sortedPriceAsc[sortedPriceAsc.length - 1].symbol).toBe('UNLISTED');
+
+    const sortedPriceDesc = sortWatchlistStocks(combined, 'PRICE_DESC', false);
+    expect(sortedPriceDesc[sortedPriceDesc.length - 1].symbol).toBe('UNLISTED');
+
+    const sortedChangeDesc = sortWatchlistStocks(combined, 'DAY_CHANGE_DESC', false);
+    expect(sortedChangeDesc[sortedChangeDesc.length - 1].symbol).toBe('UNLISTED');
   });
 
   it('supports tracking multi-watchlist membership across watchlistIds', () => {

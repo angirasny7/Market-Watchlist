@@ -119,9 +119,9 @@ export class WatchlistService {
   async fetchQuotes(watchlistId: string | 'all' = 'all'): Promise<{
     quotes: Array<{
       symbol: string;
-      price: number;
-      changeAmount: number;
-      changePercent: number;
+      price: number | null;
+      changeAmount: number | null;
+      changePercent: number | null;
       exchange: string;
       currency: string;
       updatedAt: string;

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 
 interface FlashingPriceProps {
-  price: number;
+  price: number | null;
   currency: string;
   className?: string;
   isDelayed?: boolean;
@@ -13,11 +13,17 @@ export const FlashingPrice: React.FC<FlashingPriceProps> = ({
   className = '',
   isDelayed = true,
 }) => {
-  const prevPriceRef = useRef<number>(price);
+  const prevPriceRef = useRef<number | null>(price);
   const [flashColor, setFlashColor] = useState<'up' | 'down' | null>(null);
 
   useEffect(() => {
-    if (prevPriceRef.current !== price && price > 0 && prevPriceRef.current > 0) {
+    if (
+      price !== null &&
+      prevPriceRef.current !== null &&
+      prevPriceRef.current !== price &&
+      price > 0 &&
+      prevPriceRef.current > 0
+    ) {
       const color = price > prevPriceRef.current ? 'up' : 'down';
       setFlashColor(color);
       const timer = setTimeout(() => {
@@ -29,11 +35,14 @@ export const FlashingPrice: React.FC<FlashingPriceProps> = ({
     prevPriceRef.current = price;
   }, [price]);
 
-  if (!price || isNaN(price) || price <= 0) {
+  if (price === null || price === undefined || isNaN(price) || price <= 0) {
     return (
-      <div className={`font-mono text-sm text-slate-500 flex items-center justify-end gap-1 ${className}`}>
+      <div
+        title="Price unavailable"
+        className={`font-mono text-sm text-slate-500 flex items-center justify-end gap-1 ${className}`}
+      >
         <span>—</span>
-        <span title="Quote temporarily unavailable from provider" className="text-amber-400 text-xs">⚠️</span>
+        <span className="text-amber-400 text-xs">⚠️</span>
       </div>
     );
   }

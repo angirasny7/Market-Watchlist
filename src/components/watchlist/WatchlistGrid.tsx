@@ -39,7 +39,7 @@ export const WatchlistGrid: React.FC<WatchlistGridProps> = ({
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
       {stocks.map((stock) => {
-        const isPositive = stock.changePercent >= 0;
+        const isPositive = (stock.changePercent ?? 0) >= 0;
         const changeGlyph = isPositive ? '▲ +' : '▼ ';
         const curr = stock.currency || '₹';
 
@@ -106,17 +106,23 @@ export const WatchlistGrid: React.FC<WatchlistGridProps> = ({
                   className="text-lg text-slate-100"
                   isDelayed={true}
                 />
-                <div
-                  className={`text-xs font-semibold font-mono flex items-center gap-1 ${
-                    isPositive ? 'text-emerald-400' : 'text-rose-400'
-                  }`}
-                >
-                  <span>{changeGlyph}</span>
-                  <span>{Math.abs(stock.changePercent).toFixed(2)}%</span>
-                  <span className="text-[10px] text-slate-500">
-                    ({isPositive ? '+' : '-'}{curr}{Math.abs(stock.changeAmount).toFixed(2)})
-                  </span>
-                </div>
+                {stock.changePercent !== null ? (
+                  <div
+                    className={`text-xs font-semibold font-mono flex items-center gap-1 ${
+                      isPositive ? 'text-emerald-400' : 'text-rose-400'
+                    }`}
+                  >
+                    <span>{changeGlyph}</span>
+                    <span>{Math.abs(stock.changePercent).toFixed(2)}%</span>
+                    {stock.changeAmount !== null && (
+                      <span className="text-[10px] text-slate-500">
+                        ({isPositive ? '+' : '-'}{curr}{Math.abs(stock.changeAmount).toFixed(2)})
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-xs text-slate-500 font-mono">—</div>
+                )}
               </div>
 
               <div className="shrink-0">

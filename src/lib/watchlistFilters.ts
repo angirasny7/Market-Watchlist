@@ -29,9 +29,9 @@ export interface WatchlistStockItem {
   sector: string;
   exchange: string;
   currency: string;
-  currentPrice: number;
-  changeAmount: number;
-  changePercent: number;
+  currentPrice: number | null;
+  changeAmount: number | null;
+  changePercent: number | null;
   isPinned: boolean;
   addedAt: string;
   attentionLevel: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
@@ -99,9 +99,9 @@ export function filterWatchlistStocks(
     if (dropdownFilter === 'PINNED') {
       if (!stock.isPinned) return false;
     } else if (dropdownFilter === 'GAINERS') {
-      if (stock.changePercent <= 0) return false;
+      if (stock.changePercent === null || stock.changePercent <= 0) return false;
     } else if (dropdownFilter === 'LOSERS') {
-      if (stock.changePercent >= 0) return false;
+      if (stock.changePercent === null || stock.changePercent >= 0) return false;
     } else if (dropdownFilter === 'CRITICAL') {
       if (stock.attentionLevel !== 'CRITICAL') return false;
     } else if (dropdownFilter === 'HIGH') {
@@ -140,15 +140,27 @@ export function sortWatchlistStocks(
         return a.companyName.localeCompare(b.companyName);
 
       case 'DAY_CHANGE_DESC':
+        if (a.changePercent === null && b.changePercent === null) return 0;
+        if (a.changePercent === null) return 1;
+        if (b.changePercent === null) return -1;
         return b.changePercent - a.changePercent;
 
       case 'DAY_CHANGE_ASC':
+        if (a.changePercent === null && b.changePercent === null) return 0;
+        if (a.changePercent === null) return 1;
+        if (b.changePercent === null) return -1;
         return a.changePercent - b.changePercent;
 
       case 'PRICE_DESC':
+        if (a.currentPrice === null && b.currentPrice === null) return 0;
+        if (a.currentPrice === null) return 1;
+        if (b.currentPrice === null) return -1;
         return b.currentPrice - a.currentPrice;
 
       case 'PRICE_ASC':
+        if (a.currentPrice === null && b.currentPrice === null) return 0;
+        if (a.currentPrice === null) return 1;
+        if (b.currentPrice === null) return -1;
         return a.currentPrice - b.currentPrice;
 
       case 'UNSEEN_UPDATES':

@@ -5,6 +5,7 @@ import {
   Calendar,
   Bell,
   Sparkles,
+  Check,
 } from 'lucide-react';
 import { WatchlistQuickFilter } from '../../lib/watchlistFilters';
 import { WatchlistOverviewSummary } from '../../services/watchlistService';
@@ -31,7 +32,6 @@ export const WatchlistSummaryCards: React.FC<WatchlistSummaryCardsProps> = ({
     icon: React.ComponentType<{ className?: string }>;
     accentColor: string;
     activeBorder: string;
-    activeBg: string;
     badgeText?: string;
   }> = [
     {
@@ -40,8 +40,7 @@ export const WatchlistSummaryCards: React.FC<WatchlistSummaryCardsProps> = ({
       count: summary.totalStocks,
       icon: Layers,
       accentColor: 'text-slate-400 group-hover:text-slate-200',
-      activeBorder: 'border-slate-500 bg-slate-800/40',
-      activeBg: 'bg-surface-subtle',
+      activeBorder: 'border-slate-400 bg-slate-800/60 ring-2 ring-slate-400/30',
       badgeText: isAllWatchlists
         ? `across ${watchlistsCount} ${watchlistsCount === 1 ? 'list' : 'lists'}`
         : 'in this list',
@@ -52,8 +51,7 @@ export const WatchlistSummaryCards: React.FC<WatchlistSummaryCardsProps> = ({
       count: summary.needAttention,
       icon: AlertTriangle,
       accentColor: 'text-amber-400 group-hover:text-amber-300',
-      activeBorder: 'border-amber-500/60 bg-amber-500/10 shadow-amber-500/10 shadow-lg',
-      activeBg: 'bg-surface-subtle',
+      activeBorder: 'border-amber-400 bg-amber-950/30 ring-2 ring-amber-400/40 shadow-lg shadow-amber-500/10',
       badgeText: 'high priority',
     },
     {
@@ -62,8 +60,7 @@ export const WatchlistSummaryCards: React.FC<WatchlistSummaryCardsProps> = ({
       count: summary.upcomingEvents,
       icon: Calendar,
       accentColor: 'text-cyan-400 group-hover:text-cyan-300',
-      activeBorder: 'border-cyan-500/60 bg-cyan-500/10 shadow-cyan-500/10 shadow-lg',
-      activeBg: 'bg-surface-subtle',
+      activeBorder: 'border-cyan-400 bg-cyan-950/30 ring-2 ring-cyan-400/40 shadow-lg shadow-cyan-500/10',
       badgeText: 'in the next 14 days',
     },
     {
@@ -72,8 +69,7 @@ export const WatchlistSummaryCards: React.FC<WatchlistSummaryCardsProps> = ({
       count: summary.activeAlerts,
       icon: Bell,
       accentColor: 'text-indigo-400 group-hover:text-indigo-300',
-      activeBorder: 'border-indigo-500/60 bg-indigo-500/10 shadow-indigo-500/10 shadow-lg',
-      activeBg: 'bg-surface-subtle',
+      activeBorder: 'border-indigo-400 bg-indigo-950/30 ring-2 ring-indigo-400/40 shadow-lg shadow-indigo-500/10',
       badgeText: 'active triggers',
     },
     {
@@ -81,9 +77,8 @@ export const WatchlistSummaryCards: React.FC<WatchlistSummaryCardsProps> = ({
       label: 'Unseen Updates',
       count: summary.unseenUpdates,
       icon: Sparkles,
-      accentColor: 'text-rose-400 group-hover:text-rose-300',
-      activeBorder: 'border-rose-500/60 bg-rose-500/10 shadow-rose-500/10 shadow-lg',
-      activeBg: 'bg-surface-subtle',
+      accentColor: 'text-violet-400 group-hover:text-violet-300',
+      activeBorder: 'border-violet-400 bg-violet-950/30 ring-2 ring-violet-400/40 shadow-lg shadow-violet-500/10',
       badgeText: 'unread updates',
     },
   ];
@@ -98,6 +93,8 @@ export const WatchlistSummaryCards: React.FC<WatchlistSummaryCardsProps> = ({
           <button
             key={card.id}
             type="button"
+            role="button"
+            aria-pressed={isActive}
             onClick={() => {
               if (isActive && card.id !== 'ALL') {
                 onSelectFilter('ALL');
@@ -107,15 +104,17 @@ export const WatchlistSummaryCards: React.FC<WatchlistSummaryCardsProps> = ({
             }}
             className={`group relative p-3 sm:p-3.5 rounded-xl border text-left transition-all duration-200 cursor-pointer ${
               isActive
-                ? `${card.activeBorder} ring-1 ring-white/10`
+                ? card.activeBorder
                 : 'border-border bg-surface hover:border-slate-700/80 hover:bg-surface-hover'
             }`}
           >
             <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[11px] font-medium text-slate-400 group-hover:text-slate-300 transition-colors">
+              <span className={`text-[11px] font-medium transition-colors ${
+                isActive ? 'text-slate-200 font-semibold' : 'text-slate-400 group-hover:text-slate-300'
+              }`}>
                 {card.label}
               </span>
-              <Icon className={`w-3.5 h-3.5 ${card.accentColor} transition-colors`} />
+              <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-slate-100' : card.accentColor} transition-colors`} />
             </div>
 
             <div className="flex items-baseline justify-between gap-1">
@@ -123,11 +122,20 @@ export const WatchlistSummaryCards: React.FC<WatchlistSummaryCardsProps> = ({
                 {card.count}
               </span>
 
-              {card.badgeText && (
+              {isActive && card.id !== 'ALL' ? (
+                <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm animate-in fade-in duration-200">
+                  <Check className="w-2.5 h-2.5" />
+                  <span>Filtered</span>
+                </span>
+              ) : isActive && card.id === 'ALL' ? (
+                <span className="inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded bg-slate-700/60 text-slate-300 border border-slate-600/60">
+                  {card.badgeText}
+                </span>
+              ) : card.badgeText ? (
                 <span className="text-[10px] text-slate-500 group-hover:text-slate-400 font-medium transition-colors">
                   {card.badgeText}
                 </span>
-              )}
+              ) : null}
             </div>
 
             {isActive && (

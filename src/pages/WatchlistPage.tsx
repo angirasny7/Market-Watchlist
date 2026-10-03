@@ -143,6 +143,13 @@ export const WatchlistPage: React.FC = () => {
     };
   }, [activeWatchlistId, pollWatchlistQuotes]);
 
+  // Reset search and filters whenever the active watchlist tab changes
+  useEffect(() => {
+    setSearchQuery('');
+    setWatchlistQuickFilter('ALL');
+    setWatchlistDropdownFilter('ALL');
+  }, [activeWatchlistId, setWatchlistQuickFilter, setWatchlistDropdownFilter]);
+
   // Combine live overview stocks or fallback to adapted store watchlist
   const rawStocks: WatchlistStockItem[] = useMemo(() => {
     if (watchlistOverview?.stocks) {
@@ -156,9 +163,9 @@ export const WatchlistPage: React.FC = () => {
       sector: s.sector || 'General',
       exchange: s.exchange || 'NSE',
       currency: s.currency || '₹',
-      currentPrice: s.currentPrice,
-      changeAmount: s.changeAmount,
-      changePercent: s.changePercent,
+      currentPrice: typeof s.currentPrice === 'number' && s.currentPrice > 0 ? s.currentPrice : null,
+      changeAmount: typeof s.changeAmount === 'number' ? s.changeAmount : null,
+      changePercent: typeof s.changePercent === 'number' ? s.changePercent : null,
       isPinned: s.isPinned || false,
       addedAt: new Date().toISOString(),
       attentionLevel: 'LOW',
@@ -166,7 +173,7 @@ export const WatchlistPage: React.FC = () => {
       unseenUpdatesCount: 0,
       nextEvent: null,
       activeAlertCount: 0,
-      sparkline: (s.sparkline as any[]) || [s.currentPrice],
+      sparkline: (s.sparkline as any[]) || [],
       watchlistIds: [],
     }));
   }, [watchlistOverview, watchlist]);

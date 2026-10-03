@@ -153,8 +153,14 @@ const SAVED_ACTIVE_WL_KEY = 'smw_active_watchlist_id';
 const SAVED_WL_RANGE_KEY = 'smw_watchlist_range';
 const SAVED_WL_VIEW_MODE_KEY = 'smw_watchlist_view_mode';
 const SAVED_WL_SORT_KEY = 'smw_watchlist_sort_field';
-const SAVED_WL_QUICK_FILTER_KEY = 'smw_watchlist_quick_filter';
-const SAVED_WL_DROPDOWN_FILTER_KEY = 'smw_watchlist_dropdown_filter';
+
+// Clean up any legacy transient filter keys from localStorage
+if (typeof localStorage !== 'undefined') {
+  try {
+    localStorage.removeItem('smw_watchlist_quick_filter');
+    localStorage.removeItem('smw_watchlist_dropdown_filter');
+  } catch {}
+}
 
 let syncTimer: any = null;
 function debouncedSyncPreferences(getState: () => MarketState) {
@@ -166,8 +172,6 @@ function debouncedSyncPreferences(getState: () => MarketState) {
       viewMode: s.watchlistViewMode,
       range: s.watchlistRange,
       sortField: s.watchlistSortField,
-      quickFilter: s.watchlistQuickFilter,
-      dropdownFilter: s.watchlistDropdownFilter,
     };
     apiClient.patch('/user/preferences', { preferences: prefs }).catch(() => {});
   }, 1000);
@@ -198,8 +202,8 @@ export const useMarketStore = create<MarketState>((set, get) => ({
   activeWatchlistId: (typeof localStorage !== 'undefined' && localStorage.getItem(SAVED_ACTIVE_WL_KEY)) || 'all',
   watchlistOverview: null,
   watchlistRange: (typeof localStorage !== 'undefined' && (localStorage.getItem(SAVED_WL_RANGE_KEY) as '1D' | '1W' | '1M')) || '1D',
-  watchlistQuickFilter: (typeof localStorage !== 'undefined' && (localStorage.getItem(SAVED_WL_QUICK_FILTER_KEY) as WatchlistQuickFilter)) || 'ALL',
-  watchlistDropdownFilter: (typeof localStorage !== 'undefined' && (localStorage.getItem(SAVED_WL_DROPDOWN_FILTER_KEY) as WatchlistDropdownFilter)) || 'ALL',
+  watchlistQuickFilter: 'ALL',
+  watchlistDropdownFilter: 'ALL',
   watchlistSortField: (typeof localStorage !== 'undefined' && (localStorage.getItem(SAVED_WL_SORT_KEY) as WatchlistSortField)) || 'ATTENTION_SCORE',
   isOverviewLoading: false,
 
@@ -215,7 +219,12 @@ export const useMarketStore = create<MarketState>((set, get) => ({
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem(SAVED_ACTIVE_WL_KEY, id);
     }
-    set({ activeWatchlistId: id });
+    set({
+      activeWatchlistId: id,
+      watchlistQuickFilter: 'ALL',
+      watchlistDropdownFilter: 'ALL',
+      stockSearchQuery: '',
+    });
     debouncedSyncPreferences(get);
     get().fetchWatchlistOverview(id);
   },
@@ -230,19 +239,11 @@ export const useMarketStore = create<MarketState>((set, get) => ({
   },
 
   setWatchlistQuickFilter: (filter: WatchlistQuickFilter) => {
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(SAVED_WL_QUICK_FILTER_KEY, filter);
-    }
     set({ watchlistQuickFilter: filter });
-    debouncedSyncPreferences(get);
   },
 
   setWatchlistDropdownFilter: (filter: WatchlistDropdownFilter) => {
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(SAVED_WL_DROPDOWN_FILTER_KEY, filter);
-    }
     set({ watchlistDropdownFilter: filter });
-    debouncedSyncPreferences(get);
   },
 
   setWatchlistSortField: (sort: WatchlistSortField) => {
@@ -1079,14 +1080,6 @@ export const useMarketStore = create<MarketState>((set, get) => ({
         if (p.sortField) {
           set({ watchlistSortField: p.sortField });
           if (typeof localStorage !== 'undefined') localStorage.setItem(SAVED_WL_SORT_KEY, p.sortField);
-        }
-        if (p.quickFilter) {
-          set({ watchlistQuickFilter: p.quickFilter });
-          if (typeof localStorage !== 'undefined') localStorage.setItem(SAVED_WL_QUICK_FILTER_KEY, p.quickFilter);
-        }
-        if (p.dropdownFilter) {
-          set({ watchlistDropdownFilter: p.dropdownFilter });
-          if (typeof localStorage !== 'undefined') localStorage.setItem(SAVED_WL_DROPDOWN_FILTER_KEY, p.dropdownFilter);
         }
       }
 

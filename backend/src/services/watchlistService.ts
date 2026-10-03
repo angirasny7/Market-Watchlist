@@ -9,9 +9,9 @@ export interface WatchlistStockOverviewItem {
   sector: string;
   exchange: string;
   currency: string;
-  currentPrice: number;
-  changeAmount: number;
-  changePercent: number;
+  currentPrice: number | null;
+  changeAmount: number | null;
+  changePercent: number | null;
   isPinned: boolean;
   addedAt: string;
   attentionLevel: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
@@ -52,10 +52,11 @@ function extractSparklineNumbers(
   stock: any,
   range: '1D' | '1W' | '1M' = '1D'
 ): number[] {
-  if (!stock) return [0];
-  const currentPrice = Number(stock.currentPrice || 0);
-  if (currentPrice <= 0) return [0];
-  const changePercent = Number(stock.changePercent || 0);
+  if (!stock) return [];
+  const rawPrice = stock.currentPrice !== null && stock.currentPrice !== undefined ? Number(stock.currentPrice) : null;
+  if (!rawPrice || isNaN(rawPrice) || rawPrice <= 0) return [];
+  const currentPrice = rawPrice;
+  const changePercent = stock.changePercent !== null && stock.changePercent !== undefined ? Number(stock.changePercent) : 0;
   const rawSparkline = stock.sparkline;
 
   let basePoints: number[] = [];
@@ -578,15 +579,25 @@ export class WatchlistService {
       const nextEv = upcomingEventsMap.get(symbol);
       const activeAlertCount = activeAlertsBySymbol.get(symbol) || 0;
 
+      const rawPrice = stock?.currentPrice !== null && stock?.currentPrice !== undefined ? Number(stock.currentPrice) : null;
+      const hasValidPrice = rawPrice !== null && !isNaN(rawPrice) && rawPrice > 0;
+      const currentPrice = hasValidPrice ? rawPrice : null;
+
+      const rawChangeAmount = stock?.changeAmount !== null && stock?.changeAmount !== undefined ? Number(stock.changeAmount) : null;
+      const changeAmount = hasValidPrice && rawChangeAmount !== null && !isNaN(rawChangeAmount) ? rawChangeAmount : null;
+
+      const rawChangePercent = stock?.changePercent !== null && stock?.changePercent !== undefined ? Number(stock.changePercent) : null;
+      const changePercent = hasValidPrice && rawChangePercent !== null && !isNaN(rawChangePercent) ? rawChangePercent : null;
+
       stockItems.push({
         symbol,
         companyName: stock?.companyName || symbol,
         sector: stock?.sector || 'Unknown',
         exchange: stock?.exchange || 'NSE',
         currency: stock?.currency || '₹',
-        currentPrice: stock?.currentPrice ? Number(stock.currentPrice) : 0,
-        changeAmount: stock?.changeAmount ? Number(stock.changeAmount) : 0,
-        changePercent: stock?.changePercent ? Number(stock.changePercent) : 0,
+        currentPrice,
+        changeAmount,
+        changePercent,
         isPinned,
         addedAt: addedAt.toISOString(),
         attentionLevel,
@@ -684,18 +695,26 @@ export class WatchlistService {
       },
     });
 
-    const quotes = stocks.map(s => ({
-      symbol: s.symbol,
-      price: Number(s.currentPrice),
-      changeAmount: Number(s.changeAmount),
-      changePercent: Number(s.changePercent),
-      exchange: s.exchange,
-      currency: s.currency,
-      updatedAt: s.updatedAt.toISOString(),
-      // Note: Yahoo Finance for NSE is typically delayed ~15 minutes.
-      // Prices shown are last close or delayed intraday quote from provider.
-      isDelayed: true,
-    }));
+    const quotes = stocks.map(s => {
+      const rawPrice = s.currentPrice !== null && s.currentPrice !== undefined ? Number(s.currentPrice) : null;
+      const hasValidPrice = rawPrice !== null && !isNaN(rawPrice) && rawPrice > 0;
+      const price = hasValidPrice ? rawPrice : null;
+      const rawChangeAmount = s.changeAmount !== null && s.changeAmount !== undefined ? Number(s.changeAmount) : null;
+      const changeAmount = hasValidPrice && rawChangeAmount !== null && !isNaN(rawChangeAmount) ? rawChangeAmount : null;
+      const rawChangePercent = s.changePercent !== null && s.changePercent !== undefined ? Number(s.changePercent) : null;
+      const changePercent = hasValidPrice && rawChangePercent !== null && !isNaN(rawChangePercent) ? rawChangePercent : null;
+
+      return {
+        symbol: s.symbol,
+        price,
+        changeAmount,
+        changePercent,
+        exchange: s.exchange,
+        currency: s.currency,
+        updatedAt: s.updatedAt.toISOString(),
+        isDelayed: true,
+      };
+    });
 
     return {
       quotes,

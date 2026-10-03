@@ -77,10 +77,15 @@ export const WatchlistTable: React.FC<WatchlistTableProps> = ({
         </thead>
         <tbody className="divide-y divide-border/60 text-xs">
           {stocks.map((stock, index) => {
-            const isPositive = stock.changePercent >= 0;
+            const isPriceAvailable = stock.currentPrice !== null;
+            const isChangeAvailable = stock.changePercent !== null;
+            const isPositive = (stock.changePercent ?? 0) >= 0;
             const changeGlyph = isPositive ? '▲ +' : '▼ ';
             const curr = stock.currency || '₹';
             const exchangeClosed = stock.exchange ? !isExchangeOpen(stock.exchange) : false;
+
+            const priceLabel = isPriceAvailable ? `price ${curr}${stock.currentPrice!.toFixed(2)}` : 'price unavailable';
+            const changeLabel = isChangeAvailable ? `day change ${stock.changePercent!.toFixed(2)} percent` : 'change unavailable';
 
             return (
               <tr
@@ -90,7 +95,7 @@ export const WatchlistTable: React.FC<WatchlistTableProps> = ({
                 }}
                 tabIndex={0}
                 role="row"
-                aria-label={`${stock.symbol}, ${stock.companyName}, price ${curr}${stock.currentPrice.toFixed(2)}, day change ${stock.changePercent.toFixed(2)} percent`}
+                aria-label={`${stock.symbol}, ${stock.companyName}, ${priceLabel}, ${changeLabel}`}
                 onClick={() => onSelectStock(stock)}
                 onKeyDown={(e) => handleRowKeyDown(e, index, stock)}
                 className="group hover:bg-surface-hover/80 focus:bg-surface-hover/90 focus:outline-none focus:ring-1 focus:ring-indigo-500/60 transition-colors cursor-pointer"
@@ -175,21 +180,29 @@ export const WatchlistTable: React.FC<WatchlistTableProps> = ({
 
                 {/* 4. Day Change */}
                 <td className="py-3.5 px-3 text-right">
-                  <div
-                    className={`font-semibold font-mono text-xs flex items-center justify-end gap-1 ${
-                      isPositive ? 'text-emerald-400' : 'text-rose-400'
-                    }`}
-                  >
-                    <span>{changeGlyph}</span>
-                    <span>
-                      {Math.abs(stock.changePercent).toFixed(2)}%
-                    </span>
-                  </div>
-                  <div className="text-[10px] text-slate-500 font-mono">
-                    {isPositive ? '+' : '-'}
-                    {curr}
-                    {Math.abs(stock.changeAmount).toFixed(2)}
-                  </div>
+                  {stock.changePercent !== null ? (
+                    <>
+                      <div
+                        className={`font-semibold font-mono text-xs flex items-center justify-end gap-1 ${
+                          isPositive ? 'text-emerald-400' : 'text-rose-400'
+                        }`}
+                      >
+                        <span>{changeGlyph}</span>
+                        <span>
+                          {Math.abs(stock.changePercent).toFixed(2)}%
+                        </span>
+                      </div>
+                      {stock.changeAmount !== null && (
+                        <div className="text-[10px] text-slate-500 font-mono">
+                          {isPositive ? '+' : '-'}
+                          {curr}
+                          {Math.abs(stock.changeAmount).toFixed(2)}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-slate-500 font-mono text-xs">—</span>
+                  )}
                 </td>
 
                 {/* 5. Attention Badge */}
