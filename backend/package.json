@@ -14,6 +14,7 @@
     "prisma:push": "prisma db push",
     "prisma:seed": "tsx prisma/seed.ts",
     "prisma:seed-historical-demo": "tsx prisma/seedHistoricalDemoData.ts",
+    "check:data": "tsx scripts/checkData.ts",
     "test": "npx vitest run tests/backendRules.test.ts"
   },
   "dependencies": {

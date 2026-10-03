@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { WatchlistStockItem } from '../../lib/watchlistFilters';
 import { Sparkline } from './Sparkline';
+import { FlashingPrice } from './FlashingPrice';
 import { isExchangeOpen } from '../../lib/marketHours';
 
 interface WatchlistTableProps {
@@ -142,13 +143,12 @@ export const WatchlistTable: React.FC<WatchlistTableProps> = ({
 
                 {/* 3. Market Price */}
                 <td className="py-3.5 px-3 text-right">
-                  <div className="font-semibold text-sm text-slate-100 font-mono">
-                    {curr}
-                    {stock.currentPrice.toLocaleString('en-IN', {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
-                  </div>
+                  <FlashingPrice
+                    price={stock.currentPrice}
+                    currency={curr}
+                    className="text-sm text-slate-100"
+                    isDelayed={true}
+                  />
                 </td>
 
                 {/* 4. Day Change */}

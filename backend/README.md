@@ -39,6 +39,10 @@ cp .env.example .env
 | `JWT_SECRET` | Secret key for signing JSON Web Tokens | `smart_market_watchlist_jwt_secret_key_2026_super_secure_production_grade` |
 | `JWT_EXPIRES_IN`| Token lifespan | `7d` |
 | `CORS_ORIGIN` | Allowed client origin | `http://localhost:5173` |
+| `ENABLE_INTERNAL_CRON` | Set `true` to enable automatic background scheduler locally (2m quote sync during market hours, 5m pipeline, 15m news sync) | `true` |
+| `SEED_DEMO_EVENTS` | Set `true` in development to seed realistic upcoming corporate demo events | `false` |
+
+> **Local Development Note**: `ENABLE_INTERNAL_CRON=true` (or leaving it default/unset) enables automatic background synchronization crons on your machine. If disabled (`ENABLE_INTERNAL_CRON=false`), you can manually trigger a full synchronization cycle on demand via `POST /api/internal/run-pipeline`.
 
 ---
 
@@ -81,6 +85,12 @@ npm run prisma:seed-historical-demo
 npm run dev
 ```
 The server will start at `http://localhost:5000`.
+
+### Step 6: Audit Market Data Integrity & Freshness (Dev Tool)
+Run the built-in integrity auditor to verify live vs database quotes, staleness flags, and seed patterns:
+```bash
+npm run check:data
+```
 
 ---
 

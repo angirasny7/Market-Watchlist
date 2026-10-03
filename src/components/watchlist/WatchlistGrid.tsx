@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { WatchlistStockItem } from '../../lib/watchlistFilters';
 import { Sparkline } from './Sparkline';
+import { FlashingPrice } from './FlashingPrice';
 
 interface WatchlistGridProps {
   stocks: WatchlistStockItem[];
@@ -77,13 +78,12 @@ export const WatchlistGrid: React.FC<WatchlistGridProps> = ({
             {/* 2. Middle Row: Price, Day Change & Mini Sparkline */}
             <div className="flex items-end justify-between gap-2 my-2 py-2 border-y border-border/60">
               <div>
-                <div className="text-lg font-bold font-mono text-slate-100">
-                  {curr}
-                  {stock.currentPrice.toLocaleString('en-IN', {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
-                </div>
+                <FlashingPrice
+                  price={stock.currentPrice}
+                  currency={curr}
+                  className="text-lg text-slate-100"
+                  isDelayed={true}
+                />
                 <div
                   className={`text-xs font-semibold font-mono flex items-center gap-1 ${
                     isPositive ? 'text-emerald-400' : 'text-rose-400'

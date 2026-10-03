@@ -67,34 +67,79 @@ export const WatchlistPage: React.FC = () => {
     fetchWatchlistOverview();
   }, [fetchUserWatchlists, fetchWatchlistOverview]);
 
-  // 60-second price polling — runs when at least one exchange is open.
+  // 30-60s price polling — runs when at least one exchange is open and page is visible.
   // Uses the lightweight /quotes endpoint so attention/events/sparklines are unchanged.
   useEffect(() => {
-    const POLL_INTERVAL_MS = 60_000;
+    const POLL_INTERVAL_MS = 45_000;
+    let timerId: any = null;
+    let consecutiveErrors = 0;
 
-    const tick = () => {
-      // Check if any exchange currently open (NSE hours OR US market hours)
+    const isAnyOpen = () => {
       const nowIST = new Date();
-      const istHour = new Date(nowIST.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' })).getHours();
-      const istMin = new Date(nowIST.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' })).getMinutes();
+      const istParts = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Kolkata',
+        hour: 'numeric',
+        minute: 'numeric',
+        hour12: false,
+        weekday: 'short',
+      }).formatToParts(nowIST);
+
+      const istWeekday = istParts.find((p) => p.type === 'weekday')?.value;
+      const istHour = parseInt(istParts.find((p) => p.type === 'hour')?.value || '0', 10);
+      const istMin = parseInt(istParts.find((p) => p.type === 'minute')?.value || '0', 10);
       const istTotal = istHour * 60 + istMin;
-      const istDay = new Date(nowIST.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' })).getDay();
+      const nseOpen = istWeekday !== 'Sat' && istWeekday !== 'Sun' && istTotal >= 555 && istTotal <= 930;
 
-      const etHour = new Date(nowIST.toLocaleString('en-US', { timeZone: 'America/New_York' })).getHours();
-      const etMin = new Date(nowIST.toLocaleString('en-US', { timeZone: 'America/New_York' })).getMinutes();
-      const etTotal = etHour * 60 + etMin;
-      const etDay = new Date(nowIST.toLocaleString('en-US', { timeZone: 'America/New_York' })).getDay();
+      const usParts = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/New_York',
+        hour: 'numeric',
+        minute: 'numeric',
+        hour12: false,
+        weekday: 'short',
+      }).formatToParts(nowIST);
 
-      const nseOpen = istDay > 0 && istDay < 6 && istTotal >= 555 && istTotal <= 930;
-      const usOpen = etDay > 0 && etDay < 6 && etTotal >= 570 && etTotal <= 960;
+      const usWeekday = usParts.find((p) => p.type === 'weekday')?.value;
+      const usHour = parseInt(usParts.find((p) => p.type === 'hour')?.value || '0', 10);
+      const usMin = parseInt(usParts.find((p) => p.type === 'minute')?.value || '0', 10);
+      const usTotal = usHour * 60 + usMin;
+      const usOpen = usWeekday !== 'Sat' && usWeekday !== 'Sun' && usTotal >= 570 && usTotal <= 960;
 
-      if (nseOpen || usOpen) {
-        pollWatchlistQuotes(activeWatchlistId);
+      return nseOpen || usOpen;
+    };
+
+    const poll = async () => {
+      if (document.visibilityState !== 'visible' || !isAnyOpen()) return;
+      try {
+        await pollWatchlistQuotes(activeWatchlistId);
+        consecutiveErrors = 0;
+      } catch {
+        consecutiveErrors++;
       }
     };
 
-    const id = setInterval(tick, POLL_INTERVAL_MS);
-    return () => clearInterval(id);
+    const scheduleNext = () => {
+      const delay = consecutiveErrors > 0 ? Math.min(POLL_INTERVAL_MS * Math.pow(1.5, consecutiveErrors), 300_000) : POLL_INTERVAL_MS;
+      timerId = setTimeout(async () => {
+        await poll();
+        scheduleNext();
+      }, delay);
+    };
+
+    scheduleNext();
+
+    // Refetch immediately when tab becomes visible again
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && isAnyOpen()) {
+        poll();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearTimeout(timerId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [activeWatchlistId, pollWatchlistQuotes]);
 
   // Combine live overview stocks or fallback to adapted store watchlist

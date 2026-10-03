@@ -8,10 +8,13 @@ import { alertService } from '../services/alertService.js';
 import { corporateEventService } from '../services/corporateEventService.js';
 import { runSyncCorporateEventsJob } from './syncCorporateEventsJob.js';
 
+import { isAnyMarketOpen } from '../utils/marketHours.js';
+
 let lastStockSyncTime: Date | null = null;
 let lastNewsSyncTime: Date | null = null;
 let isPipelineInProgress = false;
 let isNewsSyncInProgress = false;
+let isQuoteSyncInProgress = false;
 
 export function isPipelineRunning(): boolean {
   return isPipelineInProgress;
@@ -115,6 +118,22 @@ export function startScheduler(): void {
       console.error('[Scheduler] Scheduled intelligence pipeline failed:', err.message);
     } finally {
       isPipelineInProgress = false;
+    }
+  });
+
+  // 1b. Fast Quotes Sync: Every 2 minutes during active market hours (*/2 * * * *)
+  cron.schedule('*/2 * * * *', async () => {
+    if (!isAnyMarketOpen()) return; // Skip fast polling outside market hours
+    if (isPipelineInProgress || isQuoteSyncInProgress) return;
+
+    try {
+      isQuoteSyncInProgress = true;
+      await runSyncStocksJob();
+      lastStockSyncTime = new Date();
+    } catch (err: any) {
+      console.error('[Scheduler] Market-hours quote sync failed:', err.message);
+    } finally {
+      isQuoteSyncInProgress = false;
     }
   });
 
