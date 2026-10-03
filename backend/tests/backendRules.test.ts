@@ -555,4 +555,89 @@ describe('Backend Watchlist and Alert Rules Test Suite', () => {
       await prisma.user.delete({ where: { id: freshUser.id } }).catch(() => {});
     });
   });
+
+  // =========================================================================
+  // 9. WATCHLIST OVERVIEW COUNTS & RESILIENCE
+  // =========================================================================
+  describe('Watchlist Overview Counts & Multi-List Visibility', () => {
+    it('stock present in two watchlists appears in both individual overviews', async () => {
+      // Create second watchlist for test user
+      const list2 = await prisma.watchlist.create({
+        data: { userId: testUserId, name: 'Secondary Test List', isDefault: false },
+      });
+
+      // Add testStockSymbol to both default list and list2
+      await watchlistService.addStockToWatchlist(testUserId, defaultWatchlistId, testStockSymbol);
+      await watchlistService.addStockToWatchlist(testUserId, list2.id, testStockSymbol);
+
+      // Add secondaryStockSymbol only to list2
+      await watchlistService.addStockToWatchlist(testUserId, list2.id, secondaryStockSymbol);
+
+      // Fetch overview for default list
+      const defaultOverview = await watchlistService.getOverview(testUserId, defaultWatchlistId);
+      expect(defaultOverview.stocks.map((s) => s.symbol)).toContain(testStockSymbol);
+      expect(defaultOverview.summary.totalStocks).toBe(defaultOverview.stocks.length);
+
+      // Fetch overview for list2
+      const list2Overview = await watchlistService.getOverview(testUserId, list2.id);
+      expect(list2Overview.stocks.map((s) => s.symbol)).toContain(testStockSymbol);
+      expect(list2Overview.stocks.map((s) => s.symbol)).toContain(secondaryStockSymbol);
+      expect(list2Overview.summary.totalStocks).toBe(list2Overview.stocks.length);
+
+      // Fetch "All Watchlists" overview ('all')
+      const allOverview = await watchlistService.getOverview(testUserId, 'all');
+      const allSymbols = allOverview.stocks.map((s) => s.symbol);
+      expect(allSymbols).toContain(testStockSymbol);
+      expect(allSymbols).toContain(secondaryStockSymbol);
+      // All watchlists should contain distinct union
+      const distinctCount = new Set(allSymbols).size;
+      expect(allOverview.stocks.length).toBe(distinctCount);
+      expect(allOverview.summary.totalStocks).toBe(distinctCount);
+
+      // Check that testStockSymbol has both watchlist IDs in all overview
+      const sharedItem = allOverview.stocks.find((s) => s.symbol === testStockSymbol);
+      expect(sharedItem?.watchlistIds).toContain(defaultWatchlistId);
+      expect(sharedItem?.watchlistIds).toContain(list2.id);
+
+      // Clean up
+      await prisma.watchlistStock.deleteMany({
+        where: { watchlistId: { in: [defaultWatchlistId, list2.id] } },
+      });
+      await prisma.watchlist.delete({ where: { id: list2.id } }).catch(() => {});
+    });
+
+    it('handles stock with missing quotes gracefully without dropping row or crashing', async () => {
+      // Create a stock with minimal/missing quote data
+      const noQuoteSymbol = `NOQUOTE_${Date.now()}`;
+      await prisma.stock.create({
+        data: {
+          symbol: noQuoteSymbol,
+          companyName: 'No Quote Corp',
+          sector: 'Unknown',
+          marketCap: '₹0 Cr',
+          high52w: 0,
+          low52w: 0,
+          currentPrice: 0,
+          changeAmount: 0,
+          changePercent: 0,
+        },
+      });
+
+      await watchlistService.addStockToWatchlist(testUserId, defaultWatchlistId, noQuoteSymbol);
+
+      const overview = await watchlistService.getOverview(testUserId, defaultWatchlistId);
+      const stockItem = overview.stocks.find((s) => s.symbol === noQuoteSymbol);
+
+      expect(stockItem).toBeDefined();
+      expect(stockItem?.symbol).toBe(noQuoteSymbol);
+      expect(stockItem?.companyName).toBe('No Quote Corp');
+      expect(stockItem?.currentPrice).toBe(0);
+
+      // Clean up
+      await prisma.watchlistStock.deleteMany({
+        where: { watchlistId: defaultWatchlistId, stockSymbol: noQuoteSymbol },
+      });
+      await prisma.stock.delete({ where: { symbol: noQuoteSymbol } }).catch(() => {});
+    });
+  });
 });

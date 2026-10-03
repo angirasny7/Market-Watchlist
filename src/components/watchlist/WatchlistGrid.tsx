@@ -13,6 +13,8 @@ import { WatchlistStockItem } from '../../lib/watchlistFilters';
 import { Sparkline } from './Sparkline';
 import { FlashingPrice } from './FlashingPrice';
 
+import { UserWatchlist } from '../../services';
+
 interface WatchlistGridProps {
   stocks: WatchlistStockItem[];
   onTogglePin: (symbol: string) => void;
@@ -20,6 +22,8 @@ interface WatchlistGridProps {
   onSelectStock: (stock: WatchlistStockItem) => void;
   onOpenAlerts?: (symbol: string) => void;
   onMoveCopyStock?: (symbol: string) => void;
+  isAllWatchlists?: boolean;
+  userWatchlists?: UserWatchlist[];
 }
 
 export const WatchlistGrid: React.FC<WatchlistGridProps> = ({
@@ -29,6 +33,8 @@ export const WatchlistGrid: React.FC<WatchlistGridProps> = ({
   onSelectStock,
   onOpenAlerts,
   onMoveCopyStock,
+  isAllWatchlists = false,
+  userWatchlists = [],
 }) => {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
@@ -57,6 +63,22 @@ export const WatchlistGrid: React.FC<WatchlistGridProps> = ({
                 <div className="text-xs text-slate-400 truncate mt-0.5">
                   {stock.companyName}
                 </div>
+                {isAllWatchlists && stock.watchlistIds && stock.watchlistIds.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1 mt-1">
+                    {stock.watchlistIds.map((wId) => {
+                      const w = userWatchlists.find((uw) => uw.id === wId);
+                      if (!w) return null;
+                      return (
+                        <span
+                          key={wId}
+                          className="text-[9px] px-1.5 py-0.2 rounded bg-surface-subtle text-slate-400 border border-border/70"
+                        >
+                          {w.name}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>

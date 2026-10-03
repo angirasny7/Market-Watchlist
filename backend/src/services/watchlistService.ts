@@ -52,7 +52,9 @@ function extractSparklineNumbers(
   stock: any,
   range: '1D' | '1W' | '1M' = '1D'
 ): number[] {
-  const currentPrice = Number(stock.currentPrice);
+  if (!stock) return [0];
+  const currentPrice = Number(stock.currentPrice || 0);
+  if (currentPrice <= 0) return [0];
   const changePercent = Number(stock.changePercent || 0);
   const rawSparkline = stock.sparkline;
 
@@ -578,13 +580,13 @@ export class WatchlistService {
 
       stockItems.push({
         symbol,
-        companyName: stock.companyName,
-        sector: stock.sector,
-        exchange: stock.exchange,
-        currency: stock.currency || '₹',
-        currentPrice: Number(stock.currentPrice),
-        changeAmount: Number(stock.changeAmount),
-        changePercent: Number(stock.changePercent),
+        companyName: stock?.companyName || symbol,
+        sector: stock?.sector || 'Unknown',
+        exchange: stock?.exchange || 'NSE',
+        currency: stock?.currency || '₹',
+        currentPrice: stock?.currentPrice ? Number(stock.currentPrice) : 0,
+        changeAmount: stock?.changeAmount ? Number(stock.changeAmount) : 0,
+        changePercent: stock?.changePercent ? Number(stock.changePercent) : 0,
         isPinned,
         addedAt: addedAt.toISOString(),
         attentionLevel,

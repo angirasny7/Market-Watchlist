@@ -131,4 +131,37 @@ describe('watchlistFilters', () => {
     });
     expect(result.map((s) => s.symbol)).toEqual(['RELIANCE', 'TCS']);
   });
+
+  it('preserves stocks with 0 or missing prices when filtering by search and all categories', () => {
+    const stockWithNoPrice: WatchlistStockItem = {
+      symbol: 'UNLISTED',
+      companyName: 'Unlisted Entity',
+      sector: 'General',
+      exchange: 'NSE',
+      currency: '₹',
+      currentPrice: 0,
+      changeAmount: 0,
+      changePercent: 0,
+      isPinned: false,
+      addedAt: '2026-03-01T00:00:00Z',
+      attentionLevel: 'LOW',
+      attentionScore: 0,
+      unseenUpdatesCount: 0,
+      nextEvent: null,
+      activeAlertCount: 0,
+      sparkline: [],
+      watchlistIds: ['wl-1'],
+    };
+
+    const combined = [...sampleStocks, stockWithNoPrice];
+    const filtered = filterAndSortWatchlist(combined, { search: 'unlisted' });
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0].symbol).toBe('UNLISTED');
+  });
+
+  it('supports tracking multi-watchlist membership across watchlistIds', () => {
+    const multiWatchlistStock = sampleStocks.find((s) => s.symbol === 'INFY');
+    expect(multiWatchlistStock?.watchlistIds).toContain('wl-1');
+    expect(multiWatchlistStock?.watchlistIds).toContain('wl-2');
+  });
 });

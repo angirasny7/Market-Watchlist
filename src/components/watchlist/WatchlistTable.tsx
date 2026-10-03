@@ -14,6 +14,8 @@ import { Sparkline } from './Sparkline';
 import { FlashingPrice } from './FlashingPrice';
 import { isExchangeOpen } from '../../lib/marketHours';
 
+import { UserWatchlist } from '../../services';
+
 interface WatchlistTableProps {
   stocks: WatchlistStockItem[];
   onTogglePin: (symbol: string) => void;
@@ -21,6 +23,8 @@ interface WatchlistTableProps {
   onSelectStock: (stock: WatchlistStockItem) => void;
   onOpenAlerts?: (symbol: string) => void;
   onMoveCopyStock?: (symbol: string) => void;
+  isAllWatchlists?: boolean;
+  userWatchlists?: UserWatchlist[];
 }
 
 export const WatchlistTable: React.FC<WatchlistTableProps> = ({
@@ -30,6 +34,8 @@ export const WatchlistTable: React.FC<WatchlistTableProps> = ({
   onSelectStock,
   onOpenAlerts,
   onMoveCopyStock,
+  isAllWatchlists = false,
+  userWatchlists = [],
 }) => {
   const rowRefs = useRef<(HTMLTableRowElement | null)[]>([]);
 
@@ -137,6 +143,22 @@ export const WatchlistTable: React.FC<WatchlistTableProps> = ({
                       <span className="text-[10px] text-slate-500 truncate max-w-[180px]">
                         {stock.sector}
                       </span>
+                    )}
+                    {isAllWatchlists && stock.watchlistIds && stock.watchlistIds.length > 0 && (
+                      <div className="flex flex-wrap items-center gap-1 mt-1">
+                        {stock.watchlistIds.map((wId) => {
+                          const w = userWatchlists.find((uw) => uw.id === wId);
+                          if (!w) return null;
+                          return (
+                            <span
+                              key={wId}
+                              className="text-[9px] px-1.5 py-0.2 rounded bg-surface-subtle text-slate-400 border border-border/70"
+                            >
+                              {w.name}
+                            </span>
+                          );
+                        })}
+                      </div>
                     )}
                   </div>
                 </td>

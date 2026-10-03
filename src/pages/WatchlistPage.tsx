@@ -20,7 +20,7 @@ import {
   WatchlistStockItem,
 } from '../lib/watchlistFilters';
 import { PageContainer, WatchlistSkeleton, ErrorState } from '../components/common';
-import { Plus, RotateCcw, SearchX, LineChart } from 'lucide-react';
+import { Plus, RotateCcw, SearchX, LineChart, X } from 'lucide-react';
 
 export const WatchlistPage: React.FC = () => {
   const {
@@ -242,7 +242,66 @@ export const WatchlistPage: React.FC = () => {
         onOpenAddStock={() => setIsAddModalOpen(true)}
       />
 
-      {/* 4. Table / Grid Content, Skeleton, or Error State */}
+      {/* 4. Active Filters Indicator */}
+      {(searchQuery.trim() !== '' || watchlistQuickFilter !== 'ALL' || watchlistDropdownFilter !== 'ALL') && rawStocks.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2 rounded-xl bg-surface-subtle border border-border text-xs text-slate-300 mb-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-medium text-slate-200">
+              Showing <span className="font-bold text-emerald-400">{displayedStocks.length}</span> of <span className="font-bold text-slate-100">{rawStocks.length}</span> stocks
+            </span>
+            <span className="text-slate-500">|</span>
+            {searchQuery.trim() !== '' && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-surface border border-border text-slate-300">
+                Search: <strong className="text-slate-100 font-medium">"{searchQuery}"</strong>
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="hover:text-rose-400 ml-0.5 transition-colors"
+                  aria-label="Remove search filter"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+            {watchlistQuickFilter !== 'ALL' && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-surface border border-border text-slate-300">
+                Filter: <strong className="text-slate-100 font-medium">{watchlistQuickFilter.replace('_', ' ')}</strong>
+                <button
+                  onClick={() => setWatchlistQuickFilter('ALL')}
+                  className="hover:text-rose-400 ml-0.5 transition-colors"
+                  aria-label="Remove quick filter"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+            {watchlistDropdownFilter !== 'ALL' && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-surface border border-border text-slate-300">
+                Category: <strong className="text-slate-100 font-medium">{watchlistDropdownFilter.replace('_', ' ')}</strong>
+                <button
+                  onClick={() => setWatchlistDropdownFilter('ALL')}
+                  className="hover:text-rose-400 ml-0.5 transition-colors"
+                  aria-label="Remove category filter"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+          </div>
+          <button
+            onClick={() => {
+              setSearchQuery('');
+              setWatchlistQuickFilter('ALL');
+              setWatchlistDropdownFilter('ALL');
+            }}
+            className="inline-flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300 font-medium transition-colors ml-auto"
+          >
+            <RotateCcw className="w-3 h-3" />
+            <span>Clear filters</span>
+          </button>
+        </div>
+      )}
+
+      {/* 5. Table / Grid Content, Skeleton, or Error State */}
       {isError && rawStocks.length === 0 ? (
         <ErrorState
           title="Unable to load watchlist"
@@ -268,6 +327,8 @@ export const WatchlistPage: React.FC = () => {
               setIsAlertModalOpen(true);
             }}
             onMoveCopyStock={(symbol) => setMoveCopySymbol(symbol)}
+            isAllWatchlists={activeWatchlistId === 'all'}
+            userWatchlists={userWatchlists}
           />
         ) : (
           <WatchlistTable
@@ -280,6 +341,8 @@ export const WatchlistPage: React.FC = () => {
               setIsAlertModalOpen(true);
             }}
             onMoveCopyStock={(symbol) => setMoveCopySymbol(symbol)}
+            isAllWatchlists={activeWatchlistId === 'all'}
+            userWatchlists={userWatchlists}
           />
         )
       ) : (
