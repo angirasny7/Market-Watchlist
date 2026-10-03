@@ -24,6 +24,8 @@ import {
   ChevronDown,
   RotateCcw,
   Search,
+  Lightbulb,
+  X,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -48,14 +50,26 @@ export const AttentionFeedPage: React.FC = () => {
   // State: Real-time update pill
   const [newUpdatesAvailable, setNewUpdatesAvailable] = useState(0);
 
-  // State: Filter controls
-  const [selectedWindow, setSelectedWindow] = useState<FeedTimeWindow>('sinceLastVisit');
+  // State: Filter controls (Window is persisted in localStorage)
+  const [selectedWindow, setSelectedWindow] = useState<FeedTimeWindow>(() => {
+    const saved = localStorage.getItem('smw_feed_window');
+    if (saved === '24h' || saved === '7d' || saved === '30d' || saved === 'sinceLastVisit') {
+      return saved as FeedTimeWindow;
+    }
+    return 'sinceLastVisit';
+  });
+
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedWatchlistId, setSelectedWatchlistId] = useState('all');
   const [selectedPriority, setSelectedPriority] = useState('ALL');
   const [selectedType, setSelectedType] = useState('ALL');
   const [unreadOnly, setUnreadOnly] = useState(false);
   const [savedOnly, setSavedOnly] = useState(false);
+
+  // State: Dismissible Tip Banner
+  const [isTipDismissed, setIsTipDismissed] = useState<boolean>(() => {
+    return localStorage.getItem('smw_feed_tip_dismissed') === 'true';
+  });
 
   // State: Details Drawer & Selection
   const [selectedItem, setSelectedItem] = useState<FeedItem | null>(null);
@@ -78,6 +92,17 @@ export const AttentionFeedPage: React.FC = () => {
       setSearchQuery(symbolParam);
     }
   }, [symbolParam]);
+
+  // Handle window change with persistence
+  const handleSelectWindow = (w: FeedTimeWindow) => {
+    setSelectedWindow(w);
+    localStorage.setItem('smw_feed_window', w);
+  };
+
+  const handleDismissTip = () => {
+    setIsTipDismissed(true);
+    localStorage.setItem('smw_feed_tip_dismissed', 'true');
+  };
 
   // Initial and window/filter change loader
   const loadFeed = useCallback(
@@ -103,7 +128,7 @@ export const AttentionFeedPage: React.FC = () => {
             savedOnly,
             q: searchQuery || undefined,
           }),
-          resetCursor ? feedApiService.getSummary() : Promise.resolve(null),
+          resetCursor ? feedApiService.getSummary(selectedWindow) : Promise.resolve(null),
         ]);
 
         if (feedData) {
@@ -163,7 +188,6 @@ export const AttentionFeedPage: React.FC = () => {
         setSelectedItem(found);
         setSelectedIndex(items.indexOf(found));
       } else {
-        // Fetch specific event details lazily if not in current page list
         feedApiService.getItemDetails(eventParam).then((res) => {
           if (res?.item) {
             setSelectedItem(res.item);
@@ -173,11 +197,13 @@ export const AttentionFeedPage: React.FC = () => {
     }
   }, [eventParam, items]);
 
-  // Part D: 60s summary polling for real-time updates
+  // Real-time 60s summary polling (paused when document.hidden)
   useEffect(() => {
     const interval = setInterval(async () => {
+      if (document.hidden) return;
+
       try {
-        const latestSummary = await feedApiService.getSummary();
+        const latestSummary = await feedApiService.getSummary(selectedWindow);
         if (latestSummary && summary) {
           if (latestSummary.unreadClusters > summary.unreadClusters) {
             const diff = latestSummary.unreadClusters - summary.unreadClusters;
@@ -191,12 +217,11 @@ export const AttentionFeedPage: React.FC = () => {
     }, 60000);
 
     return () => clearInterval(interval);
-  }, [summary]);
+  }, [summary, selectedWindow]);
 
-  // Keyboard navigation
+  // Keyboard navigation (j/k, Enter/Space, r to toggle read, s to toggle save)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // If active element is input, only handle Escape
       if (
         document.activeElement?.tagName === 'INPUT' ||
         document.activeElement?.tagName === 'TEXTAREA' ||
@@ -260,7 +285,6 @@ export const AttentionFeedPage: React.FC = () => {
   const handleToggleRead = async (item: FeedItem, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
 
-    // Optimistic toggle
     const newIsUnread = !item.isUnread;
     setItems((prev) =>
       prev.map((i) => (i.id === item.id ? { ...i, isUnread: newIsUnread } : i))
@@ -343,10 +367,12 @@ export const AttentionFeedPage: React.FC = () => {
     unreadOnly ||
     savedOnly;
 
+  const distinctStockCount = new Set(items.map((i) => i.stockSymbol)).size;
+
   return (
     <PageContainer>
-      <div className="max-w-4xl mx-auto space-y-6">
-        {/* Real-time New Updates Floating Pill (Part D) */}
+      <div className="max-w-4xl mx-auto space-y-4">
+        {/* Real-time New Updates Floating Pill */}
         {newUpdatesAvailable > 0 && (
           <div className="sticky top-20 z-30 flex justify-center animate-fade-in">
             <button
@@ -362,15 +388,16 @@ export const AttentionFeedPage: React.FC = () => {
           </div>
         )}
 
-        {/* 1. Header Bar */}
+        {/* 1. Feed Header & Session Strip */}
         <FeedHeaderBar
           summary={summary}
           selectedWindow={selectedWindow}
-          onSelectWindow={setSelectedWindow}
+          onSelectWindow={handleSelectWindow}
           onMarkCaughtUp={handleMarkCaughtUp}
           isMarkingCaughtUp={isMarkingCaughtUp}
           onRefresh={handleRefresh}
           isRefreshing={isRefreshing}
+          stockCount={distinctStockCount}
         />
 
         {/* 2. Controls & Search Bar */}
@@ -395,8 +422,29 @@ export const AttentionFeedPage: React.FC = () => {
           totalUnfilteredCount={summary?.totalInWindow}
         />
 
-        {/* 3. Feed List Stream */}
-        <div className="space-y-3">
+        {/* 3. Dismissible Tip Banner */}
+        {!isTipDismissed && (
+          <div className="flex items-center justify-between gap-3 px-3.5 py-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-xs text-indigo-300">
+            <div className="flex items-center gap-2 min-w-0">
+              <Lightbulb className="w-4 h-4 text-indigo-400 flex-shrink-0" />
+              <span className="truncate">
+                <span className="font-semibold">Tip:</span> Click any update to see what happened, why it moved, sources and the price chart.
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={handleDismissTip}
+              aria-label="Dismiss tip"
+              title="Dismiss tip"
+              className="p-1 text-slate-400 hover:text-slate-200 rounded-md hover:bg-indigo-500/20 transition-colors flex-shrink-0"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
+        {/* 4. Feed List Stream */}
+        <div className="space-y-3 pt-1">
           {isLoading && items.length === 0 ? (
             <FeedSkeleton />
           ) : error ? (
@@ -466,7 +514,9 @@ export const AttentionFeedPage: React.FC = () => {
                     You're completely caught up!
                   </h3>
                   <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
-                    No unhandled market anomalies require attention for your monitored stocks in this time window.
+                    {summary?.marketsClosed
+                      ? 'Markets were closed during this period. No new anomalies detected for your watchlists.'
+                      : 'No unhandled market anomalies require attention for your monitored stocks in this time window.'}
                   </p>
                 </div>
               )}
@@ -475,7 +525,7 @@ export const AttentionFeedPage: React.FC = () => {
         </div>
       </div>
 
-      {/* 4. Progressive Disclosure Right-Side Drawer */}
+      {/* 5. Progressive Disclosure Right-Side Drawer */}
       <FeedDetailsDrawer
         isOpen={Boolean(selectedItem)}
         item={selectedItem}

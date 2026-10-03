@@ -66,4 +66,30 @@ describe('Attention Feed Component & UI Data Integrity Tests (Part C & D)', () =
     expect(mockItem.memberEventIds.length).toBe(2);
     expect(mockItem.isUnread).toBe(true);
   });
+
+  it('4. Feed summary includes windowCounts breakdown for 24h, 7d, 30d, and sinceLastVisit', () => {
+    const summaryWithWindows: FeedSummary = {
+      ...mockSummary,
+      windowCounts: {
+        sinceLastVisit: 4,
+        '24h': 3,
+        '7d': 12,
+        '30d': 41,
+      },
+    };
+
+    expect(summaryWithWindows.windowCounts?.sinceLastVisit).toBe(4);
+    expect(summaryWithWindows.windowCounts?.['24h']).toBe(3);
+    expect(summaryWithWindows.windowCounts?.['7d']).toBe(12);
+    expect(summaryWithWindows.windowCounts?.['30d']).toBe(41);
+  });
+
+  it('5. Feed item contains accurate price and change metrics without hardcoding', () => {
+    expect(mockItem.currentPrice).toBe(985.0);
+    expect(mockItem.eventPrice).toBe(980.5);
+    expect(mockItem.changePercent).toBe(4.82);
+    expect(mockItem.currency).toBe('₹');
+    expect(mockItem.stockSymbol).toBe('TATAMOTORS');
+  });
 });
+

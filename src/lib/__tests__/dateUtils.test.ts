@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatLastVisitLabel, formatSessionSummary } from '../dateUtils';
+import { formatLastVisitLabel, formatSessionSummary, formatSessionStripTime, formatWindowBaseline } from '../dateUtils';
 
 describe('formatLastVisitLabel', () => {
   it('returns welcome message when no previous login exists or invalid date', () => {
@@ -34,3 +34,30 @@ describe('formatSessionSummary', () => {
     expect(formatSessionSummary(null)).toBe("Welcome! Here's what we're tracking");
   });
 });
+
+describe('formatSessionStripTime', () => {
+  it('returns welcome message for null/undefined', () => {
+    expect(formatSessionStripTime(null)).toBe("Welcome! Here's what we're tracking across your watchlists.");
+    expect(formatSessionStripTime(undefined)).toBe("Welcome! Here's what we're tracking across your watchlists.");
+  });
+
+  it('formats timestamp with weekday, day, month, time, and relative duration', () => {
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    const result = formatSessionStripTime(twoHoursAgo);
+    expect(result).toMatch(/^Last login: \w+ \d{1,2} \w+, \d{1,2}:\d{2} [AP]M \(2 hours ago\)$/);
+  });
+});
+
+describe('formatWindowBaseline', () => {
+  it('returns empty string for null/undefined', () => {
+    expect(formatWindowBaseline(null)).toBe('');
+    expect(formatWindowBaseline(undefined)).toBe('');
+  });
+
+  it('formats timestamp with weekday, day, month, and time', () => {
+    const testDate = new Date('2026-10-03T13:20:00.000Z');
+    const result = formatWindowBaseline(testDate);
+    expect(result).toMatch(/^\w+ \d{1,2} \w+, \d{1,2}:\d{2} [AP]M$/);
+  });
+});
+

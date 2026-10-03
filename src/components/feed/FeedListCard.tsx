@@ -9,6 +9,7 @@ import {
   Bell,
   Clock,
   Sparkles,
+  ChevronRight,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { formatEventTime, formatEventTooltip } from '../../lib/formatEventTime';
@@ -74,7 +75,7 @@ export const FeedListCard: React.FC<FeedListCardProps> = ({
         }
       }}
       className={cn(
-        'group relative p-4 sm:p-5 rounded-2xl bg-surface border transition-all duration-200 cursor-pointer text-left focus:outline-none',
+        'group relative p-4 sm:p-5 rounded-2xl bg-surface border transition-all duration-200 cursor-pointer text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500',
         isSelected
           ? 'border-indigo-500 ring-2 ring-indigo-500/30 bg-surface-subtle shadow-lg'
           : item.isUnread
@@ -98,7 +99,7 @@ export const FeedListCard: React.FC<FeedListCardProps> = ({
           </div>
 
           <div className="min-w-0 flex-1 space-y-2">
-            {/* Top row: Priority badge + Ticker + Company + Exchange + Date */}
+            {/* Top row: Priority badge + Ticker + Company + Exchange */}
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <span
                 className={cn(
@@ -145,15 +146,17 @@ export const FeedListCard: React.FC<FeedListCardProps> = ({
             </div>
 
             {/* Dynamic Headline */}
-            <h3 className={cn(
-              'text-sm sm:text-base font-semibold text-slate-100 leading-snug group-hover:text-indigo-200 transition-colors',
-              item.isUnread ? 'font-bold' : 'font-medium text-slate-200'
-            )}>
+            <h3
+              className={cn(
+                'text-sm sm:text-base font-semibold text-slate-100 leading-snug group-hover:text-indigo-200 transition-colors',
+                item.isUnread ? 'font-bold' : 'font-medium text-slate-200'
+              )}
+            >
               {item.headline}
             </h3>
 
             {/* Signal Chips */}
-            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+            <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
               {item.signals.map((signal, idx) => (
                 <span
                   key={idx}
@@ -202,12 +205,15 @@ export const FeedListCard: React.FC<FeedListCardProps> = ({
               {timeLabel}
             </span>
 
-            {/* Save / Bookmark Button */}
+            {/* Save / Bookmark Button (isolated click target) */}
             <button
               type="button"
               aria-label={item.isSaved ? 'Remove from saved' : 'Save for later'}
               title={item.isSaved ? 'Saved' : 'Save for later (s)'}
-              onClick={(e) => onToggleSave(item, e)}
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleSave(item, e);
+              }}
               className={cn(
                 'p-1.5 rounded-lg border transition-colors',
                 item.isSaved
@@ -218,12 +224,15 @@ export const FeedListCard: React.FC<FeedListCardProps> = ({
               <Bookmark className={cn('w-3.5 h-3.5', item.isSaved && 'fill-amber-400')} />
             </button>
 
-            {/* Mark Read/Unread Button */}
+            {/* Mark Read/Unread Button (isolated click target) */}
             <button
               type="button"
               aria-label={item.isUnread ? 'Mark as read' : 'Mark as unread'}
               title={item.isUnread ? 'Mark as read (r)' : 'Mark as unread (r)'}
-              onClick={(e) => onToggleRead(item, e)}
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleRead(item, e);
+              }}
               className={cn(
                 'p-1.5 rounded-lg border transition-colors',
                 !item.isUnread
@@ -234,6 +243,33 @@ export const FeedListCard: React.FC<FeedListCardProps> = ({
               <CheckCircle2 className="w-3.5 h-3.5" />
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* Progressive Teaser Row & View Details Affordance */}
+      <div className="flex items-center justify-between pt-3 mt-3 border-t border-border/40 text-[11px] text-slate-400 gap-2 flex-wrap">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-slate-500 font-medium">Inside:</span>
+          <span className="px-1.5 py-0.5 rounded bg-surface-subtle border border-border/60 text-slate-300">
+            What happened
+          </span>
+          <span className="px-1.5 py-0.5 rounded bg-surface-subtle border border-border/60 text-slate-300">
+            Why
+          </span>
+          <span className="px-1.5 py-0.5 rounded bg-surface-subtle border border-border/60 text-slate-300">
+            Price chart
+          </span>
+          {item.isAlertTriggered && (
+            <span className="px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-300 font-medium flex items-center gap-1">
+              <Bell className="w-2.5 h-2.5" /> Alert
+            </span>
+          )}
+        </div>
+
+        {/* View Details Affordance */}
+        <div className="flex items-center gap-1 text-indigo-400 group-hover:text-indigo-300 font-semibold transition-colors flex-shrink-0 ml-auto">
+          <span>View details</span>
+          <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
         </div>
       </div>
     </div>

@@ -140,3 +140,44 @@ export function formatSessionSummary(timestamp?: string | Date | null): string {
   return formatLastVisitLabel(timestamp);
 }
 
+/**
+ * Formats session strip login time:
+ * "Last login: Sat 3 Oct, 6:50 PM (22 hours ago)"
+ * or "Welcome! Here's what we're tracking across your watchlists." for first-time session.
+ */
+export function formatSessionStripTime(timestamp?: string | Date | null): string {
+  if (!timestamp) {
+    return "Welcome! Here's what we're tracking across your watchlists.";
+  }
+  const date = typeof timestamp === 'string' ? new Date(timestamp) : timestamp;
+  if (isNaN(date.getTime())) {
+    return "Welcome! Here's what we're tracking across your watchlists.";
+  }
+
+  const weekday = date.toLocaleDateString('en-US', { weekday: 'short' });
+  const day = date.getDate();
+  const month = date.toLocaleDateString('en-US', { month: 'short' });
+  const time = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  const relative = formatRelativeTime(date, false);
+
+  return `Last login: ${weekday} ${day} ${month}, ${time} (${relative})`;
+}
+
+/**
+ * Formats a timestamp into a compact baseline label for window summaries:
+ * e.g. "Sat 3 Oct, 6:50 PM"
+ */
+export function formatWindowBaseline(timestamp?: string | Date | null): string {
+  if (!timestamp) return '';
+  const date = typeof timestamp === 'string' ? new Date(timestamp) : timestamp;
+  if (isNaN(date.getTime())) return '';
+
+  const weekday = date.toLocaleDateString('en-US', { weekday: 'short' });
+  const day = date.getDate();
+  const month = date.toLocaleDateString('en-US', { month: 'short' });
+  const time = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+
+  return `${weekday} ${day} ${month}, ${time}`;
+}
+
+

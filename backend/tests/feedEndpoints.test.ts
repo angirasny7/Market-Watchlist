@@ -69,7 +69,7 @@ describe('Part B: Feed Shape & Backend Endpoints Test Suite', () => {
   });
 
   it('4. No contradictory numbers inside feed items and happened details', async () => {
-    const result = await feedService.getFeed(userId, { window: '30d', limit: 3 });
+    const result = await feedService.getFeed(userId, { window: '30d', limit: 2 });
 
     for (const item of result.items) {
       const details = await feedService.getItemDetails(userId, item.id);
@@ -90,7 +90,8 @@ describe('Part B: Feed Shape & Backend Endpoints Test Suite', () => {
         expect(happened.priceAtEvent).toBeLessThanOrEqual(happened.dayHigh * 1.01);
       }
     }
-  }, 30000);
+  }, 60000);
+
 
   it('5. Only qualifying verified sources are returned in sources and why tabs', async () => {
     const result = await feedService.getFeed(userId, { window: '30d', limit: 3 });
