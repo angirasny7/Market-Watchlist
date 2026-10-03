@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { useMarketStore } from '../../store/useMarketStore';
 import { useAuthStore } from '../../store/useAuthStore';
-import { formatLastActiveTimestamp, formatRelativeTime } from '../../lib/dateUtils';
+import { formatLastActiveTimestamp, formatLastVisitLabel, formatRelativeTime } from '../../lib/dateUtils';
 
 export const WelcomeBanner: React.FC = () => {
   const navigate = useNavigate();
@@ -32,7 +32,7 @@ export const WelcomeBanner: React.FC = () => {
       : null;
 
   const isFirstSession = !rawPreviousLogin;
-  const relativeTime = formatRelativeTime(rawPreviousLogin, true);
+  const lastVisitText = formatLastVisitLabel(rawPreviousLogin);
   const previousRelativeTime = formatRelativeTime(rawPreviousLogin, false);
 
   const currentDeviceType =
@@ -97,7 +97,7 @@ export const WelcomeBanner: React.FC = () => {
             {isFirstSession ? (
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-surface-hover text-slate-100 border border-border/80 font-mono text-xs sm:text-sm">
                 <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                <span>First Login Session</span>
+                <span>Welcome! Here's what we're tracking</span>
               </span>
             ) : (
               <div
@@ -106,7 +106,7 @@ export const WelcomeBanner: React.FC = () => {
               >
                 <span className="font-semibold text-slate-100">Welcome back</span>
                 <span className="text-slate-500">•</span>
-                <span className="text-emerald-400 font-mono">Last visit {relativeTime}</span>
+                <span className="text-emerald-400 font-mono">{lastVisitText}</span>
               </div>
             )}
           </div>

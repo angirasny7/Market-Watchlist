@@ -3,7 +3,7 @@ import { BellRing, CheckCheck, Clock } from 'lucide-react';
 import { PageHeader } from '../common/PageHeader';
 import { useMarketStore } from '../../store/useMarketStore';
 import { useAuthStore } from '../../store/useAuthStore';
-import { formatLastActiveTimestamp } from '../../lib/dateUtils';
+import { formatLastVisitLabel } from '../../lib/dateUtils';
 
 interface FeedHeaderProps {
   onMarkAllRead?: () => void;
@@ -27,13 +27,12 @@ export const FeedHeader: React.FC<FeedHeaderProps> = ({
       ? userState.previousLoginAt
       : (dashboardData as any)?.previousLoginAt || null;
 
-  const formattedPreviousLogin = formatLastActiveTimestamp(previousLogin);
+  const formattedPreviousLogin = formatLastVisitLabel(previousLogin);
 
   const statusBadges = (
     <>
       <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-surface border border-border text-slate-400 font-mono">
         <Clock className="w-3.5 h-3.5 text-slate-400" />
-        <span>Last active:</span>
         <span className="text-slate-200">{formattedPreviousLogin}</span>
       </div>
 

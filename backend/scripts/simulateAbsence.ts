@@ -1,117 +1,126 @@
-import { prisma } from '../src/config/prisma.js';
+import { PrismaClient } from '@prisma/client';
 import { catchUpService } from '../src/services/catchUpService.js';
 import { sinceLastVisitService } from '../src/services/sinceLastVisitService.js';
+import { eventService } from '../src/services/eventService.js';
 
-async function main() {
-  const args = process.argv.slice(2);
-  const daysArg = args[0] ? parseInt(args[0], 10) : 19;
-  const days = isNaN(daysArg) ? 19 : daysArg;
+const prisma = new PrismaClient();
 
-  console.log(`=======================================================`);
-  console.log(`  SIMULATE USER ABSENCE: ${days} DAYS`);
-  console.log(`=======================================================`);
+async function runSimulation(userId: string, daysAway: number) {
+  console.log(`\n=============================================================`);
+  console.log(`⏳ Simulating Absence of ${daysAway} Days for User ${userId}`);
+  console.log(`=============================================================`);
 
-  const absenceMs = days * 24 * 60 * 60 * 1000;
-  const simulatedSince = new Date(Date.now() - absenceMs);
+  const absenceDate = new Date(Date.now() - daysAway * 24 * 60 * 60 * 1000);
 
-  console.log(`Setting last-seen cursor back to: ${simulatedSince.toISOString()} (${days} days ago)`);
-
-  let user: any = null;
-  try {
-    user = await prisma.user.findFirst({
-      include: {
-        userState: true,
-        watchlists: {
-          include: { stocks: true },
-        },
-      },
-    });
-  } catch (dbErr: any) {
-    console.warn(`[simulateAbsence] Local database connection: ${dbErr.message}`);
-    console.log('\nRunning offline verification simulation for catch-up logic...\n');
-    runOfflineSimulation(days, simulatedSince);
-    return;
-  }
-
-  if (!user) {
-    console.log('No user found in database. Please seed database or register a test user.');
-    runOfflineSimulation(days, simulatedSince);
-    return;
-  }
-
-  console.log(`Target User: ${user.name} (${user.email}) [ID: ${user.id}]`);
-
-  // Update timestamps
+  // 1. Update user and userState previous timestamps
   await prisma.user.update({
-    where: { id: user.id },
+    where: { id: userId },
     data: {
-      lastLoginAt: simulatedSince,
-      previousLoginAt: new Date(simulatedSince.getTime() - 24 * 60 * 60 * 1000),
+      previousLoginAt: absenceDate,
+      lastLoginAt: new Date(),
     },
   });
 
   await prisma.userState.upsert({
-    where: { userId: user.id },
+    where: { userId },
     update: {
-      previousSessionAt: simulatedSince,
-      lastActivityAt: simulatedSince,
-      lastSeenAt: simulatedSince,
+      previousSessionAt: absenceDate,
+      lastSeenAt: absenceDate,
+      lastLoginAt: new Date(),
     },
     create: {
-      userId: user.id,
-      previousSessionAt: simulatedSince,
-      lastActivityAt: simulatedSince,
-      lastSeenAt: simulatedSince,
+      userId,
+      previousSessionAt: absenceDate,
+      lastSeenAt: absenceDate,
+      lastLoginAt: new Date(),
     },
   });
 
-  console.log('✓ User state successfully rolled back.');
+  console.log(`✓ Set previousSessionAt to: ${absenceDate.toISOString()} (${daysAway} days ago)`);
 
-  // Run catch-up reconciliation
-  console.log('\nRunning catchUpService.catchUpForUser...');
-  const catchUpResult = await catchUpService.catchUpForUser(user.id);
-  console.log('CatchUp Result:', JSON.stringify(catchUpResult, null, 2));
+  // 2. Run catchUpService
+  console.log(`\n🔄 Running catchUpService.catchUpForUser()...`);
+  const catchUpResult = await catchUpService.catchUpForUser(userId);
+  console.log(`CatchUp Result:`, {
+    since: catchUpResult.since,
+    daysSince: catchUpResult.daysSince,
+    monitoredSymbols: catchUpResult.watchlistSymbols.length,
+    eventsCreated: catchUpResult.eventsCreated,
+    digestsCreated: catchUpResult.digestsCreated,
+    durationMs: catchUpResult.durationMs,
+  });
 
-  // Fetch dashboard since-last-visit intelligence
-  console.log('\nFetching dashboard intelligence since last visit...');
-  const summary = await sinceLastVisitService.getIntelligenceSinceLastVisit(user.id);
+  // 3. Query sinceLastVisit intelligence
+  console.log(`\n📊 Querying sinceLastVisitService.getIntelligenceSinceLastVisit()...`);
+  const intelligence = await sinceLastVisitService.getIntelligenceSinceLastVisit(userId);
+  console.log(`Intelligence Summary:`, {
+    awayDuration: intelligence.awayDuration,
+    newEventsCount: intelligence.newEventsCount,
+    criticalEventsCount: intelligence.criticalEventsCount,
+    watchlistEventsCount: intelligence.watchlistEventsCount,
+    newInsightsCount: intelligence.newInsights.length,
+    latestDigestHeadline: intelligence.latestDigest?.headline || 'None',
+  });
 
-  console.log(`\n================== VERIFICATION SUMMARY ==================`);
-  console.log(`Away Duration:         ${summary.awayDuration} (${summary.awayDurationMs} ms)`);
-  console.log(`Last Activity Cursor:  ${summary.lastActivityAt}`);
-  console.log(`Data Freshness:        lastSyncedAt=${summary.dataFreshness.lastSyncedAt}, isStale=${summary.dataFreshness.isStale}`);
-  console.log(`Events in Gap:         ${summary.newEventsCount} total (${summary.criticalEventsCount} critical)`);
-  console.log(`Tracked Symbols:       ${summary.watchlistSymbols.join(', ')}`);
-  console.log(`Digest in Gap:         ${summary.latestDigest ? summary.latestDigest.headline : 'None'}`);
+  // 4. Query Attention Feed events
+  console.log(`\n📬 Querying Attention Feed events via eventService.getEvents()...`);
+  const feed = await eventService.getEvents({ userId, limit: 10 });
+  console.log(`Feed Items Returned: ${feed.length}`);
 
-  if (summary.newEvents.length > 0) {
-    console.log('\nSample Events Generated During Absence:');
-    summary.newEvents.slice(0, 5).forEach((e, idx) => {
-      console.log(`  ${idx + 1}. [${new Date(e.timestamp).toISOString().split('T')[0]}] ${e.stockSymbol} (${e.eventType}): ${e.metricsDelta?.detectionReason || e.metricsDelta?.explanation}`);
-    });
+  for (let i = 0; i < Math.min(feed.length, 5); i++) {
+    const ev = feed[i];
+    const score = (ev as any).scoring?.finalScore ?? (ev.metricsDelta as any)?.attentionScore ?? 50;
+    const pri = ev.priority;
+    const what = (ev.metricsDelta as any)?.detectionReason || (ev as any).whatHappened || 'N/A';
+    const why = (ev.metricsDelta as any)?.enrichment?.summary || (ev as any).enrichment?.summary || 'N/A';
+    const evidenceCount = (ev.metricsDelta as any)?.enrichment?.evidence?.length || 0;
+    console.log(`  [${i + 1}] ${ev.stockSymbol} | ${pri} (Score: ${score})`);
+    console.log(`      What: ${what}`);
+    console.log(`      Why: ${why}`);
+    console.log(`      Evidence sources: ${evidenceCount}`);
   }
 
-  console.log(`==========================================================\n`);
+  console.log(`\n✅ Absence simulation of ${daysAway} days completed successfully.`);
 }
 
-function runOfflineSimulation(days: number, simulatedSince: Date) {
-  console.log(`[Algorithm Verification] Simulating ${days}-day return:`);
-  console.log(`- Simulated 'since': ${simulatedSince.toISOString()}`);
-  console.log(`- Calendar days missed: ${days} days (> 7 days triggers single consolidated summary digest)`);
-  console.log(`- Evaluated Anomaly Rules:`);
-  console.log(`   * Day Price Surge: >= +5.0%`);
-  console.log(`   * Day Price Drop: <= -5.0%`);
-  console.log(`   * Trailing 20-bar Volume Spike: >= 2.0x average`);
-  console.log(`   * 52-Week High Proximity: within 0.5%`);
-  console.log(`   * Cumulative Return Since Last Visit: |price now vs price at since| >= 8%`);
-  console.log(`   * Calendar-Day Deduplication: Idempotent by (stockSymbol, eventType, calendarDate)`);
-  console.log(`- Data Freshness: isStale=false when quotes synced, banner rendered if stale.`);
+async function main() {
+  const args = process.argv.slice(2);
+  let userId = args[0];
+  const requestedDays = args[1] ? parseInt(args[1], 10) : null;
+
+  if (!userId) {
+    const userWithStocks = await prisma.user.findFirst({
+      where: {
+        watchlists: {
+          some: {
+            stocks: {
+              some: {},
+            },
+          },
+        },
+      },
+    });
+    const firstUser = userWithStocks || (await prisma.user.findFirst());
+    if (!firstUser) {
+      console.error('No user found in database. Please run with a valid userId.');
+      return;
+    }
+    userId = firstUser.id;
+    console.log(`Using user with watchlists: ${firstUser.name} (${firstUser.email}, ID: ${userId})`);
+  }
+
+  const testDays = requestedDays ? [requestedDays] : [2, 19, 90];
+
+  for (const days of testDays) {
+    await runSimulation(userId, days);
+  }
 }
 
 main()
   .catch((e) => {
     console.error('Simulation error:', e);
+    process.exit(1);
   })
   .finally(async () => {
-    await prisma.$disconnect().catch(() => {});
+    await prisma.$disconnect();
   });
