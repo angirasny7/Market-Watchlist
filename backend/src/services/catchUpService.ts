@@ -319,7 +319,37 @@ export class CatchUpService {
             },
           });
 
-          if (!existingEvent) {
+          if (existingEvent) {
+            // Idempotent update: update metrics if already exists for this calendar day
+            const updatedMetrics = {
+              ...((existingEvent.metricsDelta as any) || {}),
+              attentionScore: anomaly.score,
+              detectionReason: anomaly.reason,
+              price: bar.close,
+              changePercent: parseFloat(dayChangePercent.toFixed(2)),
+              volume: barVolume,
+              avgVolume20D: Math.round(avgVol20),
+              volumeRatio: avgVol20 > 0 ? parseFloat((barVolume / avgVol20).toFixed(2)) : 1.0,
+              updatedAt: new Date().toISOString(),
+            };
+            const enrichment = await contextEnrichmentService.enrichEvent(
+              {
+                ...existingEvent,
+                metricsDelta: updatedMetrics,
+              },
+              stock
+            );
+            await prisma.event.update({
+              where: { id: existingEvent.id },
+              data: {
+                priority: anomaly.priority,
+                metricsDelta: {
+                  ...updatedMetrics,
+                  enrichment: enrichment as any,
+                },
+              },
+            });
+          } else {
             const created = await prisma.event.create({
               data: {
                 stockSymbol: symbol,
@@ -399,14 +429,43 @@ export class CatchUpService {
             },
           });
 
-          if (!existingCumEvent) {
-            const scoreRes = attentionScoringService.calculateScore({
-              changePercent: cumChangePct,
-              volume: stock ? Number(stock.volume) : 1000000,
-              avgVolume20D: stock ? Number(stock.avgVolume20D) : 1000000,
-              eventType: cumEventType,
-            });
+          const scoreRes = attentionScoringService.calculateScore({
+            changePercent: cumChangePct,
+            volume: stock ? Number(stock.volume) : 1000000,
+            avgVolume20D: stock ? Number(stock.avgVolume20D) : 1000000,
+            eventType: cumEventType,
+          });
 
+          if (existingCumEvent) {
+            // Idempotent update: update existing cumulative event for today
+            const updatedMetrics = {
+              ...((existingCumEvent.metricsDelta as any) || {}),
+              attentionScore: scoreRes.score,
+              detectionReason: cumReason,
+              price: currentStockPrice,
+              priceAtSince,
+              changePercent: parseFloat(cumChangePct.toFixed(2)),
+              isCumulativeReturnEvent: true,
+              updatedAt: new Date().toISOString(),
+            };
+            const enrichment = await contextEnrichmentService.enrichEvent(
+              {
+                ...existingCumEvent,
+                metricsDelta: updatedMetrics,
+              },
+              stock
+            );
+            await prisma.event.update({
+              where: { id: existingCumEvent.id },
+              data: {
+                priority: scoreRes.priority,
+                metricsDelta: {
+                  ...updatedMetrics,
+                  enrichment: enrichment as any,
+                },
+              },
+            });
+          } else {
             const created = await prisma.event.create({
               data: {
                 stockSymbol: symbol,

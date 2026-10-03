@@ -129,28 +129,69 @@ export async function runChangeDetectionJob(): Promise<ChangeDetectionResult> {
         }
       }
 
-      // Deduplicate and persist each detected anomaly
+      // Deduplicate and persist each detected anomaly (Calendar-day idempotency)
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const todayEnd = new Date();
+      todayEnd.setHours(23, 59, 59, 999);
+
       for (const anomaly of potentialAnomalies) {
-        const existingRecentEvent = await prisma.event.findFirst({
+        const existingEventToday = await prisma.event.findFirst({
           where: {
             stockSymbol: stock.symbol,
             eventType: anomaly.eventType,
-            timestamp: { gte: fourHoursAgo },
+            timestamp: {
+              gte: todayStart,
+              lte: todayEnd,
+            },
           },
         });
 
-        if (existingRecentEvent) {
-          eventsSkippedDuplicate++;
-          continue;
-        }
-
-        // Compute attention score
         const scoreResult = attentionScoringService.calculateScore({
           changePercent,
           volume,
           avgVolume20D,
           eventType: anomaly.eventType,
         });
+
+        if (existingEventToday) {
+          // Idempotent update: update metrics if new data is available on the same calendar day
+          const updatedMetrics = {
+            ...((existingEventToday.metricsDelta as any) || {}),
+            attentionScore: scoreResult.score,
+            detectionReason: anomaly.reason,
+            explanation: scoreResult.explanation,
+            price: currentPrice,
+            changeAmount,
+            changePercent,
+            volume,
+            avgVolume20D,
+            volumeRatio: avgVolume20D > 0 ? parseFloat((volume / avgVolume20D).toFixed(2)) : 1.0,
+            updatedAt: new Date().toISOString(),
+          };
+
+          const enrichment = await contextEnrichmentService.enrichEvent(
+            {
+              ...existingEventToday,
+              metricsDelta: updatedMetrics,
+            },
+            stock
+          );
+
+          await prisma.event.update({
+            where: { id: existingEventToday.id },
+            data: {
+              priority: scoreResult.priority,
+              metricsDelta: {
+                ...updatedMetrics,
+                enrichment,
+              },
+            },
+          });
+
+          eventsSkippedDuplicate++;
+          continue;
+        }
 
         const createdEvent = await prisma.event.create({
           data: {
