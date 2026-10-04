@@ -18,6 +18,7 @@ model User {
   updatedAt       DateTime         @updatedAt
   lastLoginAt     DateTime?
   previousLoginAt DateTime?
+  isTestUser      Boolean          @default(false)
   digestReads     UserDigestRead[]
   eventReads      UserEventRead[]
   savedEvents     UserSavedEvent[]
@@ -26,7 +27,9 @@ model User {
   alerts          Alert[]
   notifications   Notification[]
   events          Event[]
+  digests         Digest[]
 
+  @@index([isTestUser])
   @@map("users")
 }
 
@@ -209,12 +212,15 @@ model Digest {
   forwardPerformanceMap Json?
   read                  Boolean          @default(false)
   isSimulated           Boolean          @default(false)
+  userId                String?
   createdAt             DateTime         @default(now())
   digestEvents          DigestEvent[]
   digestInsights        DigestInsight[]
   userReads             UserDigestRead[]
+  user                  User?            @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([timestamp(sort: Desc)])
+  @@index([userId])
   @@map("digests")
 }
 

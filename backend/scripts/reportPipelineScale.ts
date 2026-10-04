@@ -11,51 +11,53 @@ async function reportPipelineScale() {
   console.log('  PIPELINE SCALE & MULTI-USER SYMBOL MONITORING REPORT');
   console.log('========================================================================\n');
 
-  const totalUsers = await prisma.user.count();
-  const totalWatchlists = await prisma.watchlist.count();
-  const totalWatchlistStocks = await prisma.watchlistStock.count();
+  const totalRealUsers = await prisma.user.count({ where: { isTestUser: false } });
+  const totalTestUsers = await prisma.user.count({ where: { isTestUser: true } });
+  const totalRealWatchlists = await prisma.watchlist.count({ where: { user: { isTestUser: false } } });
+  const totalRealWatchlistStocks = await prisma.watchlistStock.count({ where: { watchlist: { user: { isTestUser: false } } } });
 
-  const allWatchlistStocks = await prisma.watchlistStock.findMany({
+  const realWatchlistStocks = await prisma.watchlistStock.findMany({
+    where: { watchlist: { user: { isTestUser: false } } },
     select: { stockSymbol: true, watchlist: { select: { userId: true } } },
   });
 
   const distinctMonitoredSymbols = Array.from(
-    new Set(allWatchlistStocks.map((ws) => ws.stockSymbol.toUpperCase().trim()))
+    new Set(realWatchlistStocks.map((ws) => ws.stockSymbol.toUpperCase().trim()))
   ).sort();
 
   const totalCatalogStocks = await prisma.stock.count();
 
-  // Symbol distribution across users
+  // Symbol distribution across real users
   const symbolUserMap = new Map<string, Set<string>>();
-  for (const item of allWatchlistStocks) {
+  for (const item of realWatchlistStocks) {
     const sym = item.stockSymbol.toUpperCase().trim();
     const uSet = symbolUserMap.get(sym) || new Set<string>();
     uSet.add(item.watchlist.userId);
     symbolUserMap.set(sym, uSet);
   }
 
-  console.log(`📊 Global Multi-User Statistics:`);
-  console.log(`  • Total Registered Users: ${totalUsers}`);
-  console.log(`  • Total User Watchlists: ${totalWatchlists}`);
-  console.log(`  • Total Watchlist Stock Entries: ${totalWatchlistStocks}`);
+  console.log(`📊 Multi-User Statistics (Production Real Accounts):`);
+  console.log(`  • Active Real Users: ${totalRealUsers} (Flagged Test Users Excluded: ${totalTestUsers})`);
+  console.log(`  • Real User Watchlists: ${totalRealWatchlists}`);
+  console.log(`  • Real Watchlist Stock Entries: ${totalRealWatchlistStocks}`);
   console.log(`  • Master Stock Catalog Size: ${totalCatalogStocks} symbols`);
-  console.log(`  • Distinct Monitored Symbols (Union): ${distinctMonitoredSymbols.length} symbols\n`);
+  console.log(`  • Distinct Monitored Symbols (Union of Real Watchlists): ${distinctMonitoredSymbols.length} symbols\n`);
 
-  console.log(`📈 Distinct Monitored Symbols (Union of All Watchlists):`);
+  console.log(`📈 Distinct Monitored Symbols (Union):`);
   console.log(`  [${distinctMonitoredSymbols.join(', ')}]\n`);
 
-  console.log(`🔍 Top Overlapping Monitored Stocks Across Multiple Users:`);
+  console.log(`🔍 Monitored Stock Distribution Across Real Users:`);
   const sortedOverlap = Array.from(symbolUserMap.entries()).sort(
     (a, b) => b[1].size - a[1].size
   );
-  sortedOverlap.slice(0, 10).forEach(([sym, users]) => {
-    console.log(`  • ${sym.padEnd(12)} -> Tracked by ${users.size} user(s)`);
+  sortedOverlap.slice(0, 15).forEach(([sym, users]) => {
+    console.log(`  • ${sym.padEnd(12)} -> Tracked by ${users.size} real user(s)`);
   });
 
   console.log(`\n⚙️ Pipeline Execution Scaling Analysis:`);
   console.log(`  • Provider Sync Model: Deduplicated symbol-set batching.`);
   console.log(`  • Quotes Sync Calls Per Cycle: ${distinctMonitoredSymbols.length} provider requests (O(distinct_symbols), independent of user count).`);
-  console.log(`  • Deduplication Savings: ${totalWatchlistStocks - distinctMonitoredSymbols.length} redundant calls saved across user watchlists.`);
+  console.log(`  • Deduplication Savings: ${totalRealWatchlistStocks - distinctMonitoredSymbols.length} redundant calls saved across real user watchlists.`);
   console.log(`  • Rate Limit Protection: Per-symbol try/catch with SystemJobRun error logging and backoff.`);
   console.log(`  • Time Complexity: O(U) symbol aggregation -> O(S_distinct) provider fetches.\n`);
 

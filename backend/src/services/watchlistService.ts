@@ -496,6 +496,7 @@ export class WatchlistService {
       unreadEvents = await prisma.event.findMany({
         where: {
           stockSymbol: { in: distinctSymbols },
+          AND: [{ OR: [{ userId: null }, { userId }] }],
           userReads: { none: { userId } },
           timestamp: { gte: eventWindowDate },
           ...(allowDemo

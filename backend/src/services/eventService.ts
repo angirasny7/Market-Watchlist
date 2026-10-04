@@ -403,6 +403,7 @@ export class EventService {
     const events = await prisma.event.findMany({
       where: {
         stockSymbol: { in: symbols },
+        AND: [{ OR: [{ userId: null }, { userId }] }],
         timestamp: { gte: windowDate },
         userReads: { none: { userId } },
         ...(allowDemo
