@@ -253,14 +253,20 @@ export class EventService {
    * Save event for later for specific authenticated user
    */
   async saveEventForLater(id: string, userId: string) {
+    const userStocks = await prisma.watchlistStock.findMany({
+      where: { watchlist: { userId } },
+      select: { stockSymbol: true },
+    });
+    const userSymbols = new Set(userStocks.map((s) => s.stockSymbol));
+
     const event = await prisma.event.findFirst({
       where: {
         id,
-        OR: [{ userId: null }, { userId }],
+        AND: [{ OR: [{ userId: null }, { userId }] }],
       },
     });
 
-    if (!event) {
+    if (!event || !userSymbols.has(event.stockSymbol)) {
       const error: any = new Error('Event not found or unauthorized');
       error.statusCode = 404;
       throw error;
@@ -285,14 +291,20 @@ export class EventService {
    */
   async markEventRead(id: string, userId?: string) {
     if (userId) {
+      const userStocks = await prisma.watchlistStock.findMany({
+        where: { watchlist: { userId } },
+        select: { stockSymbol: true },
+      });
+      const userSymbols = new Set(userStocks.map((s) => s.stockSymbol));
+
       const event = await prisma.event.findFirst({
         where: {
           id,
-          OR: [{ userId: null }, { userId }],
+          AND: [{ OR: [{ userId: null }, { userId }] }],
         },
       });
 
-      if (!event) {
+      if (!event || !userSymbols.has(event.stockSymbol)) {
         const error: any = new Error('Event not found or unauthorized');
         error.statusCode = 404;
         throw error;

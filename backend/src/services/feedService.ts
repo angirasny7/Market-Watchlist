@@ -870,20 +870,25 @@ export class FeedService {
    * POST /feed/mark-read: Mark item or all items read
    */
   async markRead(userId: string, eventIds?: string[]): Promise<{ count: number }> {
+    // 1. Fetch user's monitored symbols
+    const ws = await prisma.watchlistStock.findMany({
+      where: { watchlist: { userId } },
+      select: { stockSymbol: true },
+    });
+    const userSymbols = Array.from(new Set(ws.map((w) => w.stockSymbol)));
+    if (userSymbols.length === 0) {
+      return { count: 0 };
+    }
+
     let idsToMark = eventIds;
 
     if (!idsToMark || idsToMark.length === 0) {
       // Mark all monitored unread events in the 30-day window read
-      const ws = await prisma.watchlistStock.findMany({
-        where: { watchlist: { userId } },
-        select: { stockSymbol: true },
-      });
-      const symbols = Array.from(new Set(ws.map((w) => w.stockSymbol)));
       const windowDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
       const unreadEvents = await prisma.event.findMany({
         where: {
-          stockSymbol: { in: symbols },
+          stockSymbol: { in: userSymbols },
           AND: [{ OR: [{ userId: null }, { userId }] }],
           timestamp: { gte: windowDate },
           userReads: { none: { userId } },
@@ -892,10 +897,11 @@ export class FeedService {
       });
       idsToMark = unreadEvents.map((e) => e.id);
     } else {
-      // Expand cluster member events for the specified items (strictly accessible by user)
+      // Expand cluster member events for the specified items (strictly monitored and accessible by user)
       const targetEvents = await prisma.event.findMany({
         where: {
           id: { in: idsToMark },
+          stockSymbol: { in: userSymbols },
           AND: [{ OR: [{ userId: null }, { userId }] }],
         },
         select: { id: true, stockSymbol: true, timestamp: true },
@@ -969,14 +975,20 @@ export class FeedService {
    * POST /feed/items/:id/save: Toggle saved state
    */
   async toggleSave(userId: string, eventId: string): Promise<{ isSaved: boolean }> {
+    const userStocks = await prisma.watchlistStock.findMany({
+      where: { watchlist: { userId } },
+      select: { stockSymbol: true },
+    });
+    const userSymbols = new Set(userStocks.map((s) => s.stockSymbol));
+
     const event = await prisma.event.findFirst({
       where: {
         id: eventId,
-        OR: [{ userId: null }, { userId }],
+        AND: [{ OR: [{ userId: null }, { userId }] }],
       },
     });
 
-    if (!event) {
+    if (!event || !userSymbols.has(event.stockSymbol)) {
       const error: any = new Error('Event not found or unauthorized');
       error.statusCode = 404;
       throw error;
