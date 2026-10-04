@@ -302,4 +302,41 @@ describe('Multi-User Isolation & Ownership Verification Suite', () => {
     const overviewB = await watchlistService.getOverview(userB.id, 'all');
     expect(overviewB.stocks.map((s) => s.symbol)).toEqual(expect.arrayContaining(['INFY', 'RELIANCE']));
   });
+
+  it('8. Personalized gap digests and market memory are strictly isolated', async () => {
+    // Create personalized gap digest for User A
+    const digestA = await prisma.digest.create({
+      data: {
+        userId: userA.id,
+        headline: '7-Day Gap Dossier: INFY & TCS Developments',
+        executiveSummary: 'Personalized catch-up digest for User A',
+        marketMood: 'BULLISH',
+        timeRange: '7-Day Absence',
+        benchmarkCloses: {},
+        read: false,
+        digestEvents: {
+          create: [{ eventId: testEventId }],
+        },
+      },
+    });
+
+    // User A should see their personal digest in digest list
+    const digestsA = await digestService.getDigests({ userId: userA.id });
+    const foundA = digestsA.find((d) => d.id === digestA.id);
+    expect(foundA).toBeDefined();
+    expect(foundA?.executiveSummary).toContain('User A');
+
+    // User B MUST NOT see User A's personal digest in digest list
+    const digestsB = await digestService.getDigests({ userId: userB.id });
+    const foundB = digestsB.find((d) => d.id === digestA.id);
+    expect(foundB).toBeUndefined();
+
+    // User B attempting to fetch User A's digest by ID receives null (404)
+    const directFetchB = await digestService.getDigestById(digestA.id, userB.id);
+    expect(directFetchB).toBeNull();
+
+    // Cleanup created digest
+    await prisma.digest.delete({ where: { id: digestA.id } });
+  });
 });
+

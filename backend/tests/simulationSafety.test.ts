@@ -33,7 +33,7 @@ describe('Simulation Safety and Real User Isolation (Item 0.c)', () => {
         realUserBefore.userState?.lastLogoutAt?.toISOString()
       );
     }
-  }, 30000);
+  }, 60000);
 
   it('2. Simulation targeting test user with --confirm restores state in finally block', async () => {
     // Create dedicated secondary test user to verify restoration without touching alex

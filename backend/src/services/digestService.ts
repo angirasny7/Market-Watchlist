@@ -21,6 +21,14 @@ export class DigestService {
       };
     }
 
+    if (options?.userId) {
+      where.AND = [
+        { OR: [{ userId: null }, { userId: options.userId }] },
+      ];
+    } else {
+      where.userId = null;
+    }
+
     if (options?.mood) {
       where.marketMood = options.mood;
     }
@@ -107,6 +115,7 @@ export class DigestService {
     });
 
     if (!d) return null;
+    if (d.userId && userId && d.userId !== userId) return null;
 
     let isRead = Boolean(d.read);
     if (userId) {

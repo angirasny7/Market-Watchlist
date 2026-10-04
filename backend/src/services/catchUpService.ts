@@ -575,6 +575,7 @@ export class CatchUpService {
 
           const digest = await prisma.digest.create({
             data: {
+              userId,
               headline,
               executiveSummary,
               marketMood: mood,
@@ -597,6 +598,7 @@ export class CatchUpService {
 
         const digest = await prisma.digest.create({
           data: {
+            userId,
             headline,
             executiveSummary,
             marketMood: mood,

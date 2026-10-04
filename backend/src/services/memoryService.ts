@@ -352,6 +352,7 @@ export class MemoryService {
     }
 
     const where: any = {
+      AND: [{ OR: [{ userId: null }, { userId: options.userId }] }],
       digestEvents: {
         some: {
           event: {
