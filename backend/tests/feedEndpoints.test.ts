@@ -11,9 +11,36 @@ describe('Part B: Feed Shape & Backend Endpoints Test Suite', () => {
   let userSymbols: string[];
 
   beforeAll(async () => {
-    const user = await prisma.user.findFirst({ where: { email: 'alex@example.com' } });
-    if (!user) throw new Error('User alex@example.com not found');
+    const user = await prisma.user.upsert({
+      where: { email: 'test_feed_endpoints@marketwatch.test' },
+      update: { isTestUser: true },
+      create: {
+        email: 'test_feed_endpoints@marketwatch.test',
+        name: 'Feed Endpoints Tester',
+        passwordHash: 'dummy_hash',
+        isTestUser: true,
+        userState: {
+          create: {
+            previousSessionEndedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+            previousSessionAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+          },
+        },
+      },
+    });
     userId = user.id;
+
+    const defaultWl = await watchlistService.getUserWatchlists(userId);
+    const wlId = defaultWl[0].id;
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+    await prisma.watchlistStock.createMany({
+      data: [
+        { watchlistId: wlId, stockSymbol: 'INFY', addedAt: thirtyDaysAgo },
+        { watchlistId: wlId, stockSymbol: 'RELIANCE', addedAt: thirtyDaysAgo },
+        { watchlistId: wlId, stockSymbol: 'TCS', addedAt: thirtyDaysAgo },
+      ],
+      skipDuplicates: true,
+    });
 
     const ws = await prisma.watchlistStock.findMany({
       where: { watchlist: { userId } },
