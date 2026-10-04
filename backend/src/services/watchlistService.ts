@@ -481,6 +481,10 @@ export class WatchlistService {
         if (ws.isPinned) {
           isPinnedMap.set(ws.stockSymbol, true);
         }
+        const existingAdded = addedAtMap.get(ws.stockSymbol);
+        if (!existingAdded || ws.addedAt < existingAdded) {
+          addedAtMap.set(ws.stockSymbol, ws.addedAt);
+        }
       }
     }
 
@@ -515,6 +519,8 @@ export class WatchlistService {
           priority: true,
           metricsDelta: true,
           timestamp: true,
+          occurredAt: true,
+          occurredOn: true,
         },
         orderBy: { timestamp: 'desc' },
       });
@@ -523,11 +529,20 @@ export class WatchlistService {
         unreadEvents = unreadEvents.filter((e) => !isEventDemo(e));
       }
 
+      // Filter events to only those that occurred on or after the user added the stock
+      unreadEvents = unreadEvents.filter((ev) => {
+        const watchedSince = addedAtMap.get(ev.stockSymbol);
+        if (!watchedSince) return false;
+        const evDate = ev.occurredAt || ev.occurredOn || ev.timestamp;
+        return new Date(evDate).getTime() >= watchedSince.getTime();
+      });
+
       // Unread clusters per stock (unique calendar days with unread events)
       const seenUnreadDayKeys = new Set<string>();
       const dedupedUnreadEvents: typeof unreadEvents = [];
       for (const ev of unreadEvents) {
-        const dayStr = new Date(ev.timestamp).toISOString().split('T')[0];
+        const evDate = ev.occurredAt || ev.occurredOn || ev.timestamp;
+        const dayStr = new Date(evDate).toISOString().split('T')[0];
         const key = `${ev.stockSymbol}|${dayStr}`;
         if (!seenUnreadDayKeys.has(key)) {
           seenUnreadDayKeys.add(key);

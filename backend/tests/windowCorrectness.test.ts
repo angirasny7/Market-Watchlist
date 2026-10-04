@@ -23,10 +23,11 @@ describe('Publish Time and Window Correctness (Part 2)', () => {
 
     const ws = await prisma.watchlist.findFirst({ where: { userId: testUser.id } });
     if (ws) {
+      const twentyDaysAgo = new Date(Date.now() - 20 * 24 * 60 * 60 * 1000);
       await prisma.watchlistStock.createMany({
         data: [
-          { watchlistId: ws.id, stockSymbol: 'INFY' },
-          { watchlistId: ws.id, stockSymbol: 'ITC' },
+          { watchlistId: ws.id, stockSymbol: 'INFY', addedAt: twentyDaysAgo },
+          { watchlistId: ws.id, stockSymbol: 'ITC', addedAt: twentyDaysAgo },
         ],
         skipDuplicates: true,
       });

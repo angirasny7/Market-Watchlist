@@ -95,10 +95,17 @@ export class SinceLastVisitService {
     // 2. Resolve User's Watchlist Stocks
     const watchlistStocks = await prisma.watchlistStock.findMany({
       where: { watchlist: { userId } },
-      select: { stockSymbol: true, isPinned: true },
+      select: { stockSymbol: true, isPinned: true, addedAt: true },
     });
     const watchlistSymbols = new Set(watchlistStocks.map((w) => w.stockSymbol));
     const watchlistArray = Array.from(watchlistSymbols);
+    const watchedSinceMap = new Map<string, Date>();
+    for (const ws of watchlistStocks) {
+      const existing = watchedSinceMap.get(ws.stockSymbol);
+      if (!existing || ws.addedAt < existing) {
+        watchedSinceMap.set(ws.stockSymbol, ws.addedAt);
+      }
+    }
 
     const hasPreviousSession = Boolean(
       userState?.previousSessionEndedAt ||
@@ -179,6 +186,13 @@ export class SinceLastVisitService {
         if (!allowDemo) {
           const delta = (e.metricsDelta as any) || {};
           if (e.id.startsWith('demo_') || e.id.startsWith('evt_00') || delta.isDemo === true) {
+            return false;
+          }
+        }
+        const watchedSince = watchedSinceMap.get(e.stockSymbol);
+        if (watchedSince) {
+          const evDate = (e as any).occurredAt || (e as any).occurredOn || e.timestamp;
+          if (new Date(evDate).getTime() < watchedSince.getTime()) {
             return false;
           }
         }

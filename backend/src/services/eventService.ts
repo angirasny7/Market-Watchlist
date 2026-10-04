@@ -56,14 +56,21 @@ export class EventService {
 
     let userWatchlistSymbols = new Set<string>();
     let readEventIds = new Set<string>();
+    const watchedSinceMap = new Map<string, Date>();
 
     if (options?.userId) {
-      // 1. Fetch user's watchlist symbols
+      // 1. Fetch user's watchlist symbols with addedAt (watchedSince)
       const userStocks = await prisma.watchlistStock.findMany({
         where: { watchlist: { userId: options.userId } },
-        select: { stockSymbol: true },
+        select: { stockSymbol: true, addedAt: true },
       });
-      userWatchlistSymbols = new Set(userStocks.map((s) => s.stockSymbol));
+      for (const s of userStocks) {
+        userWatchlistSymbols.add(s.stockSymbol);
+        const existing = watchedSinceMap.get(s.stockSymbol);
+        if (!existing || s.addedAt < existing) {
+          watchedSinceMap.set(s.stockSymbol, s.addedAt);
+        }
+      }
 
       // 2. Fetch user's read event IDs for multi-user isolation
       const reads = await prisma.userEventRead.findMany({
@@ -145,14 +152,23 @@ export class EventService {
       },
     });
 
-    const eligibleEvents = allowDemo
-      ? events
-      : events.filter((e) => !isEventDemo(e));
+    const eligibleEvents = (allowDemo ? events : events.filter((e) => !isEventDemo(e)))
+      .filter((e) => {
+        if (options?.userId && (options?.sinceLastVisit || options?.unreadOnly)) {
+          const watchedSince = watchedSinceMap.get(e.stockSymbol);
+          if (watchedSince) {
+            const evDate = (e as any).occurredAt || (e as any).occurredOn || e.timestamp;
+            if (new Date(evDate).getTime() < watchedSince.getTime()) return false;
+          }
+        }
+        return true;
+      });
 
     // Calendar-day clustering by stockSymbol + calendarDay
     const clusterMap = new Map<string, typeof eligibleEvents>();
     for (const e of eligibleEvents) {
-      const dayStr = new Date(e.timestamp).toISOString().split('T')[0];
+      const evDate = (e as any).occurredAt || (e as any).occurredOn || e.timestamp;
+      const dayStr = new Date(evDate).toISOString().split('T')[0];
       const key = `${e.stockSymbol}|${dayStr}`;
       const list = clusterMap.get(key) || [];
       list.push(e);
@@ -171,8 +187,14 @@ export class EventService {
         return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
       });
       const topEvent = evts[0];
-      // A cluster is marked read only if ALL events in that cluster have been read
-      const isClusterRead = options?.userId
+      const topEvDate = (topEvent as any).occurredAt || (topEvent as any).occurredOn || topEvent.timestamp;
+      const watchedSince = watchedSinceMap.get(topEvent.stockSymbol);
+      const isBeforeWatched = watchedSince ? new Date(topEvDate).getTime() < watchedSince.getTime() : false;
+
+      // A cluster is marked read if all events are read OR if it happened before watchedSince
+      const isClusterRead = isBeforeWatched
+        ? true
+        : options?.userId
         ? evts.every((ev) => readEventIds.has(ev.id))
         : evts.every((ev) => Boolean(ev.read));
 
@@ -392,9 +414,16 @@ export class EventService {
   async getUnreadFeedCount(userId: string): Promise<number> {
     const userStocks = await prisma.watchlistStock.findMany({
       where: { watchlist: { userId } },
-      select: { stockSymbol: true },
+      select: { stockSymbol: true, addedAt: true },
     });
-    const symbols = Array.from(new Set(userStocks.map((s) => s.stockSymbol)));
+    const watchedSinceMap = new Map<string, Date>();
+    for (const s of userStocks) {
+      const existing = watchedSinceMap.get(s.stockSymbol);
+      if (!existing || s.addedAt < existing) {
+        watchedSinceMap.set(s.stockSymbol, s.addedAt);
+      }
+    }
+    const symbols = Array.from(watchedSinceMap.keys());
     if (symbols.length === 0) return 0;
 
     const windowDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
@@ -420,17 +449,26 @@ export class EventService {
         stockSymbol: true,
         eventType: true,
         timestamp: true,
+        occurredAt: true,
+        occurredOn: true,
         metricsDelta: true,
       },
       orderBy: { timestamp: 'desc' },
     });
 
-    const eligibleEvents = allowDemo ? events : events.filter((e) => !isEventDemo(e));
+    const eligibleEvents = (allowDemo ? events : events.filter((e) => !isEventDemo(e)))
+      .filter((ev) => {
+        const watchedSince = watchedSinceMap.get(ev.stockSymbol);
+        if (!watchedSince) return false;
+        const evDate = (ev as any).occurredAt || (ev as any).occurredOn || ev.timestamp;
+        return new Date(evDate).getTime() >= watchedSince.getTime();
+      });
 
     // Standard Unit: Unread clusters (one per stock per calendar day)
     const unreadClusters = new Set<string>();
     for (const ev of eligibleEvents) {
-      const dayStr = new Date(ev.timestamp).toISOString().split('T')[0];
+      const evDate = (ev as any).occurredAt || (ev as any).occurredOn || ev.timestamp;
+      const dayStr = new Date(evDate).toISOString().split('T')[0];
       unreadClusters.add(`${ev.stockSymbol}|${dayStr}`);
     }
 

@@ -540,8 +540,9 @@ export class CatchUpService {
     const gapEvents = await prisma.event.findMany({
       where: {
         stockSymbol: { in: watchlistSymbols },
+        AND: [{ OR: [{ userId: null }, { userId }] }],
         timestamp: { gte: since },
-        digestEvents: { none: {} },
+        digestEvents: { none: { digest: { userId } } },
       },
       include: {
         stock: true,

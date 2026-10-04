@@ -276,21 +276,24 @@ export class FeedService {
     const limit = Math.min(1000, Math.max(1, options?.limit || 20));
     const allowDemo = process.env.NODE_ENV === 'development' && process.env.SEED_DEMO_EVENTS === 'true';
 
-    // 1. Fetch user monitored stocks
+    // 1. Fetch user monitored stocks with watchedSince (addedAt)
     let monitoredSymbols: string[] = [];
-    if (options?.watchlistId && options.watchlistId !== 'all') {
-      const ws = await prisma.watchlistStock.findMany({
-        where: { watchlistId: options.watchlistId, watchlist: { userId } },
-        select: { stockSymbol: true },
-      });
-      monitoredSymbols = ws.map((w) => w.stockSymbol);
-    } else {
-      const ws = await prisma.watchlistStock.findMany({
-        where: { watchlist: { userId } },
-        select: { stockSymbol: true },
-      });
-      monitoredSymbols = Array.from(new Set(ws.map((w) => w.stockSymbol)));
+    const watchedSinceMap = new Map<string, Date>();
+
+    const ws = await prisma.watchlistStock.findMany({
+      where: options?.watchlistId && options.watchlistId !== 'all'
+        ? { watchlistId: options.watchlistId, watchlist: { userId } }
+        : { watchlist: { userId } },
+      select: { stockSymbol: true, addedAt: true },
+    });
+
+    for (const w of ws) {
+      const existing = watchedSinceMap.get(w.stockSymbol);
+      if (!existing || w.addedAt < existing) {
+        watchedSinceMap.set(w.stockSymbol, w.addedAt);
+      }
     }
+    monitoredSymbols = Array.from(watchedSinceMap.keys());
 
     if (monitoredSymbols.length === 0) {
       return { items: [], nextCursor: null, hasMore: false, total: 0, unreadCount: 0 };
@@ -391,7 +394,20 @@ export class FeedService {
       take: 2000,
     });
 
-    const eligibleEvents = allowDemo ? dbEvents : dbEvents.filter((e) => !isEventDemo(e));
+    const eligibleEvents = (allowDemo ? dbEvents : dbEvents.filter((e) => !isEventDemo(e)))
+      .filter((ev) => {
+        // If sinceLastVisit window, only include events that happened on or after the user started watching the stock
+        if (options?.window === 'sinceLastVisit') {
+          const watchedSince = watchedSinceMap.get(ev.stockSymbol);
+          if (watchedSince) {
+            const evDate = ev.occurredAt || ev.occurredOn || ev.timestamp;
+            if (new Date(evDate).getTime() < watchedSince.getTime()) {
+              return false;
+            }
+          }
+        }
+        return true;
+      });
 
     // 5. Cluster by stockSymbol + calendarDay
     const clusterMap = new Map<string, typeof eligibleEvents>();
@@ -427,9 +443,14 @@ export class FeedService {
       const delta = (topEv.metricsDelta as any) || {};
 
       const memberIds = memberEvents.map((m) => m.id);
-      const isUnread = memberEvents.some((m) => !readEventIds.has(m.id));
+      const topEvDate = topEv.occurredAt || topEv.occurredOn || topEv.timestamp;
+      const watchedSince = watchedSinceMap.get(topEv.stockSymbol);
+      const isBeforeWatched = watchedSince ? new Date(topEvDate).getTime() < watchedSince.getTime() : false;
+
+      // An event is only unread or new if it occurred on or after the user started watching the stock
+      const isUnread = !isBeforeWatched && memberEvents.some((m) => !readEventIds.has(m.id));
       const isSaved = memberEvents.some((m) => savedEventIds.has(m.id));
-      const isNew = new Date(topEv.timestamp).getTime() > lastSessionAt.getTime();
+      const isNew = !isBeforeWatched && new Date(topEv.timestamp).getTime() > lastSessionAt.getTime();
       const isAlertTriggered = alertSymbols.has(topEv.stockSymbol);
 
       const changePercent = typeof delta.changePercent === 'number' ? delta.changePercent : stock?.changePercent ? Number(stock.changePercent) : 0;
@@ -566,14 +587,27 @@ export class FeedService {
     const symbol = event.stockSymbol.toUpperCase();
 
     // 1. Light item representation
-    const userReads = await prisma.userEventRead.findMany({ where: { userId, eventId } });
-    const userSaves = await prisma.userSavedEvent.findMany({ where: { userId, eventId } });
-    const isUnread = userReads.length === 0;
+    const [userReads, userSaves, watchlistEntries] = await Promise.all([
+      prisma.userEventRead.findMany({ where: { userId, eventId } }),
+      prisma.userSavedEvent.findMany({ where: { userId, eventId } }),
+      prisma.watchlistStock.findMany({
+        where: { watchlist: { userId }, stockSymbol: symbol },
+        select: { addedAt: true },
+        orderBy: { addedAt: 'asc' },
+        take: 1,
+      }),
+    ]);
+
+    const earliestWatchedSince = watchlistEntries.length > 0 ? watchlistEntries[0].addedAt : null;
+    const evDate = event.occurredAt || event.occurredOn || event.timestamp;
+    const isBeforeWatched = earliestWatchedSince ? new Date(evDate).getTime() < earliestWatchedSince.getTime() : false;
+
+    const isUnread = !isBeforeWatched && userReads.length === 0;
     const isSaved = userSaves.length > 0;
 
     const userState = await prisma.userState.findUnique({ where: { userId } });
     const lastSessionAt = userState?.previousSessionAt || new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
-    const isNew = new Date(event.timestamp).getTime() > lastSessionAt.getTime();
+    const isNew = !isBeforeWatched && new Date(event.timestamp).getTime() > lastSessionAt.getTime();
 
     const changePercent = typeof delta.changePercent === 'number' ? delta.changePercent : stock?.changePercent ? Number(stock.changePercent) : 0;
     const eventPrice = typeof delta.price === 'number' ? delta.price : typeof delta.eventPrice === 'number' ? delta.eventPrice : null;

@@ -95,15 +95,16 @@ describe('Multi-User Isolation & Ownership Verification Suite', () => {
       },
     });
 
-    // 4. Create a shared test market event on INFY
+    // 4. Create a shared test market event on INFY (timestamp in future so both A and B have it after addedAt)
+    const futureTime = new Date(Date.now() + 60000);
     const sharedEv = await prisma.event.create({
       data: {
         stockSymbol: 'INFY',
         eventType: EventType.PRICE_SURGE,
         priority: Priority.HIGH,
-        timestamp: new Date(),
-        occurredOn: new Date(),
-        occurredAt: new Date(),
+        timestamp: futureTime,
+        occurredOn: futureTime,
+        occurredAt: futureTime,
         userId: null, // Shared market event
         metricsDelta: {
           changePercent: 5.2,
@@ -119,9 +120,9 @@ describe('Multi-User Isolation & Ownership Verification Suite', () => {
         stockSymbol: 'INFY',
         eventType: EventType.PRICE_SURGE,
         priority: Priority.HIGH,
-        timestamp: new Date(),
-        occurredOn: new Date(),
-        occurredAt: new Date(),
+        timestamp: futureTime,
+        occurredOn: futureTime,
+        occurredAt: futureTime,
         periodStart: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
         userId: userA.id, // User A specific
         metricsDelta: {
@@ -337,6 +338,138 @@ describe('Multi-User Isolation & Ownership Verification Suite', () => {
 
     // Cleanup created digest
     await prisma.digest.delete({ where: { id: digestA.id } });
+  });
+
+  it('9. watchedSince scoping: New stock addition does not inherit historical events as unread', async () => {
+    const sym = `SYM_${Date.now()}`;
+    await prisma.stock.create({
+      data: {
+        symbol: sym,
+        companyName: 'Watched Test Stock',
+        sector: 'Technology',
+        currency: '₹',
+        currentPrice: 500,
+        changeAmount: 5,
+        changePercent: 1.0,
+        high52w: 600,
+        low52w: 400,
+        marketCap: '₹1.0T',
+      },
+    });
+
+    // Create historical event 2 days ago on this stock
+    const pastDate = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+    const pastEvent = await prisma.event.create({
+      data: {
+        stockSymbol: sym,
+        eventType: EventType.PRICE_SURGE,
+        priority: Priority.CRITICAL,
+        timestamp: pastDate,
+        occurredAt: pastDate,
+        occurredOn: pastDate,
+        metricsDelta: {
+          changePercent: 12.5,
+          attentionScore: 90,
+        },
+      },
+    });
+
+    // User C registers and adds stock now
+    const regC = await authService.register({
+      name: 'User Charlie',
+      email: `multi_c_${Date.now()}@test.com`,
+      password: 'Password123!@#',
+    });
+    const userC = { id: regC.user.id, defaultWatchlistId: regC.defaultWatchlistId! };
+
+    await watchlistService.addStockToWatchlist(userC.id, userC.defaultWatchlistId, sym);
+
+    // Verify watchlist overview for User C
+    const overviewC = await watchlistService.getOverview(userC.id, userC.defaultWatchlistId);
+    const stockItemC = overviewC.stocks.find((s) => s.symbol === sym);
+    expect(stockItemC).toBeDefined();
+    expect(stockItemC?.unseenUpdatesCount).toBe(0);
+    expect(stockItemC?.attentionLevel).toBe('LOW');
+    expect(stockItemC?.attentionScore).toBe(0);
+    expect(overviewC.summary.unseenUpdates).toBe(0);
+    expect(overviewC.summary.needAttention).toBe(0);
+
+    // Verify feed for User C
+    const feedSinceLastVisit = await feedService.getFeed(userC.id, { window: 'sinceLastVisit' });
+    expect(feedSinceLastVisit.items.length).toBe(0);
+    expect(feedSinceLastVisit.unreadCount).toBe(0);
+
+    const feed30d = await feedService.getFeed(userC.id, { window: '30d' });
+    const historicalFeedItem = feed30d.items.find((i) => i.stockSymbol === sym);
+    expect(historicalFeedItem).toBeDefined();
+    expect(historicalFeedItem?.isUnread).toBe(false);
+
+    // Cleanup
+    await prisma.event.delete({ where: { id: pastEvent.id } });
+  });
+
+  it('10. watchedSince scoping: New event after addedAt increments unread count and attention score', async () => {
+    const sym = `SYM2_${Date.now()}`;
+    await prisma.stock.create({
+      data: {
+        symbol: sym,
+        companyName: 'Watched Test Stock 2',
+        sector: 'Technology',
+        currency: '₹',
+        currentPrice: 800,
+        changeAmount: 10,
+        changePercent: 1.25,
+        high52w: 1000,
+        low52w: 600,
+        marketCap: '₹2.0T',
+      },
+    });
+
+    const regD = await authService.register({
+      name: 'User David',
+      email: `multi_d_${Date.now()}@test.com`,
+      password: 'Password123!@#',
+    });
+    const userD = { id: regD.user.id, defaultWatchlistId: regD.defaultWatchlistId! };
+
+    // User D adds stock at T0
+    await watchlistService.addStockToWatchlist(userD.id, userD.defaultWatchlistId, sym);
+
+    // New event occurs at T0 + 1 second
+    const futureDate = new Date(Date.now() + 1000);
+    const newEvent = await prisma.event.create({
+      data: {
+        stockSymbol: sym,
+        eventType: EventType.PRICE_DROP,
+        priority: Priority.HIGH,
+        timestamp: futureDate,
+        occurredAt: futureDate,
+        occurredOn: futureDate,
+        metricsDelta: {
+          changePercent: -6.5,
+          attentionScore: 75,
+        },
+      },
+    });
+
+    // Verify watchlist overview now shows unseen update
+    const overviewD = await watchlistService.getOverview(userD.id, userD.defaultWatchlistId);
+    const stockItemD = overviewD.stocks.find((s) => s.symbol === sym);
+    expect(stockItemD).toBeDefined();
+    expect(stockItemD?.unseenUpdatesCount).toBe(1);
+    expect(stockItemD?.attentionLevel).toBe('HIGH');
+    expect(stockItemD?.attentionScore).toBe(75);
+    expect(overviewD.summary.unseenUpdates).toBe(1);
+    expect(overviewD.summary.needAttention).toBe(1);
+
+    // Verify feed item is unread
+    const feed30d = await feedService.getFeed(userD.id, { window: '30d' });
+    const feedItem = feed30d.items.find((i) => i.stockSymbol === sym);
+    expect(feedItem).toBeDefined();
+    expect(feedItem?.isUnread).toBe(true);
+
+    // Cleanup
+    await prisma.event.delete({ where: { id: newEvent.id } });
   });
 });
 
