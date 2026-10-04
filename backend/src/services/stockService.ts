@@ -30,6 +30,9 @@ interface CachedHistoryEntry {
 // In-memory TTL cache for stock history (5 min for intraday 1D/1W, 1 hour for 1M/1Y/ALL)
 const historyCache = new Map<string, CachedHistoryEntry>();
 
+// In-flight request coalescing map to prevent duplicate concurrent provider requests
+const inFlightRequests = new Map<string, Promise<StockHistoryResponse>>();
+
 export class StockService {
   /**
    * Automatically verifies and upserts the master catalog on startup.
@@ -179,7 +182,15 @@ export class StockService {
   }
 
   /**
-   * Fetch historical OHLCV chart bars for lightweight-charts with TTL in-memory caching.
+   * Clear in-memory history cache (useful for testing or cache invalidation)
+   */
+  clearHistoryCache(): void {
+    historyCache.clear();
+    inFlightRequests.clear();
+  }
+
+  /**
+   * Fetch historical OHLCV chart bars for lightweight-charts with TTL in-memory caching and request coalescing.
    * Caches 5 minutes for 1D/1W, 1 hour for 1M/1Y/ALL.
    */
   async getStockHistory(
@@ -195,6 +206,30 @@ export class StockService {
     if (cached && cached.expiresAt > now) {
       return cached.data;
     }
+
+    // 2. Request coalescing: if an identical request is already in flight, await that promise
+    if (inFlightRequests.has(cacheKey)) {
+      return inFlightRequests.get(cacheKey)!;
+    }
+
+    const fetchPromise = (async () => {
+      try {
+        return await this._fetchAndComputeStockHistory(symbol, range);
+      } finally {
+        inFlightRequests.delete(cacheKey);
+      }
+    })();
+
+    inFlightRequests.set(cacheKey, fetchPromise);
+    return fetchPromise;
+  }
+
+  private async _fetchAndComputeStockHistory(
+    symbol: string,
+    range: StockHistoryRange
+  ): Promise<StockHistoryResponse> {
+    const cacheKey = `${symbol}_${range}`;
+    const now = Date.now();
 
     // 2. Lookup stock
     const stock = await prisma.stock.findUnique({
