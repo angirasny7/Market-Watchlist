@@ -471,5 +471,106 @@ describe('Multi-User Isolation & Ownership Verification Suite', () => {
     // Cleanup
     await prisma.event.delete({ where: { id: newEvent.id } });
   });
+
+  it('11. Copy/move across watchlists preserves the earliest addedAt timestamp', async () => {
+    const sym = `SYM3_${Date.now()}`;
+    await prisma.stock.create({
+      data: {
+        symbol: sym,
+        companyName: 'Earliest AddedAt Stock',
+        sector: 'Healthcare',
+        currency: '₹',
+        currentPrice: 400,
+        changeAmount: 2,
+        changePercent: 0.5,
+        high52w: 500,
+        low52w: 300,
+        marketCap: '₹500B',
+      },
+    });
+
+    const regE = await authService.register({
+      name: 'User Earliest',
+      email: `multi_e_${Date.now()}@test.com`,
+      password: 'Password123!@#',
+    });
+    const userE = { id: regE.user.id, defaultWatchlistId: regE.defaultWatchlistId! };
+
+    // Add to Watchlist 1 at T0
+    const earlyTime = new Date(Date.now() - 3600 * 1000);
+    const item1 = await prisma.watchlistStock.create({
+      data: {
+        watchlistId: userE.defaultWatchlistId,
+        stockSymbol: sym,
+        addedAt: earlyTime,
+      },
+    });
+
+    // Create Watchlist 2 and add same stock at T0 + 1hr
+    const wl2 = await watchlistService.createWatchlist(userE.id, 'Secondary List');
+    const laterTime = new Date();
+    const item2 = await prisma.watchlistStock.create({
+      data: {
+        watchlistId: wl2.id,
+        stockSymbol: sym,
+        addedAt: laterTime,
+      },
+    });
+
+    // In union feed ('all'), watchedSinceMap takes min(addedAt) = earlyTime
+    const allWs = await prisma.watchlistStock.findMany({
+      where: { watchlist: { userId: userE.id } },
+      select: { stockSymbol: true, addedAt: true },
+    });
+    const minAddedAt = allWs
+      .filter((w) => w.stockSymbol === sym)
+      .reduce((min, cur) => (cur.addedAt < min ? cur.addedAt : min), allWs[0].addedAt);
+
+    expect(minAddedAt.toISOString()).toBe(earlyTime.toISOString());
+  });
+
+  it('12. Remove and re-add resets watchedSince (addedAt timestamp advances)', async () => {
+    const sym = `SYM4_${Date.now()}`;
+    await prisma.stock.create({
+      data: {
+        symbol: sym,
+        companyName: 'Reset AddedAt Stock',
+        sector: 'Financials',
+        currency: '₹',
+        currentPrice: 1500,
+        changeAmount: 15,
+        changePercent: 1.0,
+        high52w: 1800,
+        low52w: 1200,
+        marketCap: '₹3.0T',
+      },
+    });
+
+    const regF = await authService.register({
+      name: 'User Reset',
+      email: `multi_f_${Date.now()}@test.com`,
+      password: 'Password123!@#',
+    });
+    const userF = { id: regF.user.id, defaultWatchlistId: regF.defaultWatchlistId! };
+
+    // Add initially with historical addedAt (e.g. 5 days ago)
+    const oldTime = new Date(Date.now() - 5 * 24 * 3600 * 1000);
+    await prisma.watchlistStock.create({
+      data: {
+        watchlistId: userF.defaultWatchlistId,
+        stockSymbol: sym,
+        addedAt: oldTime,
+      },
+    });
+
+    // Remove from watchlist
+    await watchlistService.removeStockFromWatchlist(userF.id, userF.defaultWatchlistId, sym);
+
+    // Re-add to watchlist today
+    const reAdded = await watchlistService.addStockToWatchlist(userF.id, userF.defaultWatchlistId, sym);
+
+    expect(new Date(reAdded.addedAt).getTime()).toBeGreaterThan(oldTime.getTime());
+  });
 });
+
 
