@@ -151,8 +151,8 @@ export class DigestService {
 
   async markDigestRead(id: string, userId?: string) {
     const d = await prisma.digest.findUnique({ where: { id } });
-    if (!d) {
-      const error: any = new Error('Digest not found');
+    if (!d || (d.userId && userId && d.userId !== userId)) {
+      const error: any = new Error('Digest not found or unauthorized');
       error.statusCode = 404;
       throw error;
     }
@@ -190,8 +190,8 @@ export class DigestService {
 
   async viewDigest(id: string, userId: string) {
     const d = await prisma.digest.findUnique({ where: { id } });
-    if (!d) {
-      const error: any = new Error('Digest not found');
+    if (!d || (d.userId && userId && d.userId !== userId)) {
+      const error: any = new Error('Digest not found or unauthorized');
       error.statusCode = 404;
       throw error;
     }
