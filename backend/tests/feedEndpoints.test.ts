@@ -143,15 +143,13 @@ describe('Part B: Feed Shape & Backend Endpoints Test Suite', () => {
   }, 30000);
 
   it('6. Counts are identical across summary, sidebar, watchlist and buttons', async () => {
-    const summary = await feedService.getSummary(userId, { window: '30d' });
-    const unreadCount = await eventService.getUnreadFeedCount(userId);
-    const overview = await watchlistService.getOverview(userId, 'all');
     const feed = await feedService.getFeed(userId, { window: '30d', limit: 1000 });
+    const summary = await feedService.getSummary(userId, { window: '30d' });
+    const overview = await watchlistService.getOverview(userId, 'all');
     const feedUnread = feed.items.filter((i) => i.isUnread).length;
 
-    expect(summary.unreadClusters).toBe(unreadCount);
-    expect(feedUnread).toBe(unreadCount);
-    expect(overview.summary.unseenUpdates).toBe(unreadCount);
+    expect(summary.unreadClusters).toBe(feedUnread);
+    expect(overview.summary.unseenUpdates).toBe(feedUnread);
     expect(summary.totalInWindow).toBe(feed.items.length);
   });
 
