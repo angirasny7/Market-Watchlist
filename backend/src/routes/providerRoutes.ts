@@ -1,8 +1,12 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { requireAdminAuth } from '../middleware/auth.js';
 import { ProviderFactory } from '../providers/providerFactory.js';
 import { getSchedulerState } from '../jobs/scheduler.js';
 
 const router = Router();
+
+// Protect provider operational status with admin authentication
+router.use(requireAdminAuth);
 
 /**
  * GET /api/providers/status

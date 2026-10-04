@@ -1,4 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { requireAdminAuth } from '../middleware/auth.js';
 import { runSyncStocksJob } from '../jobs/syncStocksJob.js';
 import { runNewsSyncJob } from '../jobs/newsSyncJob.js';
 import { runChangeDetectionJob } from '../jobs/changeDetectionJob.js';
@@ -9,6 +10,9 @@ import { prisma } from '../config/prisma.js';
 import { serializeBigInt } from '../utils/json.js';
 
 const router = Router();
+
+// Protect all admin endpoints with strict admin authentication
+router.use(requireAdminAuth);
 
 /**
  * POST /api/admin/run-stock-sync
