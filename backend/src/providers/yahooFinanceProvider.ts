@@ -86,6 +86,37 @@ export class YahooFinanceProvider implements IMarketDataProvider {
   }
 
   /**
+   * Helper executing async operation with exponential backoff retry on 429 / network errors
+   */
+  private async executeWithRetry<T>(
+    operation: () => Promise<T>,
+    operationName: string,
+    retries = 3,
+    baseDelayMs = 200
+  ): Promise<T> {
+    let attempt = 0;
+    while (true) {
+      try {
+        return await operation();
+      } catch (err: any) {
+        attempt++;
+        const msg = String(err?.message || '');
+        const isRateLimit = err?.status === 429 || msg.includes('429') || msg.includes('Too Many Requests') || msg.includes('rate limit');
+        const isNetwork = err?.code === 'ECONNRESET' || err?.code === 'ETIMEDOUT' || msg.includes('timeout') || msg.includes('socket hang up');
+
+        if (attempt >= retries || (!isRateLimit && !isNetwork)) {
+          throw err;
+        }
+
+        const jitter = Math.random() * 80;
+        const delay = Math.min(2500, baseDelayMs * Math.pow(2, attempt) + jitter);
+        console.warn(`[YahooFinanceProvider] ${operationName} hit retryable error (${msg}). Retrying in ${delay.toFixed(0)}ms (attempt ${attempt}/${retries})...`);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  /**
    * Fetch single quote with automatic ticker fallback
    */
   async getQuote(symbol: string): Promise<MarketQuote | null> {
@@ -93,11 +124,17 @@ export class YahooFinanceProvider implements IMarketDataProvider {
     const yahooTicker = this.resolveYahooTicker(rawTicker);
 
     try {
-      let q = await this.yf.quote(yahooTicker);
+      let q = await this.executeWithRetry(
+        () => this.yf.quote(yahooTicker),
+        `getQuote(${rawTicker})`
+      );
 
       // Fallback for Tata Motors if TMCV.NS is unavailable
       if (!q && rawTicker === 'TATAMOTORS') {
-        q = await this.yf.quote('TMPV.NS');
+        q = await this.executeWithRetry(
+          () => this.yf.quote('TMPV.NS'),
+          'getQuote(TATAMOTORS fallback TMPV)'
+        );
       }
 
       if (!q || q.regularMarketPrice === undefined) {

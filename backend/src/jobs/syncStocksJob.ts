@@ -35,13 +35,20 @@ export async function runSyncStocksJob(targetSymbols?: string[]): Promise<SyncSt
   try {
     const marketProvider = ProviderFactory.getMarketDataProvider();
 
-    // 2. Fetch stocks to synchronize
+    // 2. Fetch stocks to synchronize (prioritize real, non-test user monitored stocks)
     let symbols = targetSymbols;
     if (!symbols || symbols.length === 0) {
-      const stocks = await prisma.stock.findMany({
-        select: { symbol: true },
+      const realUserStocks = await prisma.watchlistStock.findMany({
+        where: { watchlist: { user: { isTestUser: false } } },
+        select: { stockSymbol: true },
       });
-      symbols = stocks.map((s) => s.symbol);
+      symbols = Array.from(new Set(realUserStocks.map((ws) => ws.stockSymbol)));
+      if (symbols.length === 0) {
+        const fallbackStocks = await prisma.stock.findMany({
+          select: { symbol: true },
+        });
+        symbols = fallbackStocks.map((s) => s.symbol);
+      }
     }
 
     if (symbols.length === 0) {
@@ -66,75 +73,81 @@ export async function runSyncStocksJob(targetSymbols?: string[]): Promise<SyncSt
     let successCount = 0;
     let failedCount = 0;
 
-    // 3. Process each ticker independently with isolated error boundaries
-    for (const symbol of symbols) {
-      try {
-        const quote = await marketProvider.getQuote(symbol);
+    // 3. Process tickers in concurrency-controlled batches (chunk size 6) with isolated error boundaries
+    const CONCURRENCY_LIMIT = 6;
+    for (let i = 0; i < symbols.length; i += CONCURRENCY_LIMIT) {
+      const batch = symbols.slice(i, i + CONCURRENCY_LIMIT);
+      await Promise.allSettled(
+        batch.map(async (symbol) => {
+          try {
+            const quote = await marketProvider.getQuote(symbol);
 
-        if (!quote) {
-          console.warn(`[SyncStocksJob] Quote not returned for ${symbol}`);
-          failedCount++;
-          continue;
-        }
-
-        const now = new Date();
-
-        // Update master stock record
-        await prisma.stock.update({
-          where: { symbol },
-          data: {
-            currentPrice: quote.price,
-            changeAmount: quote.changeAmount,
-            changePercent: quote.changePercent,
-            volume: BigInt(Math.max(0, Math.round(quote.volume))),
-            avgVolume20D: BigInt(Math.max(0, Math.round(quote.avgVolume20D))),
-            high52w: quote.high52w,
-            low52w: quote.low52w,
-            peRatio: quote.peRatio !== undefined ? quote.peRatio : undefined,
-            marketCap: quote.marketCap || undefined,
-            updatedAt: now,
-          },
-        });
-
-        // Append historical price checkpoint for charts and anomaly scoring
-        await prisma.stockPriceHistory.create({
-          data: {
-            stockSymbol: symbol,
-            price: quote.price,
-            changePercent: quote.changePercent,
-            volume: BigInt(Math.max(0, Math.round(quote.volume))),
-            timestamp: now,
-          },
-        });
-
-        // Backfill 30-day historical bars if history is sparse (< 7 checkpoints)
-        const historyCount = await prisma.stockPriceHistory.count({
-          where: { stockSymbol: symbol },
-        });
-
-        if (historyCount < 7) {
-          const bars = await marketProvider.getHistoricalBars(symbol, 30);
-          if (bars && bars.length > 0) {
-            for (const bar of bars) {
-              await prisma.stockPriceHistory.create({
-                data: {
-                  stockSymbol: symbol,
-                  price: bar.close,
-                  changePercent: parseFloat((((bar.close - bar.open) / (bar.open || 1)) * 100).toFixed(2)),
-                  volume: BigInt(Math.max(0, Math.round(bar.volume))),
-                  timestamp: bar.timestamp,
-                },
-              });
+            if (!quote) {
+              console.warn(`[SyncStocksJob] Quote not returned for ${symbol}`);
+              failedCount++;
+              return;
             }
-            console.log(`[SyncStocksJob] Backfilled ${bars.length} historical bars for ${symbol}`);
-          }
-        }
 
-        successCount++;
-      } catch (tickerErr: any) {
-        console.error(`[SyncStocksJob] Error syncing ticker ${symbol}: ${tickerErr.message}`);
-        failedCount++;
-      }
+            const now = new Date();
+
+            // Update master stock record
+            await prisma.stock.update({
+              where: { symbol },
+              data: {
+                currentPrice: quote.price,
+                changeAmount: quote.changeAmount,
+                changePercent: quote.changePercent,
+                volume: BigInt(Math.max(0, Math.round(quote.volume))),
+                avgVolume20D: BigInt(Math.max(0, Math.round(quote.avgVolume20D))),
+                high52w: quote.high52w,
+                low52w: quote.low52w,
+                peRatio: quote.peRatio !== undefined ? quote.peRatio : undefined,
+                marketCap: quote.marketCap || undefined,
+                updatedAt: now,
+              },
+            });
+
+            // Append historical price checkpoint for charts and anomaly scoring
+            await prisma.stockPriceHistory.create({
+              data: {
+                stockSymbol: symbol,
+                price: quote.price,
+                changePercent: quote.changePercent,
+                volume: BigInt(Math.max(0, Math.round(quote.volume))),
+                timestamp: now,
+              },
+            });
+
+            // Backfill 30-day historical bars if history is sparse (< 7 checkpoints)
+            const historyCount = await prisma.stockPriceHistory.count({
+              where: { stockSymbol: symbol },
+            });
+
+            if (historyCount < 7) {
+              const bars = await marketProvider.getHistoricalBars(symbol, 30);
+              if (bars && bars.length > 0) {
+                for (const bar of bars) {
+                  await prisma.stockPriceHistory.create({
+                    data: {
+                      stockSymbol: symbol,
+                      price: bar.close,
+                      changePercent: parseFloat((((bar.close - bar.open) / (bar.open || 1)) * 100).toFixed(2)),
+                      volume: BigInt(Math.max(0, Math.round(bar.volume))),
+                      timestamp: bar.timestamp,
+                    },
+                  });
+                }
+                console.log(`[SyncStocksJob] Backfilled ${bars.length} historical bars for ${symbol}`);
+              }
+            }
+
+            successCount++;
+          } catch (tickerErr: any) {
+            console.error(`[SyncStocksJob] Error syncing ticker ${symbol}: ${tickerErr.message}`);
+            failedCount++;
+          }
+        })
+      );
     }
 
     const durationMs = Date.now() - startTime;
