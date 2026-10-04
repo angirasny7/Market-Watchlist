@@ -11,7 +11,7 @@ export class AuthService {
    * Register a new user with email validation, password strength validation,
    * duplicate prevention, bcrypt hashing, UserState creation, and default Watchlist.
    */
-  async register(data: { email: string; password: string; name: string; deviceInfo?: any; userAgent?: string }) {
+  async register(data: { email: string; password: string; name: string; deviceInfo?: any; userAgent?: string; isTestUser?: boolean }) {
     const email = data.email?.toLowerCase().trim();
     const name = data.name?.trim();
     const password = data.password;
@@ -68,6 +68,8 @@ export class AuthService {
     const detected = parseDeviceInfo(data.userAgent, data.deviceInfo);
 
     // Create user along with default watchlist and initial userState
+    const isTest = data.isTestUser !== undefined ? data.isTestUser : process.env.NODE_ENV === 'test';
+
     const user = await prisma.user.create({
       data: {
         email,
@@ -75,6 +77,7 @@ export class AuthService {
         name,
         lastLoginAt: now,
         previousLoginAt: null, // Strictly null for first-ever login session
+        isTestUser: isTest,
         watchlists: {
           create: {
             name: 'Primary Watchlist',
