@@ -502,10 +502,15 @@ export class WatchlistService {
           stockSymbol: { in: distinctSymbols },
           AND: [{ OR: [{ userId: null }, { userId }] }],
           userReads: { none: { userId } },
+          userSaves: { none: { userId } },
+          isHidden: false,
+          isDuplicate: false,
+          isInvalidated: false,
           timestamp: { gte: eventWindowDate },
           ...(allowDemo
             ? {}
             : {
+                isDemo: false,
                 NOT: [
                   { id: { startsWith: 'demo_' } },
                   { id: { in: ['evt_001', 'evt_002', 'evt_003', 'evt_004'] } },

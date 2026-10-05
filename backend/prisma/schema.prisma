@@ -160,16 +160,21 @@ model Event {
   detectedAt   DateTime         @default(now())
   read         Boolean          @default(false)
   acknowledged Boolean          @default(false)
-  isSimulated  Boolean          @default(false)
-  userId       String?
-  metricsDelta Json
-  createdAt    DateTime         @default(now())
-  digestEvents DigestEvent[]
-  stock        Stock            @relation(fields: [stockSymbol], references: [symbol])
-  user         User?            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  insights     Insight[]
-  userReads    UserEventRead[]
-  userSaves    UserSavedEvent[]
+  isSimulated      Boolean          @default(false)
+  isDemo           Boolean          @default(false)
+  isHidden         Boolean          @default(false)
+  isInvalidated    Boolean          @default(false)
+  isDuplicate      Boolean          @default(false)
+  canonicalEventId String?
+  userId           String?
+  metricsDelta     Json
+  createdAt        DateTime         @default(now())
+  digestEvents     DigestEvent[]
+  stock            Stock            @relation(fields: [stockSymbol], references: [symbol])
+  user             User?            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  insights         Insight[]
+  userReads        UserEventRead[]
+  userSaves        UserSavedEvent[]
 
   @@index([stockSymbol, timestamp(sort: Desc)])
   @@index([userId])
@@ -177,6 +182,9 @@ model Event {
   @@index([occurredAt(sort: Desc)])
   @@index([priority, timestamp(sort: Desc)])
   @@index([eventType])
+  @@index([isDemo])
+  @@index([isHidden])
+  @@index([isDuplicate])
   @@map("events")
 }
 
@@ -267,16 +275,19 @@ model SystemJobRun {
 }
 
 model UserEventRead {
-  id      String   @id @default(uuid())
-  userId  String
-  eventId String
-  readAt  DateTime @default(now())
-  event   Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id         String    @id @default(uuid())
+  userId     String
+  eventId    String
+  readAt     DateTime  @default(now())
+  readSource String    @default("manual")
+  restoredAt DateTime?
+  event      Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, eventId])
   @@index([userId])
   @@index([eventId])
+  @@index([readSource])
   @@map("user_event_reads")
 }
 
@@ -295,12 +306,13 @@ model UserDigestRead {
 }
 
 model UserSavedEvent {
-  id      String   @id @default(uuid())
-  userId  String
-  eventId String
-  savedAt DateTime @default(now())
-  event   Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id         String    @id @default(uuid())
+  userId     String
+  eventId    String
+  savedAt    DateTime  @default(now())
+  restoredAt DateTime?
+  event      Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, eventId])
   @@index([userId])
@@ -341,6 +353,9 @@ enum EventType {
   FIFTY_TWO_WEEK_LOW
   ANALYST_UPGRADE
   MANAGEMENT_CHANGE
+  NEWS
+  FILING
+  CUMULATIVE_MOVE
 }
 
 enum NewsSentiment {

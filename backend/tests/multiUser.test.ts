@@ -7,6 +7,7 @@ import { alertService } from '../src/services/alertService.js';
 import { notificationService } from '../src/services/notificationService.js';
 import { digestService } from '../src/services/digestService.js';
 import { eventService } from '../src/services/eventService.js';
+import { memoryService } from '../src/services/memoryService.js';
 
 const prisma = new PrismaClient();
 
@@ -114,10 +115,10 @@ describe('Multi-User Isolation & Ownership Verification Suite', () => {
     });
     testEventId = sharedEv.id;
 
-    // 5. Create a user-specific cumulative return event strictly for User A
+    // 5. Create a user-specific cumulative return event strictly for User A on TCS
     const cumEvA = await prisma.event.create({
       data: {
-        stockSymbol: 'INFY',
+        stockSymbol: 'TCS',
         eventType: EventType.PRICE_SURGE,
         priority: Priority.HIGH,
         timestamp: futureTime,
@@ -237,14 +238,15 @@ describe('Multi-User Isolation & Ownership Verification Suite', () => {
     await feedService.markRead(userA.id, [testEventId]);
     await feedService.toggleSave(userA.id, testEventId);
 
-    // Verify User A sees it read and saved
+    // Verify User A sees it in Memory Read and Saved, and has left the unhandled feed
     const feedA = await feedService.getFeed(userA.id, { window: '30d' });
     const itemA = feedA.items.find((i) => i.memberEventIds.includes(testEventId));
-    expect(itemA).toBeDefined();
-    expect(itemA?.isUnread).toBe(false);
-    expect(itemA?.isSaved).toBe(true);
+    expect(itemA).toBeUndefined(); // Handled items leave the unhandled Attention Feed
 
-    // Verify User B still sees it UNREAD and NOT SAVED
+    const memorySavedA = await memoryService.getArchivedEvents({ userId: userA.id, memoryType: 'SAVED' });
+    expect(memorySavedA.some((m) => m.id === testEventId)).toBe(true);
+
+    // Verify User B still sees it UNREAD and NOT SAVED in their Attention Feed
     const feedB = await feedService.getFeed(userB.id, { window: '30d' });
     const itemB = feedB.items.find((i) => i.memberEventIds.includes(testEventId));
     expect(itemB).toBeDefined();
@@ -401,8 +403,7 @@ describe('Multi-User Isolation & Ownership Verification Suite', () => {
 
     const feed30d = await feedService.getFeed(userC.id, { window: '30d' });
     const historicalFeedItem = feed30d.items.find((i) => i.stockSymbol === sym);
-    expect(historicalFeedItem).toBeDefined();
-    expect(historicalFeedItem?.isUnread).toBe(false);
+    expect(historicalFeedItem).toBeUndefined(); // Events occurred prior to addedAt are excluded from feed
 
     // Cleanup
     await prisma.event.delete({ where: { id: pastEvent.id } });

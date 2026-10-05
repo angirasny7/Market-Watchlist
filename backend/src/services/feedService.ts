@@ -4,6 +4,7 @@ import { isEventDemo } from './eventService.js';
 import { contextEnrichmentService } from './contextEnrichmentService.js';
 import { evidenceAggregator, EvidenceItem } from './evidenceAggregator.js';
 import { ProviderFactory } from '../providers/providerFactory.js';
+import { undoStore } from '../utils/undoStore.js';
 
 export type FeedPriorityLabel = 'Urgent' | 'Important' | 'Worth a look' | 'FYI';
 
@@ -118,6 +119,21 @@ export interface FeedItemDetails {
   alert: FeedDetailsAlert | null;
 }
 
+export interface FeedCountsResponse {
+  toReview: number;
+  newSinceLastVisit: number;
+  savedCount: number;
+  readCount: number;
+  expiredCount: number;
+  windowCounts: {
+    toReview: number;
+    sinceLastVisit: number;
+    '24h': number;
+    '7d': number;
+    '30d': number;
+  };
+}
+
 export interface FeedSummary {
   unreadClusters: number;
   totalInWindow: number;
@@ -133,7 +149,8 @@ export interface FeedSummary {
   lastSyncedAt: string;
   isDelayed: boolean;
   delayNotice: string;
-  windowCounts?: {
+  windowCounts: {
+    toReview: number;
     sinceLastVisit: number;
     '24h': number;
     '7d': number;
@@ -184,8 +201,15 @@ export class FeedService {
     topEventType: EventType,
     changePercent: number,
     volumeRatio: number,
-    isCumulative: boolean
+    isCumulative: boolean,
+    metricsDelta?: any
   ): string {
+    if (topEventType === 'NEWS' || topEventType === 'FILING') {
+      const customHeadline = metricsDelta?.headline || metricsDelta?.title;
+      if (customHeadline) return customHeadline;
+      return topEventType === 'NEWS' ? `${companyName} featured in new market coverage` : `${companyName} submitted regulatory disclosure`;
+    }
+
     const dir = changePercent >= 0 ? '+' : '';
     const pctStr = `${dir}${changePercent.toFixed(1)}%`;
 
@@ -250,20 +274,240 @@ export class FeedService {
         return 'Upgrade';
       case 'MANAGEMENT_CHANGE':
         return 'Management';
+      case 'NEWS':
+        return 'News';
+      case 'FILING':
+        return 'Filing';
       default:
         return 'Market Event';
     }
   }
 
   /**
-   * GET /feed: Light-weight clustered feed items with cursor pagination
+   * Helper resolving user's watched symbols and per-symbol watchedSince
+   */
+  private async resolveUserWatchlistScope(userId: string, watchlistId?: string): Promise<{
+    monitoredSymbols: string[];
+    watchedSinceMap: Map<string, Date>;
+  }> {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { createdAt: true },
+    });
+    const userCreatedAt = user?.createdAt || new Date(0);
+
+    const ws = await prisma.watchlistStock.findMany({
+      where: watchlistId && watchlistId !== 'all'
+        ? { watchlistId, watchlist: { userId } }
+        : { watchlist: { userId } },
+      select: { stockSymbol: true, addedAt: true },
+    });
+
+    const watchedSinceMap = new Map<string, Date>();
+    for (const w of ws) {
+      const existing = watchedSinceMap.get(w.stockSymbol);
+      const effectiveAddedAt = w.addedAt;
+      if (!existing || effectiveAddedAt < existing) {
+        watchedSinceMap.set(w.stockSymbol, effectiveAddedAt);
+      }
+    }
+
+    return {
+      monitoredSymbols: Array.from(watchedSinceMap.keys()),
+      watchedSinceMap,
+    };
+  }
+
+  /**
+   * Helper resolving user's session boundary
+   */
+  private async resolveUserSessionBoundary(userId: string): Promise<{
+    hasPreviousSession: boolean;
+    lastSessionAt: Date;
+    userState: any;
+  }> {
+    const userState = await prisma.userState.findUnique({ where: { userId } });
+    const hasPreviousSession = Boolean(
+      userState?.previousSessionEndedAt ||
+      userState?.previousSessionAt ||
+      userState?.lastLogoutAt
+    );
+
+    const lastSessionAt =
+      userState?.previousSessionEndedAt ||
+      userState?.previousSessionAt ||
+      userState?.lastSeenAt ||
+      new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+
+    return { hasPreviousSession, lastSessionAt, userState };
+  }
+
+  /**
+   * Single source of truth for all feed, badge, overview, and memory counts
+   */
+  async getFeedCounts(userId: string): Promise<FeedCountsResponse> {
+    const { monitoredSymbols, watchedSinceMap } = await this.resolveUserWatchlistScope(userId);
+    const { hasPreviousSession, lastSessionAt } = await this.resolveUserSessionBoundary(userId);
+
+    const allowDemo = process.env.NODE_ENV === 'development' && process.env.SEED_DEMO_EVENTS === 'true';
+    const eventFilter = {
+      isHidden: false,
+      isDuplicate: false,
+      isInvalidated: false,
+      ...(allowDemo
+        ? {}
+        : {
+            isDemo: false,
+            NOT: [
+              { id: { startsWith: 'demo_' } },
+              { id: { in: ['evt_001', 'evt_002', 'evt_003', 'evt_004'] } },
+            ],
+          }),
+    };
+
+    const [savedCount, readCount, expiredCount] = await Promise.all([
+      prisma.userSavedEvent.count({ where: { userId, event: eventFilter } }),
+      prisma.userEventRead.count({ where: { userId, readSource: { not: 'auto' }, event: eventFilter } }),
+      prisma.userEventRead.count({ where: { userId, readSource: 'auto', event: eventFilter } }),
+    ]);
+
+    if (monitoredSymbols.length === 0) {
+      return {
+        toReview: 0,
+        newSinceLastVisit: 0,
+        savedCount,
+        readCount,
+        expiredCount,
+        windowCounts: {
+          toReview: 0,
+          sinceLastVisit: 0,
+          '24h': 0,
+          '7d': 0,
+          '30d': 0,
+        },
+      };
+    }
+
+    const retentionStartDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const date24hAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const date7dAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+    // Fetch user reads and saves
+    const [userReads, userSaves] = await Promise.all([
+      prisma.userEventRead.findMany({ where: { userId }, select: { eventId: true } }),
+      prisma.userSavedEvent.findMany({ where: { userId }, select: { eventId: true } }),
+    ]);
+    const readEventIds = new Set(userReads.map((r) => r.eventId));
+    const savedEventIds = new Set(userSaves.map((s) => s.eventId));
+
+    // Query unhandled candidate events
+    const rawEvents = await prisma.event.findMany({
+      where: {
+        stockSymbol: { in: monitoredSymbols },
+        AND: [{ OR: [{ userId: null }, { userId }] }],
+        isHidden: false,
+        isDuplicate: false,
+        isInvalidated: false,
+        ...(allowDemo
+          ? {}
+          : {
+              isDemo: false,
+              NOT: [
+                { id: { startsWith: 'demo_' } },
+                { id: { in: ['evt_001', 'evt_002', 'evt_003', 'evt_004'] } },
+              ],
+            }),
+        OR: [
+          { occurredAt: { gte: retentionStartDate } },
+          { AND: [{ occurredAt: null }, { occurredOn: { gte: retentionStartDate } }] },
+          { AND: [{ occurredAt: null }, { occurredOn: null }, { timestamp: { gte: retentionStartDate } }] },
+        ],
+      },
+      select: {
+        id: true,
+        stockSymbol: true,
+        timestamp: true,
+        occurredAt: true,
+        occurredOn: true,
+        metricsDelta: true,
+      },
+      orderBy: { timestamp: 'desc' },
+    });
+
+    // Filter unhandled & watchedSince
+    const unhandledEvents = rawEvents.filter((ev) => {
+      if (readEventIds.has(ev.id) || savedEventIds.has(ev.id)) return false;
+      if (!allowDemo && isEventDemo(ev)) return false;
+
+      const watchedSince = watchedSinceMap.get(ev.stockSymbol);
+      if (!watchedSince) return false;
+      const evDate = new Date(ev.occurredAt || ev.occurredOn || ev.timestamp);
+      return evDate.getTime() >= watchedSince.getTime();
+    });
+
+    // Group into clusters by stockSymbol + calendarDay
+    const clusterMap = new Map<string, typeof unhandledEvents>();
+    for (const ev of unhandledEvents) {
+      const evDate = new Date(ev.occurredAt || ev.occurredOn || ev.timestamp);
+      const dayStr = evDate.toISOString().split('T')[0];
+      const key = `${ev.stockSymbol}|${dayStr}`;
+      const list = clusterMap.get(key) || [];
+      list.push(ev);
+      clusterMap.set(key, list);
+    }
+
+    let toReviewClusters = 0;
+    let newSinceLastVisitClusters = 0;
+    let sinceLastVisitClusters = 0;
+    let clusters24h = 0;
+    let clusters7d = 0;
+    let clusters30d = 0;
+
+    for (const [, memberEvts] of clusterMap.entries()) {
+      toReviewClusters++;
+      // Top timestamp for cluster
+      const maxTime = Math.max(...memberEvts.map((e) => new Date(e.occurredAt || e.occurredOn || e.timestamp).getTime()));
+
+      if (hasPreviousSession && maxTime >= lastSessionAt.getTime()) {
+        sinceLastVisitClusters++;
+        newSinceLastVisitClusters++;
+      }
+      if (maxTime >= date24hAgo.getTime()) {
+        clusters24h++;
+      }
+      if (maxTime >= date7dAgo.getTime()) {
+        clusters7d++;
+      }
+      if (maxTime >= retentionStartDate.getTime()) {
+        clusters30d++;
+      }
+    }
+
+    return {
+      toReview: toReviewClusters,
+      newSinceLastVisit: newSinceLastVisitClusters,
+      savedCount,
+      readCount,
+      expiredCount,
+      windowCounts: {
+        toReview: toReviewClusters,
+        sinceLastVisit: sinceLastVisitClusters,
+        '24h': clusters24h,
+        '7d': clusters7d,
+        '30d': clusters30d,
+      },
+    };
+  }
+
+  /**
+   * GET /feed: Unhandled Attention Feed inbox with filtering and pagination
    */
   async getFeed(
     userId: string,
     options?: {
       cursor?: string;
       limit?: number;
-      window?: 'sinceLastVisit' | '24h' | '7d' | '30d';
+      window?: 'toReview' | 'sinceLastVisit' | '24h' | '7d' | '30d' | 'all';
       watchlistId?: string;
       symbol?: string;
       priority?: string;
@@ -276,30 +520,14 @@ export class FeedService {
     const limit = Math.min(1000, Math.max(1, options?.limit || 20));
     const allowDemo = process.env.NODE_ENV === 'development' && process.env.SEED_DEMO_EVENTS === 'true';
 
-    // 1. Fetch user monitored stocks with watchedSince (addedAt)
-    let monitoredSymbols: string[] = [];
-    const watchedSinceMap = new Map<string, Date>();
-
-    const ws = await prisma.watchlistStock.findMany({
-      where: options?.watchlistId && options.watchlistId !== 'all'
-        ? { watchlistId: options.watchlistId, watchlist: { userId } }
-        : { watchlist: { userId } },
-      select: { stockSymbol: true, addedAt: true },
-    });
-
-    for (const w of ws) {
-      const existing = watchedSinceMap.get(w.stockSymbol);
-      if (!existing || w.addedAt < existing) {
-        watchedSinceMap.set(w.stockSymbol, w.addedAt);
-      }
-    }
-    monitoredSymbols = Array.from(watchedSinceMap.keys());
+    // 1. Resolve watched symbols & watchedSince
+    const { monitoredSymbols: allUserSymbols, watchedSinceMap } = await this.resolveUserWatchlistScope(userId, options?.watchlistId);
+    let monitoredSymbols = allUserSymbols;
 
     if (monitoredSymbols.length === 0) {
       return { items: [], nextCursor: null, hasMore: false, total: 0, unreadCount: 0 };
     }
 
-    // Specific symbol filter check
     if (options?.symbol) {
       const sym = options.symbol.toUpperCase();
       if (!monitoredSymbols.includes(sym)) {
@@ -308,24 +536,13 @@ export class FeedService {
       monitoredSymbols = [sym];
     }
 
-    // 2. Resolve User State and Since Date
-    const userState = await prisma.userState.findUnique({ where: { userId } });
-    const hasPreviousSession = Boolean(
-      userState?.previousSessionEndedAt ||
-      userState?.previousSessionAt ||
-      userState?.lastLogoutAt
-    );
+    // 2. Resolve User Session Boundary
+    const { hasPreviousSession, lastSessionAt } = await this.resolveUserSessionBoundary(userId);
 
-    // If user is brand new with no previous session, sinceLastVisit has 0 items
+    // If user is brand new with no previous session and requested sinceLastVisit, returns 0 items
     if (options?.window === 'sinceLastVisit' && !hasPreviousSession) {
       return { items: [], nextCursor: null, hasMore: false, total: 0, unreadCount: 0 };
     }
-
-    const lastSessionAt =
-      userState?.previousSessionEndedAt ||
-      userState?.previousSessionAt ||
-      userState?.lastSeenAt ||
-      new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
 
     let windowStartDate: Date;
     switch (options?.window) {
@@ -339,28 +556,31 @@ export class FeedService {
         windowStartDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
         break;
       case '30d':
+      case 'toReview':
+      case 'all':
       default:
         windowStartDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
         break;
     }
 
-    // 3. User Read and Saved IDs
+    // 3. User Read, Saved, and Alert state
     const [userReads, userSaves, userAlerts] = await Promise.all([
       prisma.userEventRead.findMany({ where: { userId }, select: { eventId: true } }),
       prisma.userSavedEvent.findMany({ where: { userId }, select: { eventId: true } }),
-      prisma.alert.findMany({ where: { userId, isActive: true }, select: { stockSymbol: true, alertType: true, targetValue: true } }),
+      prisma.alert.findMany({ where: { userId, isActive: true }, select: { stockSymbol: true } }),
     ]);
 
     const readEventIds = new Set(userReads.map((r) => r.eventId));
     const savedEventIds = new Set(userSaves.map((s) => s.eventId));
     const alertSymbols = new Set(userAlerts.map((a) => a.stockSymbol));
 
-    // 4. Query Events for monitored symbols within window with multi-user isolation
+    // 4. Query DB Events
     const whereClause: any = {
       stockSymbol: { in: monitoredSymbols },
-      AND: [
-        { OR: [{ userId: null }, { userId }] },
-      ],
+      AND: [{ OR: [{ userId: null }, { userId }] }],
+      isHidden: false,
+      isDuplicate: false,
+      isInvalidated: false,
       OR: [
         { occurredAt: { gte: windowStartDate } },
         { AND: [{ occurredAt: null }, { occurredOn: { gte: windowStartDate } }] },
@@ -369,6 +589,7 @@ export class FeedService {
       ...(allowDemo
         ? {}
         : {
+            isDemo: false,
             NOT: [
               { id: { startsWith: 'demo_' } },
               { id: { in: ['evt_001', 'evt_002', 'evt_003', 'evt_004'] } },
@@ -396,17 +617,18 @@ export class FeedService {
 
     const eligibleEvents = (allowDemo ? dbEvents : dbEvents.filter((e) => !isEventDemo(e)))
       .filter((ev) => {
-        // If sinceLastVisit window, only include events that happened on or after the user started watching the stock
-        if (options?.window === 'sinceLastVisit') {
-          const watchedSince = watchedSinceMap.get(ev.stockSymbol);
-          if (watchedSince) {
-            const evDate = ev.occurredAt || ev.occurredOn || ev.timestamp;
-            if (new Date(evDate).getTime() < watchedSince.getTime()) {
-              return false;
-            }
-          }
+        // Enforce watchedSince strictly:
+        const watchedSince = watchedSinceMap.get(ev.stockSymbol);
+        if (!watchedSince) return false;
+        const evDate = new Date(ev.occurredAt || ev.occurredOn || ev.timestamp);
+        if (evDate.getTime() < watchedSince.getTime()) return false;
+
+        // An item is in the Attention Feed ONLY IF it is unhandled (not read AND not saved)
+        // unless explicitly querying savedOnly
+        if (options?.savedOnly) {
+          return savedEventIds.has(ev.id);
         }
-        return true;
+        return !readEventIds.has(ev.id) && !savedEventIds.has(ev.id);
       });
 
     // 5. Cluster by stockSymbol + calendarDay
@@ -420,7 +642,6 @@ export class FeedService {
       clusterMap.set(key, list);
     }
 
-    // Priority ordering for picking top event
     const priorityWeight: Record<Priority, number> = {
       CRITICAL: 4,
       HIGH: 3,
@@ -431,7 +652,6 @@ export class FeedService {
     const feedItems: FeedItem[] = [];
 
     for (const [, memberEvents] of clusterMap.entries()) {
-      // Sort member events: highest priority first, then most recent timestamp
       memberEvents.sort((a, b) => {
         const diff = (priorityWeight[b.priority] || 0) - (priorityWeight[a.priority] || 0);
         if (diff !== 0) return diff;
@@ -441,16 +661,10 @@ export class FeedService {
       const topEv = memberEvents[0];
       const stock = topEv.stock;
       const delta = (topEv.metricsDelta as any) || {};
-
       const memberIds = memberEvents.map((m) => m.id);
-      const topEvDate = topEv.occurredAt || topEv.occurredOn || topEv.timestamp;
-      const watchedSince = watchedSinceMap.get(topEv.stockSymbol);
-      const isBeforeWatched = watchedSince ? new Date(topEvDate).getTime() < watchedSince.getTime() : false;
+      const topEvDate = new Date(topEv.occurredAt || topEv.occurredOn || topEv.timestamp);
 
-      // An event is only unread or new if it occurred on or after the user started watching the stock
-      const isUnread = !isBeforeWatched && memberEvents.some((m) => !readEventIds.has(m.id));
-      const isSaved = memberEvents.some((m) => savedEventIds.has(m.id));
-      const isNew = !isBeforeWatched && new Date(topEv.timestamp).getTime() > lastSessionAt.getTime();
+      const isNew = hasPreviousSession && topEvDate.getTime() > lastSessionAt.getTime();
       const isAlertTriggered = alertSymbols.has(topEv.stockSymbol);
 
       const changePercent = typeof delta.changePercent === 'number' ? delta.changePercent : stock?.changePercent ? Number(stock.changePercent) : 0;
@@ -460,7 +674,6 @@ export class FeedService {
       const volumeRatio = typeof delta.volumeRatio === 'number' ? delta.volumeRatio : 1.0;
       const isCumulative = Boolean(delta.isCumulativeReturnEvent);
 
-      // Build unique signals for this daily cluster
       const distinctSignalTypes = new Set<EventType>();
       const allSignals: FeedSignal[] = [];
       for (const m of memberEvents) {
@@ -484,7 +697,8 @@ export class FeedService {
         topEv.eventType,
         changePercent,
         volumeRatio,
-        isCumulative
+        isCumulative,
+        delta
       );
 
       feedItems.push({
@@ -502,8 +716,8 @@ export class FeedService {
         eventType: topEv.eventType,
         priority: topEv.priority,
         priorityLabel: this.mapPriorityToLabel(topEv.priority),
-        isUnread,
-        isSaved,
+        isUnread: true,
+        isSaved: false,
         isNew,
         isAlertTriggered,
         isDemo: isEventDemo(topEv),
@@ -518,15 +732,8 @@ export class FeedService {
       });
     }
 
-    // 6. Apply filters on clustered items
+    // 6. Apply search filter
     let filtered = feedItems;
-
-    if (options?.unreadOnly) {
-      filtered = filtered.filter((i) => i.isUnread);
-    }
-    if (options?.savedOnly) {
-      filtered = filtered.filter((i) => i.isSaved);
-    }
     if (options?.q) {
       const q = options.q.trim().toLowerCase();
       filtered = filtered.filter(
@@ -538,11 +745,10 @@ export class FeedService {
       );
     }
 
-    // Sort by timestamp descending
     filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     const total = filtered.length;
-    const unreadCount = feedItems.filter((i) => i.isUnread).length;
+    const unreadCount = total;
 
     // 7. Cursor Pagination
     let startIndex = 0;
@@ -586,8 +792,7 @@ export class FeedService {
     const delta = (event.metricsDelta as any) || {};
     const symbol = event.stockSymbol.toUpperCase();
 
-    // 1. Light item representation
-    const [userReads, userSaves, watchlistEntries] = await Promise.all([
+    const [userReads, userSaves, watchlistEntries, userState] = await Promise.all([
       prisma.userEventRead.findMany({ where: { userId, eventId } }),
       prisma.userSavedEvent.findMany({ where: { userId, eventId } }),
       prisma.watchlistStock.findMany({
@@ -596,18 +801,13 @@ export class FeedService {
         orderBy: { addedAt: 'asc' },
         take: 1,
       }),
+      prisma.userState.findUnique({ where: { userId } }),
     ]);
 
-    const earliestWatchedSince = watchlistEntries.length > 0 ? watchlistEntries[0].addedAt : null;
-    const evDate = event.occurredAt || event.occurredOn || event.timestamp;
-    const isBeforeWatched = earliestWatchedSince ? new Date(evDate).getTime() < earliestWatchedSince.getTime() : false;
-
-    const isUnread = !isBeforeWatched && userReads.length === 0;
+    const isUnread = userReads.length === 0;
     const isSaved = userSaves.length > 0;
-
-    const userState = await prisma.userState.findUnique({ where: { userId } });
-    const lastSessionAt = userState?.previousSessionAt || new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
-    const isNew = !isBeforeWatched && new Date(event.timestamp).getTime() > lastSessionAt.getTime();
+    const lastSessionAt = userState?.previousSessionEndedAt || userState?.previousSessionAt || new Date(0);
+    const isNew = new Date(event.occurredAt || event.occurredOn || event.timestamp).getTime() > lastSessionAt.getTime();
 
     const changePercent = typeof delta.changePercent === 'number' ? delta.changePercent : stock?.changePercent ? Number(stock.changePercent) : 0;
     const eventPrice = typeof delta.price === 'number' ? delta.price : typeof delta.eventPrice === 'number' ? delta.eventPrice : null;
@@ -640,11 +840,10 @@ export class FeedService {
       dayChangePercent: stock?.changePercent ? Number(stock.changePercent) : null,
       signals: [{ type: event.eventType, label: this.getSignalLabel(event.eventType, changePercent, volumeRatio) }],
       extraSignalsCount: 0,
-      headline: this.generateHeadline(stock?.companyName || symbol, event.eventType, changePercent, volumeRatio, Boolean(delta.isCumulativeReturnEvent)),
+      headline: this.generateHeadline(stock?.companyName || symbol, event.eventType, changePercent, volumeRatio, Boolean(delta.isCumulativeReturnEvent), delta),
       memberEventIds: [event.id],
     };
 
-    // 2. Tab "happened"
     const high52w = stock?.high52w ? Number(stock.high52w) : null;
     const low52w = stock?.low52w ? Number(stock.low52w) : null;
     const happened: FeedDetailsHappened = {
@@ -671,7 +870,6 @@ export class FeedService {
       isCumulative: Boolean(delta.isCumulativeReturnEvent),
     };
 
-    // 3. Tab "why" & "sources"
     const evidenceList: EvidenceItem[] = await evidenceAggregator.gatherEvidence(event, stock);
     const enrichment = delta.enrichment || (await contextEnrichmentService.enrichEvent(event, stock));
 
@@ -701,7 +899,6 @@ export class FeedService {
       possibleDrivers: enrichment.possibleDrivers || [],
     };
 
-    // 4. Tab "matters"
     const dirWord = changePercent >= 0 ? 'gain' : 'decline';
     const mattersSummary = `${stock?.companyName || symbol} recorded a ${Math.abs(changePercent).toFixed(1)}% ${dirWord} with ${volumeRatio.toFixed(1)}x typical 20-day volume.`;
     const bulletPoints = [
@@ -717,7 +914,6 @@ export class FeedService {
       bulletPoints,
     };
 
-    // 5. Tab "price" series (Fetch from StockPriceHistory or MarketDataProvider)
     const marketProvider = ProviderFactory.getMarketDataProvider();
     const bars = await marketProvider.getHistoricalBars(symbol, 30);
     const series1M: FeedDetailsPriceSeries[] = bars.map((b) => ({
@@ -735,7 +931,6 @@ export class FeedService {
       eventMarkerTimestamp: event.timestamp.toISOString(),
     };
 
-    // 6. Tab "alert"
     const alert = await prisma.alert.findFirst({
       where: {
         userId,
@@ -766,42 +961,25 @@ export class FeedService {
   }
 
   /**
-   * GET /feed/summary: High-level summary sentence, counts and freshness
+   * GET /feed/summary: High-level summary sentence, unified counts, and freshness
    */
   async getSummary(
     userId: string,
-    options?: { window?: 'sinceLastVisit' | '24h' | '7d' | '30d' }
+    options?: { window?: 'toReview' | 'sinceLastVisit' | '24h' | '7d' | '30d' }
   ): Promise<FeedSummary> {
-    const selectedWindow = options?.window || 'sinceLastVisit';
-    const userState = await prisma.userState.findUnique({ where: { userId } });
-    const hasPreviousSession = Boolean(
-      userState?.previousSessionEndedAt ||
-      userState?.previousSessionAt ||
-      userState?.lastLogoutAt
-    );
+    const selectedWindow = options?.window || 'toReview';
+    const { hasPreviousSession, lastSessionAt, userState } = await this.resolveUserSessionBoundary(userId);
 
-    const lastSessionAt =
-      userState?.previousSessionEndedAt ||
-      userState?.previousSessionAt ||
-      userState?.lastSeenAt ||
-      userState?.lastLoginAt ||
-      new Date();
     const daysSinceLastVisit = hasPreviousSession
       ? Math.max(1, Math.round((Date.now() - lastSessionAt.getTime()) / (24 * 60 * 60 * 1000)))
       : 0;
 
-    // Fetch feed for the selected window as well as all windows
-    const [selectedFeed, sinceFeed, feed24h, feed7d, feed30d] = await Promise.all([
-      this.getFeed(userId, { window: selectedWindow, limit: 1000 }),
-      this.getFeed(userId, { window: 'sinceLastVisit', limit: 1000 }),
-      this.getFeed(userId, { window: '24h', limit: 1000 }),
-      this.getFeed(userId, { window: '7d', limit: 1000 }),
-      this.getFeed(userId, { window: '30d', limit: 1000 }),
+    const [counts, selectedFeed] = await Promise.all([
+      this.getFeedCounts(userId),
+      this.getFeed(userId, { window: selectedWindow as any, limit: 1000 }),
     ]);
 
     const items = selectedFeed.items;
-    const unreadClusters = items.filter((i) => i.isUnread).length;
-    const totalInWindow = items.length;
     const criticalCount = items.filter((i) => i.priority === 'CRITICAL').length;
     const highCount = items.filter((i) => i.priority === 'HIGH').length;
     const mediumCount = items.filter((i) => i.priority === 'MEDIUM').length;
@@ -810,22 +988,15 @@ export class FeedService {
 
     const uniqueStocksCount = new Set(items.map((i) => i.stockSymbol)).size;
 
-    // Check if markets were closed during this period (e.g. weekend with no trading price moves)
-    const hasTradingMoves = items.some((i) =>
-      i.signals.some((s) => s.type === 'PRICE_SURGE' || s.type === 'PRICE_DROP' || s.type === 'VOLUME_SPIKE')
-    );
-    const isWeekend = new Date().getDay() === 0 || new Date().getDay() === 6;
-    const marketsClosed = items.length === 0 || (!hasTradingMoves && isWeekend);
-
     let headline = '';
     if (selectedWindow === 'sinceLastVisit') {
-      headline = `Since your last visit: ${unreadClusters} updates across ${uniqueStocksCount} stocks · ${needAttentionCount} need attention`;
+      headline = `Since your last visit: ${items.length} unhandled updates across ${uniqueStocksCount} stocks · ${needAttentionCount} need attention`;
     } else if (selectedWindow === '24h') {
-      headline = `Last 24 hours: ${totalInWindow} updates across ${uniqueStocksCount} stocks · ${needAttentionCount} need attention`;
+      headline = `Last 24 hours: ${items.length} unhandled updates across ${uniqueStocksCount} stocks · ${needAttentionCount} need attention`;
     } else if (selectedWindow === '7d') {
-      headline = `Last 7 days: ${totalInWindow} updates across ${uniqueStocksCount} stocks · ${needAttentionCount} need attention`;
+      headline = `Last 7 days: ${items.length} unhandled updates across ${uniqueStocksCount} stocks · ${needAttentionCount} need attention`;
     } else {
-      headline = `Last 30 days: ${totalInWindow} updates across ${uniqueStocksCount} stocks · ${needAttentionCount} need attention`;
+      headline = `To review: ${counts.toReview} unhandled updates across ${uniqueStocksCount} stocks · ${needAttentionCount} need attention`;
     }
 
     const lastStock = await prisma.stock.findFirst({
@@ -838,8 +1009,8 @@ export class FeedService {
     const dataFreshness = minutesAgo <= 1 ? 'Prices updated just now' : `Prices updated ${minutesAgo} min ago`;
 
     return {
-      unreadClusters,
-      totalInWindow,
+      unreadClusters: counts.toReview,
+      totalInWindow: items.length,
       needAttentionCount,
       criticalCount,
       highCount,
@@ -852,66 +1023,53 @@ export class FeedService {
       lastSyncedAt,
       isDelayed: true,
       delayNotice: 'Delayed ~15 min (NSE)',
-      windowCounts: {
-        sinceLastVisit: sinceFeed.total,
-        '24h': feed24h.total,
-        '7d': feed7d.total,
-        '30d': feed30d.total,
-      },
-      marketsClosed,
-      previousSessionStartedAt: (userState as any)?.previousSessionStartedAt?.toISOString() || null,
-      previousSessionEndReason: (userState as any)?.previousSessionEndReason || 'logout',
+      windowCounts: counts.windowCounts,
+      marketsClosed: items.length === 0,
+      previousSessionStartedAt: userState?.previousSessionStartedAt?.toISOString() || null,
+      previousSessionEndReason: userState?.previousSessionEndReason || 'logout',
       serverNow: new Date().toISOString(),
     };
   }
 
-
   /**
-   * POST /feed/mark-read: Mark item or all items read
+   * POST /feed/mark-read: Mark item(s) or window as read with count safety check and undoToken
    */
-  async markRead(userId: string, eventIds?: string[]): Promise<{ count: number }> {
-    // 1. Fetch user's monitored symbols
-    const ws = await prisma.watchlistStock.findMany({
-      where: { watchlist: { userId } },
-      select: { stockSymbol: true },
-    });
-    const userSymbols = Array.from(new Set(ws.map((w) => w.stockSymbol)));
-    if (userSymbols.length === 0) {
-      return { count: 0 };
+  async markRead(
+    userId: string,
+    options?:
+      | string[]
+      | {
+          eventIds?: string[];
+          filter?: string;
+          expectedCount?: number;
+          readSource?: string;
+        }
+  ): Promise<{ success: boolean; count: number; undoToken: string }> {
+    const { monitoredSymbols, watchedSinceMap } = await this.resolveUserWatchlistScope(userId);
+    if (monitoredSymbols.length === 0) {
+      return { success: true, count: 0, undoToken: '' };
     }
 
-    let idsToMark = eventIds;
+    const opts = Array.isArray(options) ? { eventIds: options } : options;
+    let idsToMark: string[] = [];
 
-    if (!idsToMark || idsToMark.length === 0) {
-      // Mark all monitored unread events in the 30-day window read
-      const windowDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-
-      const unreadEvents = await prisma.event.findMany({
-        where: {
-          stockSymbol: { in: userSymbols },
-          AND: [{ OR: [{ userId: null }, { userId }] }],
-          timestamp: { gte: windowDate },
-          userReads: { none: { userId } },
-        },
-        select: { id: true },
-      });
-      idsToMark = unreadEvents.map((e) => e.id);
-    } else {
-      // Expand cluster member events for the specified items (strictly monitored and accessible by user)
+    if (opts?.eventIds && opts.eventIds.length > 0) {
+      // Expand cluster member events for the requested event IDs
       const targetEvents = await prisma.event.findMany({
         where: {
-          id: { in: idsToMark },
-          stockSymbol: { in: userSymbols },
+          id: { in: opts.eventIds },
+          stockSymbol: { in: monitoredSymbols },
           AND: [{ OR: [{ userId: null }, { userId }] }],
         },
-        select: { id: true, stockSymbol: true, timestamp: true },
+        select: { id: true, stockSymbol: true, timestamp: true, occurredAt: true, occurredOn: true },
       });
 
       const allIds = new Set<string>(targetEvents.map((t) => t.id));
       for (const ev of targetEvents) {
-        const startOfDay = new Date(ev.timestamp);
+        const evDate = new Date(ev.occurredAt || ev.occurredOn || ev.timestamp);
+        const startOfDay = new Date(evDate);
         startOfDay.setUTCHours(0, 0, 0, 0);
-        const endOfDay = new Date(ev.timestamp);
+        const endOfDay = new Date(evDate);
         endOfDay.setUTCHours(23, 59, 59, 999);
 
         const siblingEvents = await prisma.event.findMany({
@@ -925,31 +1083,235 @@ export class FeedService {
         siblingEvents.forEach((s) => allIds.add(s.id));
       }
       idsToMark = Array.from(allIds);
+    } else {
+      // Mark all unhandled events matching the window / filter
+      const feedResult = await this.getFeed(userId, { window: (opts?.filter as any) || 'toReview', limit: 1000 });
+      const allClusterMemberIds: string[] = [];
+      feedResult.items.forEach((item) => {
+        allClusterMemberIds.push(...item.memberEventIds);
+      });
+      idsToMark = Array.from(new Set(allClusterMemberIds));
+    }
+
+    // Safety guard: if expectedCount provided, enforce +/- 2 tolerance
+    if (typeof opts?.expectedCount === 'number') {
+      const diff = Math.abs(idsToMark.length - opts.expectedCount);
+      if (diff > 2) {
+        const error: any = new Error(
+          `Count mismatch: Expected ~${opts.expectedCount} events to mark read, but found ${idsToMark.length}. Action rejected for data safety.`
+        );
+        error.statusCode = 400;
+        error.code = 'COUNT_MISMATCH';
+        error.currentCount = idsToMark.length;
+        throw error;
+      }
     }
 
     if (idsToMark.length === 0) {
-      return { count: 0 };
+      return { success: true, count: 0, undoToken: '' };
     }
+
+    const readSource = opts?.readSource || (opts?.eventIds ? 'manual' : 'bulk');
 
     await prisma.userEventRead.createMany({
       data: idsToMark.map((id) => ({
         userId,
         eventId: id,
         readAt: new Date(),
+        readSource,
       })),
       skipDuplicates: true,
     });
 
-    return { count: idsToMark.length };
+    const undoToken = undoStore.createUndoToken(userId, 'mark_read', idsToMark);
+
+    return { success: true, count: idsToMark.length, undoToken };
   }
 
   /**
-   * POST /feed/caught-up: Update last session cursor and mark all current items read
+   * POST /feed/items/:id/save: Idempotent save event (leaves feed -> Memory Saved)
    */
-  async markCaughtUp(userId: string): Promise<{ success: boolean; unreadClusters: number }> {
-    const now = new Date();
+  async saveItem(userId: string, eventId: string): Promise<{ isSaved: boolean; undoToken: string }> {
+    const { monitoredSymbols } = await this.resolveUserWatchlistScope(userId);
+    const event = await prisma.event.findFirst({
+      where: {
+        id: eventId,
+        AND: [{ OR: [{ userId: null }, { userId }] }],
+      },
+    });
 
-    // 1. Advance user state session timestamp
+    if (!event || !monitoredSymbols.includes(event.stockSymbol)) {
+      const error: any = new Error('Event not found or unauthorized');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    await prisma.userSavedEvent.upsert({
+      where: {
+        userId_eventId: { userId, eventId },
+      },
+      create: {
+        userId,
+        eventId,
+        savedAt: new Date(),
+      },
+      update: {
+        savedAt: new Date(),
+      },
+    });
+
+    const undoToken = undoStore.createUndoToken(userId, 'save', [eventId]);
+    return { isSaved: true, undoToken };
+  }
+
+  /**
+   * Toggle save status (backward compatibility alias)
+   */
+  async toggleSave(userId: string, eventId: string): Promise<{ isSaved: boolean; undoToken?: string }> {
+    const existing = await prisma.userSavedEvent.findUnique({
+      where: { userId_eventId: { userId, eventId } },
+    });
+    if (existing) {
+      const res = await this.unsaveItem(userId, eventId);
+      return { isSaved: res.isSaved, undoToken: res.undoToken };
+    } else {
+      const res = await this.saveItem(userId, eventId);
+      return { isSaved: res.isSaved, undoToken: res.undoToken };
+    }
+  }
+
+  /**
+   * POST /feed/items/:id/unsave: Remove from saved
+   */
+  async unsaveItem(userId: string, eventId: string): Promise<{ isSaved: boolean; isInFeed: boolean; undoToken: string }> {
+    await prisma.userSavedEvent.deleteMany({
+      where: { userId, eventId },
+    });
+
+    const isRead = await prisma.userEventRead.findUnique({
+      where: { userId_eventId: { userId, eventId } },
+    });
+
+    const undoToken = undoStore.createUndoToken(userId, 'unsave', [eventId]);
+    return { isSaved: false, isInFeed: !isRead, undoToken };
+  }
+
+  /**
+   * POST /feed/items/:id/restore: Restores event to unhandled Attention Feed
+   */
+  async restoreItem(userId: string, eventId: string): Promise<{ restored: boolean; undoToken: string }> {
+    const [existingRead, existingSaved] = await Promise.all([
+      prisma.userEventRead.findUnique({ where: { userId_eventId: { userId, eventId } } }),
+      prisma.userSavedEvent.findUnique({ where: { userId_eventId: { userId, eventId } } }),
+    ]);
+
+    await Promise.all([
+      prisma.userEventRead.deleteMany({ where: { userId, eventId } }),
+      prisma.userSavedEvent.deleteMany({ where: { userId, eventId } }),
+    ]);
+
+    const undoToken = undoStore.createUndoToken(userId, 'restore', [eventId], {
+      wasReadIds: existingRead ? [eventId] : [],
+      wasSavedIds: existingSaved ? [eventId] : [],
+    });
+
+    return { restored: true, undoToken };
+  }
+
+  /**
+   * POST /feed/undo: Reverses a recent action using valid undoToken
+   */
+  async undoAction(userId: string, undoToken: string): Promise<{ undone: boolean; action: string; count: number }> {
+    const entry = undoStore.consumeUndoToken(undoToken, userId);
+    if (!entry) {
+      const error: any = new Error('Undo token expired or invalid');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    switch (entry.action) {
+      case 'mark_read':
+      case 'caught_up': {
+        await prisma.userEventRead.deleteMany({
+          where: {
+            userId,
+            eventId: { in: entry.eventIds },
+          },
+        });
+        if (entry.previousState?.previousLastSeenAt) {
+          await prisma.userState.updateMany({
+            where: { userId },
+            data: {
+              lastSeenAt: entry.previousState.previousLastSeenAt,
+              previousSessionAt: entry.previousState.previousSessionAt,
+            },
+          });
+        }
+        break;
+      }
+      case 'save': {
+        await prisma.userSavedEvent.deleteMany({
+          where: {
+            userId,
+            eventId: { in: entry.eventIds },
+          },
+        });
+        break;
+      }
+      case 'unsave': {
+        await prisma.userSavedEvent.createMany({
+          data: entry.eventIds.map((eventId) => ({
+            userId,
+            eventId,
+            savedAt: new Date(),
+          })),
+          skipDuplicates: true,
+        });
+        break;
+      }
+      case 'restore': {
+        if (entry.previousState?.wasReadIds && entry.previousState.wasReadIds.length > 0) {
+          await prisma.userEventRead.createMany({
+            data: entry.previousState.wasReadIds.map((eventId) => ({
+              userId,
+              eventId,
+              readAt: new Date(),
+            })),
+            skipDuplicates: true,
+          });
+        }
+        if (entry.previousState?.wasSavedIds && entry.previousState.wasSavedIds.length > 0) {
+          await prisma.userSavedEvent.createMany({
+            data: entry.previousState.wasSavedIds.map((eventId) => ({
+              userId,
+              eventId,
+              savedAt: new Date(),
+            })),
+            skipDuplicates: true,
+          });
+        }
+        break;
+      }
+    }
+
+    return { undone: true, action: entry.action, count: entry.eventIds.length };
+  }
+
+  /**
+   * POST /feed/caught-up: Advances session cursor and marks all unhandled items read with undoToken
+   */
+  async markCaughtUp(userId: string, expectedCount?: number): Promise<{ success: boolean; count: number; undoToken: string }> {
+    const userState = await prisma.userState.findUnique({ where: { userId } });
+    const prevLastSeen = userState?.lastSeenAt;
+    const prevSessionAt = userState?.previousSessionAt;
+
+    const readResult = await this.markRead(userId, {
+      filter: 'toReview',
+      expectedCount,
+      readSource: 'caught_up',
+    });
+
+    const now = new Date();
     await prisma.userState.upsert({
       where: { userId },
       create: {
@@ -965,58 +1327,17 @@ export class FeedService {
       },
     });
 
-    // 2. Mark all current events read
-    await this.markRead(userId);
+    const undoToken = undoStore.createUndoToken(
+      userId,
+      'caught_up',
+      readResult.undoToken ? (undoStore.getUndoEntry(readResult.undoToken, userId)?.eventIds || []) : [],
+      {
+        previousLastSeenAt: prevLastSeen,
+        previousSessionAt: prevSessionAt,
+      }
+    );
 
-    return { success: true, unreadClusters: 0 };
-  }
-
-  /**
-   * POST /feed/items/:id/save: Toggle saved state
-   */
-  async toggleSave(userId: string, eventId: string): Promise<{ isSaved: boolean }> {
-    const userStocks = await prisma.watchlistStock.findMany({
-      where: { watchlist: { userId } },
-      select: { stockSymbol: true },
-    });
-    const userSymbols = new Set(userStocks.map((s) => s.stockSymbol));
-
-    const event = await prisma.event.findFirst({
-      where: {
-        id: eventId,
-        AND: [{ OR: [{ userId: null }, { userId }] }],
-      },
-    });
-
-    if (!event || !userSymbols.has(event.stockSymbol)) {
-      const error: any = new Error('Event not found or unauthorized');
-      error.statusCode = 404;
-      throw error;
-    }
-
-    const existing = await prisma.userSavedEvent.findUnique({
-      where: {
-        userId_eventId: { userId, eventId },
-      },
-    });
-
-    if (existing) {
-      await prisma.userSavedEvent.delete({
-        where: {
-          userId_eventId: { userId, eventId },
-        },
-      });
-      return { isSaved: false };
-    } else {
-      await prisma.userSavedEvent.create({
-        data: {
-          userId,
-          eventId,
-          savedAt: new Date(),
-        },
-      });
-      return { isSaved: true };
-    }
+    return { success: true, count: readResult.count, undoToken };
   }
 }
 

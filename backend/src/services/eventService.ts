@@ -43,11 +43,16 @@ export class EventService {
     watchlistOnly?: boolean;
     limit?: number;
   }) {
-    const where: any = {};
+    const where: any = {
+      isHidden: false,
+      isDuplicate: false,
+      isInvalidated: false,
+    };
     const allowDemo = process.env.NODE_ENV === 'development' && process.env.SEED_DEMO_EVENTS === 'true';
 
     // Filter out demo events if not explicitly allowed in development
     if (!allowDemo) {
+      where.isDemo = false;
       where.NOT = [
         { id: { startsWith: 'demo_' } },
         { id: { in: ['evt_001', 'evt_002', 'evt_003', 'evt_004'] } },
@@ -108,9 +113,12 @@ export class EventService {
       where.eventType = options.eventType;
     }
 
-    // If unreadOnly is requested, filter out events already read by the user
+    // If unreadOnly is requested, filter out events already read or saved by the user
     if (options?.unreadOnly && options?.userId) {
       where.userReads = {
+        none: { userId: options.userId },
+      };
+      where.userSaves = {
         none: { userId: options.userId },
       };
     }
@@ -421,70 +429,12 @@ export class EventService {
 
   /**
    * Single source of truth for user's unread feed events count
-   * Filters strictly: user's monitored watchlist stocks, active 30-day window, real events only, unread.
+   * Delegates to feedService.getFeedCounts to ensure 100% parity
    */
   async getUnreadFeedCount(userId: string): Promise<number> {
-    const userStocks = await prisma.watchlistStock.findMany({
-      where: { watchlist: { userId } },
-      select: { stockSymbol: true, addedAt: true },
-    });
-    const watchedSinceMap = new Map<string, Date>();
-    for (const s of userStocks) {
-      const existing = watchedSinceMap.get(s.stockSymbol);
-      if (!existing || s.addedAt < existing) {
-        watchedSinceMap.set(s.stockSymbol, s.addedAt);
-      }
-    }
-    const symbols = Array.from(watchedSinceMap.keys());
-    if (symbols.length === 0) return 0;
-
-    const windowDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const allowDemo = process.env.NODE_ENV === 'development' && process.env.SEED_DEMO_EVENTS === 'true';
-
-    const events = await prisma.event.findMany({
-      where: {
-        stockSymbol: { in: symbols },
-        AND: [{ OR: [{ userId: null }, { userId }] }],
-        timestamp: { gte: windowDate },
-        userReads: { none: { userId } },
-        ...(allowDemo
-          ? {}
-          : {
-              NOT: [
-                { id: { startsWith: 'demo_' } },
-                { id: { in: ['evt_001', 'evt_002', 'evt_003', 'evt_004'] } },
-              ],
-            }),
-      },
-      select: {
-        id: true,
-        stockSymbol: true,
-        eventType: true,
-        timestamp: true,
-        occurredAt: true,
-        occurredOn: true,
-        metricsDelta: true,
-      },
-      orderBy: { timestamp: 'desc' },
-    });
-
-    const eligibleEvents = (allowDemo ? events : events.filter((e) => !isEventDemo(e)))
-      .filter((ev) => {
-        const watchedSince = watchedSinceMap.get(ev.stockSymbol);
-        if (!watchedSince) return false;
-        const evDate = (ev as any).occurredAt || (ev as any).occurredOn || ev.timestamp;
-        return new Date(evDate).getTime() >= watchedSince.getTime();
-      });
-
-    // Standard Unit: Unread clusters (one per stock per calendar day)
-    const unreadClusters = new Set<string>();
-    for (const ev of eligibleEvents) {
-      const evDate = (ev as any).occurredAt || (ev as any).occurredOn || ev.timestamp;
-      const dayStr = new Date(evDate).toISOString().split('T')[0];
-      unreadClusters.add(`${ev.stockSymbol}|${dayStr}`);
-    }
-
-    return unreadClusters.size;
+    const { feedService } = await import('./feedService.js');
+    const counts = await feedService.getFeedCounts(userId);
+    return counts.toReview;
   }
 }
 

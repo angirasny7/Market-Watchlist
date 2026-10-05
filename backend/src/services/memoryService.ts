@@ -1,10 +1,12 @@
 import { prisma } from '../config/prisma.js';
 import { EventType, MarketMood } from '@prisma/client';
 import { getUserWatchlistSymbols } from '../utils/userOnboarding.js';
+import { isEventDemo } from './eventService.js';
+import { feedService } from './feedService.js';
 
 export interface MemoryQueryOptions {
   userId: string;
-  memoryType?: 'ALL' | 'ARCHIVED' | 'SAVED' | string;
+  memoryType?: 'ALL' | 'ARCHIVED' | 'SAVED' | 'EXPIRED' | string;
   dateRange?: string; // 'ALL' | 'TODAY' | 'YESTERDAY' | 'LAST_7_DAYS' | 'LAST_30_DAYS' | 'THIS_MONTH' | 'SINCE_LAST_LOGIN' | 'CUSTOM'
   startDate?: string;
   endDate?: string;
@@ -18,8 +20,8 @@ export interface MemoryQueryOptions {
 
 export class MemoryService {
   /**
-   * Retrieves events from the user's personal memory vault (Archived and/or Saved).
-   * Unread, unhandled events are never returned here.
+   * Retrieves events from the user's personal memory vault (Archived, Saved, or Expired).
+   * Unhandled events are never returned here.
    */
   async getArchivedEvents(options: MemoryQueryOptions) {
     const { userId } = options;
@@ -28,6 +30,7 @@ export class MemoryService {
     }
 
     const memoryType = (options.memoryType || 'ALL').toUpperCase();
+    const allowDemo = process.env.NODE_ENV === 'development' && process.env.SEED_DEMO_EVENTS === 'true';
 
     // 1. Date Range Filtering computation
     let start: Date | undefined;
@@ -82,10 +85,39 @@ export class MemoryService {
     }
 
     // 2. Stock and Watchlist Filtering
-    const eventFilter: any = {};
+    const eventFilter: any = {
+      isHidden: false,
+      isDuplicate: false,
+      isInvalidated: false,
+      ...(allowDemo
+        ? {}
+        : {
+            isDemo: false,
+            NOT: [
+              { id: { startsWith: 'demo_' } },
+              { id: { in: ['evt_001', 'evt_002', 'evt_003', 'evt_004'] } },
+            ],
+          }),
+    };
+
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { createdAt: true } });
+    const userCreatedAt = user?.createdAt || new Date(0);
+
+    const userWatchlistStocks = await prisma.watchlistStock.findMany({
+      where: { watchlist: { userId } },
+      select: { stockSymbol: true, addedAt: true },
+    });
+    const watchedSinceMap = new Map<string, Date>();
+    for (const ws of userWatchlistStocks) {
+      const existing = watchedSinceMap.get(ws.stockSymbol);
+      const effectiveAddedAt = ws.addedAt > userCreatedAt ? ws.addedAt : userCreatedAt;
+      if (!existing || effectiveAddedAt < existing) {
+        watchedSinceMap.set(ws.stockSymbol, effectiveAddedAt);
+      }
+    }
 
     if (options.watchlistOnly) {
-      const watchlistSymbols = await getUserWatchlistSymbols(userId);
+      const watchlistSymbols = Array.from(watchedSinceMap.keys());
       if (watchlistSymbols.length === 0) {
         return [];
       }
@@ -128,12 +160,18 @@ export class MemoryService {
       },
     };
 
-    const watchlistSymbols = new Set(await getUserWatchlistSymbols(userId));
+    const watchlistSymbols = new Set(Array.from(watchedSinceMap.keys()));
 
-    // 4. Fetch UserEventRead (Archived) if requested
+    // 4. Fetch UserEventRead (Archived / Read / Expired)
     let archivedItems: any[] = [];
-    if (memoryType === 'ALL' || memoryType === 'ARCHIVED') {
+    if (memoryType === 'ALL' || memoryType === 'ARCHIVED' || memoryType === 'READ' || memoryType === 'EXPIRED') {
       const readWhere: any = { userId };
+      if (memoryType === 'EXPIRED') {
+        readWhere.readSource = 'auto';
+      } else if (memoryType === 'READ' || memoryType === 'ARCHIVED') {
+        readWhere.readSource = { not: 'auto' };
+      }
+
       if (start || end) {
         readWhere.readAt = {};
         if (start) readWhere.readAt.gte = start;
@@ -146,65 +184,68 @@ export class MemoryService {
       const reads = await prisma.userEventRead.findMany({
         where: readWhere,
         orderBy: { readAt: 'desc' },
-        take: options.limit || 100,
+        take: options.limit || 200,
         include: includeEvent,
       });
 
-      archivedItems = reads.map((read) => {
-        const e = read.event;
-        const metrics = (e.metricsDelta as any) || {};
+      archivedItems = reads
+        .filter((r) => allowDemo || !isEventDemo(r.event))
+        .map((read) => {
+          const e = read.event;
+          const metrics = (e.metricsDelta as any) || {};
 
-        let eventMood: MarketMood = MarketMood.NEUTRAL;
-        const changePct = Number(e.stock.changePercent);
-        if (changePct >= 1.5) eventMood = MarketMood.EXTREME_GREED;
-        else if (changePct >= 0.3) eventMood = MarketMood.BULLISH;
-        else if (changePct <= -1.5) eventMood = MarketMood.BEARISH;
-        else if (changePct <= -0.3) eventMood = MarketMood.CHOPPY;
+          let eventMood: MarketMood = MarketMood.NEUTRAL;
+          const changePct = Number(e.stock.changePercent);
+          if (changePct >= 1.5) eventMood = MarketMood.EXTREME_GREED;
+          else if (changePct >= 0.3) eventMood = MarketMood.BULLISH;
+          else if (changePct <= -1.5) eventMood = MarketMood.BEARISH;
+          else if (changePct <= -0.3) eventMood = MarketMood.CHOPPY;
 
-        const primaryInsight = e.insights[0];
+          const primaryInsight = e.insights[0];
 
-        return {
-          id: e.id,
-          readId: read.id,
-          readAt: read.readAt.toISOString(),
-          memoryType: 'ARCHIVED' as const,
-          stockSymbol: e.stockSymbol,
-          companyName: e.stock.companyName,
-          eventType: e.eventType,
-          priority: e.priority,
-          headline: metrics.headline || `${e.stock.companyName} ${e.eventType}`,
-          whatHappened: metrics.whatHappened || metrics.summary || metrics.headline || '',
-          price: Number(e.stock.currentPrice),
-          changeAmount: Number(e.stock.changeAmount),
-          changePercent: Number(e.stock.changePercent),
-          timestamp: e.timestamp.toISOString(),
-          read: true,
-          acknowledged: e.acknowledged,
-          inWatchlist: watchlistSymbols.has(e.stockSymbol),
-          marketMood: read.event.digestEvents[0]?.digest?.marketMood || eventMood,
-          stock: {
-            ...e.stock,
-            currentPrice: Number(e.stock.currentPrice),
+          return {
+            id: e.id,
+            readId: read.id,
+            readAt: read.readAt.toISOString(),
+            readSource: read.readSource,
+            memoryType: read.readSource === 'auto' ? ('EXPIRED' as const) : ('ARCHIVED' as const),
+            stockSymbol: e.stockSymbol,
+            companyName: e.stock.companyName,
+            eventType: e.eventType,
+            priority: e.priority,
+            headline: metrics.headline || `${e.stock.companyName} ${e.eventType}`,
+            whatHappened: metrics.whatHappened || metrics.summary || metrics.headline || '',
+            price: Number(e.stock.currentPrice),
             changeAmount: Number(e.stock.changeAmount),
             changePercent: Number(e.stock.changePercent),
-            volume: Number(e.stock.volume),
-            avgVolume20D: Number(e.stock.avgVolume20D),
-            peRatio: e.stock.peRatio ? Number(e.stock.peRatio) : null,
-            high52w: Number(e.stock.high52w),
-            low52w: Number(e.stock.low52w),
-          },
-          insights: e.insights.map((ins) => ({
-            ...ins,
-            confidenceScore: Number(ins.confidenceScore),
-          })),
-          primaryInsight: primaryInsight
-            ? {
-                ...primaryInsight,
-                confidenceScore: Number(primaryInsight.confidenceScore),
-              }
-            : null,
-        };
-      });
+            timestamp: e.timestamp.toISOString(),
+            read: true,
+            acknowledged: e.acknowledged,
+            inWatchlist: watchlistSymbols.has(e.stockSymbol),
+            marketMood: read.event.digestEvents[0]?.digest?.marketMood || eventMood,
+            stock: {
+              ...e.stock,
+              currentPrice: Number(e.stock.currentPrice),
+              changeAmount: Number(e.stock.changeAmount),
+              changePercent: Number(e.stock.changePercent),
+              volume: Number(e.stock.volume),
+              avgVolume20D: Number(e.stock.avgVolume20D),
+              peRatio: e.stock.peRatio ? Number(e.stock.peRatio) : null,
+              high52w: Number(e.stock.high52w),
+              low52w: Number(e.stock.low52w),
+            },
+            insights: e.insights.map((ins) => ({
+              ...ins,
+              confidenceScore: Number(ins.confidenceScore),
+            })),
+            primaryInsight: primaryInsight
+              ? {
+                  ...primaryInsight,
+                  confidenceScore: Number(primaryInsight.confidenceScore),
+                }
+              : null,
+          };
+        });
     }
 
     // 5. Fetch UserSavedEvent (Saved) if requested
@@ -223,65 +264,67 @@ export class MemoryService {
       const saves = await prisma.userSavedEvent.findMany({
         where: saveWhere,
         orderBy: { savedAt: 'desc' },
-        take: options.limit || 100,
+        take: options.limit || 200,
         include: includeEvent,
       });
 
-      savedItems = saves.map((save) => {
-        const e = save.event;
-        const metrics = (e.metricsDelta as any) || {};
+      savedItems = saves
+        .filter((s) => allowDemo || !isEventDemo(s.event))
+        .map((save) => {
+          const e = save.event;
+          const metrics = (e.metricsDelta as any) || {};
 
-        let eventMood: MarketMood = MarketMood.NEUTRAL;
-        const changePct = Number(e.stock.changePercent);
-        if (changePct >= 1.5) eventMood = MarketMood.EXTREME_GREED;
-        else if (changePct >= 0.3) eventMood = MarketMood.BULLISH;
-        else if (changePct <= -1.5) eventMood = MarketMood.BEARISH;
-        else if (changePct <= -0.3) eventMood = MarketMood.CHOPPY;
+          let eventMood: MarketMood = MarketMood.NEUTRAL;
+          const changePct = Number(e.stock.changePercent);
+          if (changePct >= 1.5) eventMood = MarketMood.EXTREME_GREED;
+          else if (changePct >= 0.3) eventMood = MarketMood.BULLISH;
+          else if (changePct <= -1.5) eventMood = MarketMood.BEARISH;
+          else if (changePct <= -0.3) eventMood = MarketMood.CHOPPY;
 
-        const primaryInsight = e.insights[0];
+          const primaryInsight = e.insights[0];
 
-        return {
-          id: e.id,
-          saveId: save.id,
-          savedAt: save.savedAt.toISOString(),
-          memoryType: 'SAVED' as const,
-          stockSymbol: e.stockSymbol,
-          companyName: e.stock.companyName,
-          eventType: e.eventType,
-          priority: e.priority,
-          headline: metrics.headline || `${e.stock.companyName} ${e.eventType}`,
-          whatHappened: metrics.whatHappened || metrics.summary || metrics.headline || '',
-          price: Number(e.stock.currentPrice),
-          changeAmount: Number(e.stock.changeAmount),
-          changePercent: Number(e.stock.changePercent),
-          timestamp: e.timestamp.toISOString(),
-          read: false,
-          acknowledged: true,
-          inWatchlist: watchlistSymbols.has(e.stockSymbol),
-          marketMood: save.event.digestEvents[0]?.digest?.marketMood || eventMood,
-          stock: {
-            ...e.stock,
-            currentPrice: Number(e.stock.currentPrice),
+          return {
+            id: e.id,
+            saveId: save.id,
+            savedAt: save.savedAt.toISOString(),
+            memoryType: 'SAVED' as const,
+            stockSymbol: e.stockSymbol,
+            companyName: e.stock.companyName,
+            eventType: e.eventType,
+            priority: e.priority,
+            headline: metrics.headline || `${e.stock.companyName} ${e.eventType}`,
+            whatHappened: metrics.whatHappened || metrics.summary || metrics.headline || '',
+            price: Number(e.stock.currentPrice),
             changeAmount: Number(e.stock.changeAmount),
             changePercent: Number(e.stock.changePercent),
-            volume: Number(e.stock.volume),
-            avgVolume20D: Number(e.stock.avgVolume20D),
-            peRatio: e.stock.peRatio ? Number(e.stock.peRatio) : null,
-            high52w: Number(e.stock.high52w),
-            low52w: Number(e.stock.low52w),
-          },
-          insights: e.insights.map((ins) => ({
-            ...ins,
-            confidenceScore: Number(ins.confidenceScore),
-          })),
-          primaryInsight: primaryInsight
-            ? {
-                ...primaryInsight,
-                confidenceScore: Number(primaryInsight.confidenceScore),
-              }
-            : null,
-        };
-      });
+            timestamp: e.timestamp.toISOString(),
+            read: false,
+            acknowledged: true,
+            inWatchlist: watchlistSymbols.has(e.stockSymbol),
+            marketMood: save.event.digestEvents[0]?.digest?.marketMood || eventMood,
+            stock: {
+              ...e.stock,
+              currentPrice: Number(e.stock.currentPrice),
+              changeAmount: Number(e.stock.changeAmount),
+              changePercent: Number(e.stock.changePercent),
+              volume: Number(e.stock.volume),
+              avgVolume20D: Number(e.stock.avgVolume20D),
+              peRatio: e.stock.peRatio ? Number(e.stock.peRatio) : null,
+              high52w: Number(e.stock.high52w),
+              low52w: Number(e.stock.low52w),
+            },
+            insights: e.insights.map((ins) => ({
+              ...ins,
+              confidenceScore: Number(ins.confidenceScore),
+            })),
+            primaryInsight: primaryInsight
+              ? {
+                  ...primaryInsight,
+                  confidenceScore: Number(primaryInsight.confidenceScore),
+                }
+              : null,
+          };
+        });
     }
 
     // 6. Combine & Sort newest first
@@ -330,15 +373,12 @@ export class MemoryService {
    * Retrieves aggregated memory counters for the authenticated user
    */
   async getMemoryCounts(userId: string) {
-    const [archivedCount, savedCount] = await Promise.all([
-      prisma.userEventRead.count({ where: { userId } }),
-      prisma.userSavedEvent.count({ where: { userId } }),
-    ]);
-
+    const feedCounts = await feedService.getFeedCounts(userId);
     return {
-      archivedCount,
-      savedCount,
-      totalCount: archivedCount + savedCount,
+      archivedCount: feedCounts.readCount,
+      savedCount: feedCounts.savedCount,
+      expiredCount: feedCounts.expiredCount,
+      totalCount: feedCounts.readCount + feedCounts.savedCount,
     };
   }
 

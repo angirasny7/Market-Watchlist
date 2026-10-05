@@ -5,13 +5,45 @@ import { Insight } from '../types/insight';
 import { HistoricalDigest } from '../types/digest';
 import { IndexSnapshot, MacroAlert, SectorPerformance, MarketMover } from '../types/market';
 import { UserState, SyncStatus } from '../types/userState';
-import {
-  mockIndices,
-  mockMacroAlerts,
-  mockSectorPerformance,
-  mockMarketMovers,
-  mockUserState,
-} from '../data';
+
+const initialUserState: UserState = {
+  userId: '',
+  userName: '',
+  lastVisitTimestamp: new Date().toISOString(),
+  lastSeenDisplay: 'Just now',
+  syncStatus: 'SYNCED',
+  previousLoginAt: null,
+  previousSessionAt: null,
+  lastLogoutAt: null,
+  currentDevice: {
+    deviceId: 'dev_current',
+    deviceName: 'Desktop',
+    deviceType: 'Desktop',
+    lastActive: 'Active Now',
+    isCurrentDevice: true,
+  },
+  previousDevice: null,
+  allDevices: [
+    {
+      deviceId: 'dev_current',
+      deviceName: 'Desktop',
+      deviceType: 'Desktop',
+      lastActive: 'Active Now',
+      isCurrentDevice: true,
+    },
+  ],
+  cursor: {
+    lastSeenSnapshotId: '',
+    lastSeenTimestamp: new Date().toISOString(),
+    lastAcknowledgedDigestId: undefined,
+    unreadEventsCount: 0,
+  },
+  preferences: {
+    minScoreThreshold: 50,
+    emailDigestEnabled: true,
+    autoAcknowledgeOnScroll: false,
+  },
+};
 import {
   watchlistService,
   UserWatchlist,
@@ -835,13 +867,13 @@ export const useMarketStore = create<MarketState>((set, get) => ({
   },
 
   // Highlights State
-  indices: mockIndices,
-  macroAlerts: mockMacroAlerts,
-  sectorPerformance: mockSectorPerformance,
-  marketMovers: mockMarketMovers,
+  indices: [],
+  macroAlerts: [],
+  sectorPerformance: [],
+  marketMovers: [],
 
   // User State & Cross-Device Sync State
-  userState: mockUserState,
+  userState: initialUserState,
   marketStatus: 'REGULAR_OPEN',
 
   simulateDeviceSwitch: (deviceId: string) => {
@@ -1116,7 +1148,7 @@ export const useMarketStore = create<MarketState>((set, get) => ({
       isLoading: false,
       isError: false,
       errorMessage: null,
-      userState: mockUserState,
+      userState: initialUserState,
     });
   },
 

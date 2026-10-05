@@ -69,7 +69,7 @@ export async function runSyncNewsJob(targetSymbols?: string[]): Promise<SyncNews
             continue;
           }
 
-          await prisma.news.create({
+          const createdNews = await prisma.news.create({
             data: {
               stockSymbol: symbol,
               headline: article.headline,
@@ -80,6 +80,49 @@ export async function runSyncNewsJob(targetSymbols?: string[]): Promise<SyncNews
               sentiment: article.sentiment,
             },
           });
+
+          // Ingest into Event table as NEWS or FILING event (Amendment F)
+          const isFiling = article.sourceName.toLowerCase().includes('bse') ||
+            article.sourceName.toLowerCase().includes('nse') ||
+            article.sourceName.toLowerCase().includes('sec') ||
+            article.headline.toLowerCase().includes('filing') ||
+            article.headline.toLowerCase().includes('disclosure');
+
+          const eventType = isFiling ? 'FILING' : 'NEWS';
+          const pubDate = new Date(article.publishedAt);
+          const startOfPubDay = new Date(pubDate);
+          startOfPubDay.setUTCHours(0, 0, 0, 0);
+          const endOfPubDay = new Date(pubDate);
+          endOfPubDay.setUTCHours(23, 59, 59, 999);
+
+          const existingEvent = await prisma.event.findFirst({
+            where: {
+              stockSymbol: symbol,
+              eventType,
+              timestamp: { gte: startOfPubDay, lte: endOfPubDay },
+            },
+          });
+
+          if (!existingEvent) {
+            await prisma.event.create({
+              data: {
+                stockSymbol: symbol,
+                eventType,
+                priority: 'LOW',
+                timestamp: pubDate,
+                occurredOn: pubDate,
+                occurredAt: pubDate,
+                detectedAt: new Date(),
+                metricsDelta: {
+                  headline: article.headline,
+                  summary: article.summary,
+                  sourceUrl: article.sourceUrl,
+                  sourceName: article.sourceName,
+                  sentiment: article.sentiment,
+                },
+              },
+            });
+          }
 
           newsIngested++;
         }
