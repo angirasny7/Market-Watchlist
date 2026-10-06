@@ -15,7 +15,7 @@ describe('Unread Count Single Source of Truth (F0.5)', () => {
 
     const { feedService } = await import('../src/services/feedService.js');
     const unreadCount = await eventService.getUnreadFeedCount(user.id);
-    const feedRes = await feedService.getFeed(user.id, { limit: 1000 });
+    const feedRes = await feedService.getFeed(user.id, { window: 'toReview', limit: 1000 });
     const feedUnreadCount = feedRes.items.filter((e) => e.isUnread).length;
 
     expect(unreadCount).toBe(feedUnreadCount);

@@ -12,7 +12,7 @@
 export function isFirstLoginSession(previousLoginAt?: string | Date | null): boolean {
   if (!previousLoginAt) return true;
   const d = typeof previousLoginAt === 'string' ? new Date(previousLoginAt) : previousLoginAt;
-  return isNaN(d.getTime());
+  return isNaN(d.getTime()) || d.getTime() <= 0 || d.getFullYear() < 2000;
 }
 
 /**
@@ -171,7 +171,7 @@ export function formatVisitTime(options: {
   }
 
   const date = typeof timestamp === 'string' ? new Date(timestamp) : timestamp;
-  if (isNaN(date.getTime())) {
+  if (isNaN(date.getTime()) || date.getTime() <= 0 || date.getFullYear() < 2000) {
     return {
       label: "Welcome! Here's what we're tracking",
       prefix: 'Welcome',
@@ -218,7 +218,7 @@ export function formatLastVisitLabel(timestamp?: string | Date | null): string {
   }
 
   const date = typeof timestamp === 'string' ? new Date(timestamp) : timestamp;
-  if (isNaN(date.getTime())) {
+  if (isNaN(date.getTime()) || date.getTime() <= 0 || date.getFullYear() < 2000) {
     return "Welcome! Here's what we're tracking";
   }
 

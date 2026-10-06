@@ -142,7 +142,7 @@ export const FeedHeaderBar: React.FC<FeedHeaderBarProps> = ({
   };
 
   const visitTimeInfo = formatVisitTime({
-    timestamp: summary?.lastVisitAt,
+    timestamp: summary?.hasBoundary && !summary?.isFirstSession ? summary?.lastVisitAt : null,
     endReason: summary?.previousSessionEndReason,
     serverNowOffsetMs,
   });

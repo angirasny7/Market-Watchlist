@@ -1064,7 +1064,7 @@ export class FeedService {
       mediumCount,
       lowCount,
       daysSinceLastVisit,
-      lastVisitAt: lastSessionAt.toISOString(),
+      lastVisitAt: visitInfo?.hasBoundary && visitInfo.feedBoundaryAt ? visitInfo.feedBoundaryAt.toISOString() : null,
       headline,
       dataFreshness,
       lastSyncedAt,

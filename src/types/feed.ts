@@ -146,6 +146,10 @@ export interface FeedSummary {
     '30d': number;
   };
   marketsClosed?: boolean;
+  hasBoundary?: boolean;
+  isFirstSession?: boolean;
+  feedBoundaryAt?: string | null;
+  lastVisitEndedAt?: string | null;
   newsCountInWindow?: number;
   previousSessionStartedAt?: string | null;
   previousSessionEndReason?: 'logout' | 'inactivity' | 'tab_closed' | string | null;
