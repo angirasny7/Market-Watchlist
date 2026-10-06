@@ -2,45 +2,50 @@
  * Helper to format event times meaningfully based on market occurrence and event type.
  *
  * Rules:
- * 1. Cumulative "since your last visit" event -> "Since <Weekday> <Day> <Month>" (e.g. "Since Thu 1 Oct")
- * 2. Single-day price/volume move -> "<Day/Date> close" (e.g. "Today close", "Yesterday close", "Fri 2 Oct close")
- * 3. Corporate event (Earnings, Dividend, etc.) -> "Earnings today", "Reported 2 Oct", "Dividend announced 1 Oct"
- * 4. Alert-triggered event -> "Triggered <Weekday> <Day> <Month>, <Hour>:<Min> <AM/PM>" in exchange/local TZ
- * 5. NEVER show a bare clock time without a date.
+ * - < 12 hours ago: relative time (e.g. "Just now", "45 min ago", "2 hr ago")
+ * - >= 12 hours ago: formatted date + time when updated on reliable website (e.g. "6 Oct, 9:30 AM EDT" or "6 Oct, 9:30 AM IST")
+ * - Supporting source URL helper resolves official source, news link, or financial provider URL.
  */
-
-import { isExchangeTradingDay } from '../data/tradingCalendar2026';
 
 export interface EventTimeContext {
   occurredOn?: string | Date | null;
+  occurredAt?: string | Date | null;
   periodStart?: string | Date | null;
   detectedAt?: string | Date | null;
+  publishedAt?: string | Date | null;
+  receivedAt?: string | Date | null;
   date?: string | Date | null;
   timestamp?: string | Date | null;
   eventType?: string;
+  source?: string | null;
+  sourceUrl?: string | null;
+  sources?: any[] | null;
+  sourceTrustTier?: string | null;
   isCumulative?: boolean;
   isAlertTriggered?: boolean;
   exchange?: string;
   headline?: string;
+  isIntraday?: boolean;
+  stockSymbol?: string;
 }
 
 const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const SHORT_WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-/**
- * Parses any valid date input (string, Date, number) into a Date object.
- */
 function parseDate(val: string | Date | null | undefined): Date | null {
   if (!val) return null;
   const d = typeof val === 'string' ? new Date(val) : val;
   return isNaN(d.getTime()) ? null : d;
 }
 
-/**
- * Returns 'Asia/Kolkata' for Indian exchanges or 'America/New_York' for US.
- */
 export function getExchangeTimeZone(exchange?: string): string {
-  if (!exchange) return 'Asia/Kolkata';
+  if (!exchange) {
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Kolkata';
+    } catch {
+      return 'Asia/Kolkata';
+    }
+  }
   const ex = exchange.toUpperCase();
   if (ex === 'NSE' || ex === 'BSE' || ex === 'IN' || ex === 'INDIA') {
     return 'Asia/Kolkata';
@@ -48,181 +53,176 @@ export function getExchangeTimeZone(exchange?: string): string {
   if (ex === 'NASDAQ' || ex === 'NYSE' || ex === 'US') {
     return 'America/New_York';
   }
-  return 'Asia/Kolkata';
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Kolkata';
+  } catch {
+    return 'Asia/Kolkata';
+  }
 }
 
-/**
- * Compares two dates by calendar day in a given timezone or UTC.
- */
-function getDayDiff(d1: Date, d2: Date = new Date()): number {
-  const utc1 = Date.UTC(d1.getFullYear(), d1.getMonth(), d1.getDate());
-  const utc2 = Date.UTC(d2.getFullYear(), d2.getMonth(), d2.getDate());
-  return Math.floor((utc2 - utc1) / (1000 * 60 * 60 * 24));
-}
-
-/**
- * Formats "Thu 1 Oct" or "2 Oct"
- */
-function formatDayMonth(d: Date, includeWeekday: boolean = true): string {
+export function formatDayMonth(d: Date, includeWeekday: boolean = true): string {
   const weekday = SHORT_WEEKDAYS[d.getDay()];
   const day = d.getDate();
   const month = SHORT_MONTHS[d.getMonth()];
   return includeWeekday ? `${weekday} ${day} ${month}` : `${day} ${month}`;
 }
 
+export function formatTimeWithTz(d: Date, tz: string, includeWeekday: boolean = false): string {
+  try {
+    const weekdayStr = SHORT_WEEKDAYS[d.getDay()];
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      day: 'numeric',
+      month: 'short',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    }).formatToParts(d);
+
+    let day = '';
+    let month = '';
+    let hour = '';
+    let minute = '';
+    let dayPeriod = 'AM';
+
+    for (const p of parts) {
+      if (p.type === 'day') day = p.value;
+      if (p.type === 'month') month = p.value;
+      if (p.type === 'hour') hour = p.value;
+      if (p.type === 'minute') minute = p.value;
+      if (p.type === 'dayPeriod') dayPeriod = p.value.toUpperCase();
+    }
+
+    const tzAbbr = tz === 'Asia/Kolkata' || tz === 'Asia/Calcutta' ? 'IST' : tz === 'America/New_York' ? 'EDT' : 'IST';
+    const prefix = includeWeekday ? `${weekdayStr} ` : '';
+    return `${prefix}${day} ${month}, ${hour}:${minute} ${dayPeriod} ${tzAbbr}`;
+  } catch {
+    return formatDayMonth(d, includeWeekday);
+  }
+}
+
 /**
  * Main function to format event time on Attention Feed cards.
  */
 export function formatEventTime(item: EventTimeContext, now: Date = new Date()): string {
-  const occurred = parseDate(item.occurredOn) || parseDate(item.date) || parseDate(item.timestamp);
-  const periodStart = parseDate(item.periodStart);
-  const detected = parseDate(item.detectedAt) || parseDate(item.timestamp) || parseDate(item.date);
-  const type = (item.eventType || '').toUpperCase();
-  const isCumulative = Boolean(
-    item.isCumulative ||
-    (item.headline && item.headline.toLowerCase().includes('since your last visit')) ||
-    (periodStart && occurred && periodStart.getTime() < occurred.getTime() - 12 * 60 * 60 * 1000)
-  );
+  const tz = getExchangeTimeZone(item.exchange);
 
-  // 1. Alert-Triggered Events
-  if (item.isAlertTriggered && detected) {
-    const tz = getExchangeTimeZone(item.exchange);
-    try {
-      const parts = new Intl.DateTimeFormat('en-US', {
-        timeZone: tz,
-        weekday: 'short',
-        day: 'numeric',
-        month: 'short',
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true,
-      }).formatToParts(detected);
-
-      let weekday = '';
-      let day = '';
-      let month = '';
-      let hour = '';
-      let minute = '';
-      let dayPeriod = 'AM';
-
-      for (const p of parts) {
-        if (p.type === 'weekday') weekday = p.value;
-        if (p.type === 'day') day = p.value;
-        if (p.type === 'month') month = p.value;
-        if (p.type === 'hour') hour = p.value;
-        if (p.type === 'minute') minute = p.value;
-        if (p.type === 'dayPeriod') dayPeriod = p.value.toUpperCase();
-      }
-
-      return `Triggered ${weekday} ${day} ${month}, ${hour}:${minute} ${dayPeriod}`;
-    } catch {
-      return `Triggered ${formatDayMonth(detected, true)}`;
+  // 1. Cumulative session move (since last visit)
+  if (item.isCumulative && item.periodStart && item.occurredOn) {
+    const start = parseDate(item.periodStart);
+    const end = parseDate(item.occurredOn);
+    if (start && end) {
+      return `${formatDayMonth(start, true)} close -> ${formatDayMonth(end, true)} close`;
     }
   }
 
-  // 2. Cumulative "Since Last Visit" Events
-  if (isCumulative) {
-    const startDate = periodStart || occurred;
-    if (periodStart && occurred && periodStart.getTime() !== occurred.getTime()) {
-      return `${formatDayMonth(periodStart, true)} close -> ${formatDayMonth(occurred, true)} close`;
-    }
-    if (startDate) {
-      return `Since ${formatDayMonth(startDate, true)} close`;
-    }
-    return 'Since last visit';
+  // 2. Alert triggered
+  if (item.isAlertTriggered) {
+    const triggerDate = parseDate(item.detectedAt) || parseDate(item.occurredAt) || parseDate(item.timestamp) || now;
+    return `Your alert · Triggered ${formatTimeWithTz(triggerDate, tz, true)}`;
   }
 
-  // 3. Corporate Events (Earnings, Dividend, Management change, Analyst action)
-  const isEarnings = type.includes('EARNINGS');
-  const isDividend = type.includes('DIVIDEND');
-  const isManagement = type.includes('MANAGEMENT');
-  const isAnalyst = type.includes('ANALYST') || type.includes('UPGRADE') || type.includes('DOWNGRADE');
-
-  if (occurred && (isEarnings || isDividend || isManagement || isAnalyst)) {
-    const diffDays = getDayDiff(occurred, now);
-    const dateStr = formatDayMonth(occurred, false);
-
-    if (isEarnings) {
-      if (diffDays === 0) return 'Earnings today';
-      if (diffDays === 1) return 'Reported yesterday';
-      return `Reported ${dateStr}`;
-    }
-    if (isDividend) {
-      if (diffDays === 0) return 'Dividend today';
-      return `Dividend announced ${dateStr}`;
-    }
-    if (isManagement) {
-      if (diffDays === 0) return 'Announced today';
-      return `Announced ${dateStr}`;
-    }
-    if (isAnalyst) {
-      if (diffDays === 0) return 'Upgraded today';
-      return `Updated ${dateStr}`;
-    }
+  // 3. Regulatory filing
+  if (item.eventType === 'FILING') {
+    const pubDate = parseDate(item.publishedAt) || parseDate(item.occurredAt) || now;
+    const src = item.source || `${item.exchange || 'NSE'} filing`;
+    return `${src} · Announced ${formatTimeWithTz(pubDate, tz, true)}`;
   }
 
-  // 4. Single-Day Price / Volume moves (End-of-day close moves)
-  if (occurred) {
-    const diffDays = getDayDiff(occurred, now);
-    const isTradingDay = isExchangeTradingDay(item.exchange || 'NSE', now);
-    
-    // Only use "Today close" if today was a real trading day for this exchange
-    if (diffDays === 0 && isTradingDay) {
-      return 'Today close';
-    }
-    if (diffDays === 1 && isTradingDay) {
-      return 'Yesterday close';
-    }
-    return `${formatDayMonth(occurred, true)} close`;
+  // 4. News publication
+  if (item.eventType === 'NEWS') {
+    const pubDate = parseDate(item.publishedAt) || parseDate(item.occurredAt) || now;
+    const src = item.source || 'News';
+    return `${src} · Published ${formatTimeWithTz(pubDate, tz, true)}`;
   }
 
-  // Fallback safe date format (NEVER a bare time)
-  if (detected) {
-    return `${formatDayMonth(detected, true)} close`;
+  // 5. Intraday detection with delay notice
+  if (item.isIntraday && item.detectedAt) {
+    const detDate = parseDate(item.detectedAt) || now;
+    return `Detected ${formatTimeWithTz(detDate, tz, false).replace(/^[^\d]+/, '')} · ${item.exchange || 'NSE'} data (~15 min delayed)`;
   }
 
-  return 'Recent move';
+  // 6. Occurred on completed market session
+  if ((item.occurredOn || item.occurredAt || item.timestamp) && !item.isIntraday && !item.publishedAt && !item.detectedAt) {
+    const occDate = parseDate(item.occurredOn) || parseDate(item.occurredAt) || parseDate(item.timestamp) || now;
+    return `${formatDayMonth(occDate, true)} session · ${item.exchange || 'NSE'} data`;
+  }
+
+  // 7. General relative or formatted timestamp
+  const eventDate =
+    parseDate(item.publishedAt) ||
+    parseDate(item.occurredAt) ||
+    parseDate(item.occurredOn) ||
+    parseDate(item.detectedAt) ||
+    parseDate(item.timestamp) ||
+    parseDate(item.date) ||
+    now;
+
+  const diffMs = Math.max(0, now.getTime() - eventDate.getTime());
+  const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
+
+  if (diffMs < TWELVE_HOURS_MS) {
+    if (diffMs < 60 * 1000) {
+      return 'Just now';
+    }
+    if (diffMs < 60 * 60 * 1000) {
+      const mins = Math.max(1, Math.floor(diffMs / (60 * 1000)));
+      return `${mins} min ago`;
+    }
+    const hrs = Math.max(1, Math.floor(diffMs / (60 * 60 * 1000)));
+    return `${hrs} hr ago`;
+  }
+
+  // >= 12 hours ago -> Format date + time
+  return formatTimeWithTz(eventDate, tz, false);
 }
 
 /**
- * Detailed tooltip string for auditing data provenance and exact detection time.
+ * Resolves a reliable supporting website or financial quote URL for a feed item.
+ */
+export function getSupportingSourceUrl(item: {
+  stockSymbol?: string;
+  exchange?: string;
+  sourceUrl?: string | null;
+  sources?: any[] | null;
+}): string {
+  if (item.sourceUrl && typeof item.sourceUrl === 'string' && item.sourceUrl.startsWith('http')) {
+    return item.sourceUrl;
+  }
+  if (Array.isArray(item.sources) && item.sources.length > 0) {
+    const valid = item.sources.find((s) => s && typeof s.url === 'string' && s.url.startsWith('http'));
+    if (valid) return valid.url;
+  }
+  const ex = (item.exchange || '').toUpperCase();
+  const sym = (item.stockSymbol || '').trim().toUpperCase();
+  if (ex === 'NSE' || ex === 'BSE' || ex === 'IN' || ex === 'INDIA' || sym.endsWith('.NS')) {
+    const cleanSym = sym.replace('.NS', '');
+    return `https://www.google.com/finance/quote/${encodeURIComponent(cleanSym)}:NSE`;
+  }
+  return `https://finance.yahoo.com/quote/${encodeURIComponent(sym || 'SPY')}`;
+}
+
+/**
+ * Detailed tooltip string for auditing data provenance, publish time, and receipt time.
  */
 export function formatEventTooltip(item: EventTimeContext): string {
-  const occurred = parseDate(item.occurredOn) || parseDate(item.date) || parseDate(item.timestamp);
-  const detected = parseDate(item.detectedAt) || parseDate(item.timestamp) || parseDate(item.date);
+  const occurred = parseDate(item.occurredAt) || parseDate(item.occurredOn) || parseDate(item.timestamp);
+  const published = parseDate(item.publishedAt) || occurred;
+  const received = parseDate(item.receivedAt) || parseDate(item.detectedAt) || parseDate(item.timestamp);
   const tz = getExchangeTimeZone(item.exchange);
 
   const lines: string[] = [];
 
-  if (occurred) {
-    lines.push(`Market Date: ${occurred.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`);
+  if (published) {
+    lines.push(`Published: ${formatTimeWithTz(published, tz, true)}`);
   }
 
-  if (item.periodStart) {
-    const start = parseDate(item.periodStart);
-    if (start) {
-      lines.push(`Period Start: ${start.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`);
-    }
+  if (received) {
+    lines.push(`Received by us at ${formatTimeWithTz(received, tz, true)}`);
   }
 
-  if (detected) {
-    try {
-      const timeStr = detected.toLocaleTimeString('en-US', {
-        timeZone: tz,
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true,
-      });
-      const dateStr = detected.toLocaleDateString('en-GB', {
-        timeZone: tz,
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric',
-      });
-      lines.push(`Detected: ${dateStr} at ${timeStr} (${tz})`);
-    } catch {
-      lines.push(`Detected: ${detected.toISOString()}`);
-    }
+  if (item.source) {
+    lines.push(`Source: ${item.source} (${item.sourceTrustTier || 'VERIFIED'})`);
   }
 
   return lines.join(' · ');

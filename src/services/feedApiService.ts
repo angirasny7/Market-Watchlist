@@ -61,26 +61,88 @@ export class FeedApiService {
     return null;
   }
 
-  async markRead(eventIds?: string[]): Promise<boolean> {
-    const res = await apiClient.post('/feed/mark-read', { eventIds });
-    return res.success;
-  }
-
-  async markItemRead(eventId: string): Promise<boolean> {
-    const res = await apiClient.post(`/feed/items/${eventId}/mark-read`);
-    return res.success;
-  }
-
-  async toggleSave(eventId: string): Promise<{ isSaved: boolean } | null> {
-    const res = await apiClient.post<{ isSaved: boolean }>(`/feed/items/${eventId}/save`);
+  async markRead(eventIds?: string[]): Promise<{ success: boolean; count: number; undoToken?: string } | null> {
+    const res = await apiClient.post<{ success: boolean; count: number; undoToken?: string }>('/feed/mark-read', { eventIds });
     if (res.success && res.data) {
       return res.data;
     }
     return null;
   }
 
-  async markCaughtUp(): Promise<{ success: boolean; unreadClusters: number } | null> {
-    const res = await apiClient.post<{ success: boolean; unreadClusters: number }>('/feed/caught-up');
+  async markItemRead(eventId: string): Promise<{ success: boolean; undoToken?: string } | null> {
+    const res = await apiClient.post<{ success: boolean; undoToken?: string }>(`/feed/items/${eventId}/mark-read`);
+    if (res.success && res.data) {
+      return res.data;
+    }
+    return null;
+  }
+
+  async saveItem(eventId: string): Promise<{ success: boolean; isSaved: boolean; undoToken?: string } | null> {
+    const res = await apiClient.post<{ success: boolean; isSaved: boolean; undoToken?: string }>(`/feed/items/${eventId}/save`);
+    if (res.success && res.data) {
+      return res.data;
+    }
+    return null;
+  }
+
+  async toggleSave(eventId: string): Promise<{ isSaved: boolean; undoToken?: string } | null> {
+    const res = await apiClient.post<{ isSaved: boolean; undoToken?: string }>(`/feed/items/${eventId}/save`);
+    if (res.success && res.data) {
+      return res.data;
+    }
+    return null;
+  }
+
+  async unsaveItem(eventId: string): Promise<{ success: boolean; isSaved: boolean; undoToken?: string } | null> {
+    const res = await apiClient.post<{ success: boolean; isSaved: boolean; undoToken?: string }>(`/feed/items/${eventId}/unsave`);
+    if (res.success && res.data) {
+      return res.data;
+    }
+    return null;
+  }
+
+  async recordFeedViewed(): Promise<{ viewedAt: string } | null> {
+    const res = await apiClient.post<{ viewedAt: string }>('/feed/viewed');
+    if (res.success && res.data) {
+      return res.data;
+    }
+    return null;
+  }
+
+  async deleteItem(eventId: string): Promise<{ success: boolean; count: number; undoToken?: string } | null> {
+    const res = await apiClient.post<{ success: boolean; count: number; undoToken?: string }>(`/feed/items/${eventId}/delete`);
+    if (res.success && res.data) {
+      return res.data;
+    }
+    return null;
+  }
+
+  async restoreItem(eventId: string): Promise<{ success: boolean; undoToken?: string } | null> {
+    const res = await apiClient.post<{ success: boolean; undoToken?: string }>(`/feed/items/${eventId}/restore`);
+    if (res.success && res.data) {
+      return res.data;
+    }
+    return null;
+  }
+
+  async undoAction(undoToken: string): Promise<{ success: boolean; action?: string; reversedCount?: number } | null> {
+    const res = await apiClient.post<{ success: boolean; action?: string; reversedCount?: number }>('/feed/undo', { undoToken });
+    if (res.success && res.data) {
+      return res.data;
+    }
+    return null;
+  }
+
+  async getCounts(): Promise<any | null> {
+    const res = await apiClient.get<any>('/feed/counts');
+    if (res.success && res.data) {
+      return res.data;
+    }
+    return null;
+  }
+
+  async markCaughtUp(): Promise<{ success: boolean; count: number; undoToken?: string } | null> {
+    const res = await apiClient.post<{ success: boolean; count: number; undoToken?: string }>('/feed/caught-up');
     if (res.success && res.data) {
       return res.data;
     }

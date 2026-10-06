@@ -18,8 +18,9 @@ export const LoginPage: React.FC = () => {
   // If already authenticated, redirect to destination or dashboard
   useEffect(() => {
     if (isAuthenticated) {
-      const from = (location.state as any)?.from?.pathname || '/';
-      navigate(from, { replace: true });
+      const from = (location.state as any)?.from?.pathname;
+      const destination = (from && from !== '/login' && from !== '/register') ? from : '/';
+      navigate(destination, { replace: true });
     }
   }, [isAuthenticated, navigate, location]);
 
@@ -45,8 +46,9 @@ export const LoginPage: React.FC = () => {
     if (success) {
       // Hydrate market data for newly authenticated user
       fetchMarketData();
-      const from = (location.state as any)?.from?.pathname || '/';
-      navigate(from, { replace: true });
+      const from = (location.state as any)?.from?.pathname;
+      const destination = (from && from !== '/login' && from !== '/register') ? from : '/';
+      navigate(destination, { replace: true });
     }
   };
 
@@ -58,7 +60,7 @@ export const LoginPage: React.FC = () => {
           <Activity className="w-8 h-8" />
         </div>
         <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-100">
-          Smart Market Watchlist
+          SignalLens
         </h2>
         <p className="mt-2 text-sm text-slate-400">
           Sign in to access your real-time market intelligence

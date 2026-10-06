@@ -15,3 +15,4 @@ export * from './LoadingSkeleton';
 export * from './ErrorState';
 export * from './PopoverMenu';
 export * from './SearchInput';
+export * from './ErrorBoundary';

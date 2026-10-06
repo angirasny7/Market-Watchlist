@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   FeedListCard,
   FeedDetailsDrawer,
@@ -7,7 +7,9 @@ import {
   FeedControlsBar,
 } from '../components/feed';
 import { feedApiService } from '../services/feedApiService';
+import { feedStreamClient } from '../services/feedStreamClient';
 import { useMarketStore } from '../store/useMarketStore';
+import { useToastStore } from '../store/useToastStore';
 import {
   FeedItem,
   FeedSummary,
@@ -26,12 +28,16 @@ import {
   Search,
   Lightbulb,
   X,
+  Inbox,
+  PlusCircle,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 export const AttentionFeedPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const { userWatchlists, fetchUserWatchlists } = useMarketStore();
+  const { addToast } = useToastStore();
 
   // State: Data
   const [items, setItems] = useState<FeedItem[]>([]);
@@ -50,21 +56,22 @@ export const AttentionFeedPage: React.FC = () => {
   // State: Real-time update pill
   const [newUpdatesAvailable, setNewUpdatesAvailable] = useState(0);
 
-  // State: Filter controls (Window is persisted in localStorage)
+  // State: Filter controls (Window is persisted in localStorage, defaults to toReview)
   const [selectedWindow, setSelectedWindow] = useState<FeedTimeWindow>(() => {
     const saved = localStorage.getItem('smw_feed_window');
-    if (saved === '24h' || saved === '7d' || saved === '30d' || saved === 'sinceLastVisit') {
+    if (saved === 'toReview' || saved === '24h' || saved === '7d' || saved === '30d' || saved === 'sinceLastVisit') {
       return saved as FeedTimeWindow;
     }
-    return 'sinceLastVisit';
+    return 'toReview';
   });
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedWatchlistId, setSelectedWatchlistId] = useState('all');
   const [selectedPriority, setSelectedPriority] = useState('ALL');
   const [selectedType, setSelectedType] = useState('ALL');
-  const [unreadOnly, setUnreadOnly] = useState(false);
-  const [savedOnly, setSavedOnly] = useState(false);
+
+  // State: Collapsible "Other updates" section
+  const [isOtherSectionOpen, setIsOtherSectionOpen] = useState(false);
 
   // State: Dismissible Tip Banner
   const [isTipDismissed, setIsTipDismissed] = useState<boolean>(() => {
@@ -75,11 +82,22 @@ export const AttentionFeedPage: React.FC = () => {
   const [selectedItem, setSelectedItem] = useState<FeedItem | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
 
+  // State: Screen reader announcement
+  const [ariaAnnouncement, setAriaAnnouncement] = useState('');
+
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // Read URL params (event deep link or symbol filter)
+  // Read URL params (event deep link, symbol filter, or window override)
   const eventParam = searchParams.get('event');
   const symbolParam = searchParams.get('symbol');
+  const windowParam = searchParams.get('window');
+
+  useEffect(() => {
+    if (windowParam && ['toReview', '24h', '7d', '30d', 'sinceLastVisit'].includes(windowParam)) {
+      setSelectedWindow(windowParam as FeedTimeWindow);
+      localStorage.setItem('smw_feed_window', windowParam);
+    }
+  }, [windowParam]);
 
   useEffect(() => {
     if (userWatchlists.length === 0) {
@@ -124,8 +142,6 @@ export const AttentionFeedPage: React.FC = () => {
             symbol: undefined,
             priority: selectedPriority,
             type: selectedType,
-            unreadOnly,
-            savedOnly,
             q: searchQuery || undefined,
           }),
           resetCursor ? feedApiService.getSummary(selectedWindow) : Promise.resolve(null),
@@ -160,8 +176,6 @@ export const AttentionFeedPage: React.FC = () => {
       selectedWatchlistId,
       selectedPriority,
       selectedType,
-      unreadOnly,
-      savedOnly,
       searchQuery,
       nextCursor,
     ]
@@ -175,8 +189,6 @@ export const AttentionFeedPage: React.FC = () => {
     selectedWatchlistId,
     selectedPriority,
     selectedType,
-    unreadOnly,
-    savedOnly,
     searchQuery,
   ]);
 
@@ -197,7 +209,22 @@ export const AttentionFeedPage: React.FC = () => {
     }
   }, [eventParam, items]);
 
-  // Real-time 60s summary polling (paused when document.hidden)
+  // 3-second page visibility timer for recording feed view (Stage B1)
+  useEffect(() => {
+    if (isLoading) return;
+
+    const timer = setTimeout(() => {
+      if (document.visibilityState === 'visible') {
+        feedApiService.recordFeedViewed().catch((err) => {
+          console.debug('Failed to record feed viewed:', err);
+        });
+      }
+    }, 3000);
+
+    return () => clearTimeout(timer);
+  }, [isLoading]);
+
+  // Real-time 45s summary polling (paused when document.hidden)
   useEffect(() => {
     const interval = setInterval(async () => {
       if (document.hidden) return;
@@ -214,12 +241,261 @@ export const AttentionFeedPage: React.FC = () => {
       } catch {
         // Silent poll error
       }
-    }, 60000);
+    }, 45000);
 
-    return () => clearInterval(interval);
-  }, [summary, selectedWindow]);
+    // Real-time SSE Stream subscription for cross-device sync
+    const unsubscribe = feedStreamClient.subscribe((event) => {
+      if (
+        event.action === 'mark_read' ||
+        event.action === 'mark_item_read' ||
+        event.action === 'save_item' ||
+        event.action === 'unsave_item' ||
+        event.action === 'delete_item' ||
+        event.action === 'restore_item' ||
+        event.action === 'undo' ||
+        event.action === 'caught_up'
+      ) {
+        loadFeed(true);
+      }
+    });
 
-  // Keyboard navigation (j/k, Enter/Space, r to toggle read, s to toggle save)
+    return () => {
+      clearInterval(interval);
+      unsubscribe();
+    };
+  }, [summary, selectedWindow, loadFeed]);
+
+  // Separate High/Medium items vs FYI/Low items for collapsed section
+  const { primaryItems, fyiItems } = useMemo(() => {
+    const primary: FeedItem[] = [];
+    const fyi: FeedItem[] = [];
+    for (const it of items) {
+      if (it.priority === 'LOW' || it.priorityLabel === 'FYI') {
+        fyi.push(it);
+      } else {
+        primary.push(it);
+      }
+    }
+    return { primaryItems: primary, fyiItems: fyi };
+  }, [items]);
+
+  // Actions
+  const handleSelectItem = (item: FeedItem) => {
+    setSelectedItem(item);
+    const newParams = new URLSearchParams(searchParams);
+    newParams.set('event', item.id);
+    setSearchParams(newParams, { replace: true });
+  };
+
+  const handleCloseDrawer = () => {
+    setSelectedItem(null);
+    const newParams = new URLSearchParams(searchParams);
+    newParams.delete('event');
+    setSearchParams(newParams, { replace: true });
+  };
+
+  // Mark Read with Optimistic UI and Undo Toast
+  const handleToggleRead = async (item: FeedItem, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const targetId = item.id;
+
+    // Optimistically remove from unhandled feed if marking read
+    setItems((prev) => prev.filter((i) => i.id !== targetId));
+    if (selectedItem?.id === targetId) {
+      setSelectedItem(null);
+      handleCloseDrawer();
+    }
+
+    if (summary) {
+      setSummary({
+        ...summary,
+        unreadClusters: Math.max(0, summary.unreadClusters - 1),
+        totalInWindow: Math.max(0, summary.totalInWindow - 1),
+      });
+    }
+
+    setAriaAnnouncement(`${item.stockSymbol} update marked as read`);
+
+    try {
+      const res = await feedApiService.markItemRead(targetId);
+      const undoToken = res?.undoToken;
+
+      addToast(
+        `Moved ${item.stockSymbol} to Market Memory · Read`,
+        'success',
+        15000,
+        undoToken
+          ? {
+              label: 'Undo',
+              onClick: async () => {
+                await feedApiService.undoAction(undoToken);
+                loadFeed(true);
+                addToast(`Restored ${item.stockSymbol} update to Attention Feed`, 'info', 3000);
+              },
+            }
+          : undefined,
+        {
+          label: 'View in Memory',
+          onClick: () => navigate('/memory'),
+        }
+      );
+    } catch (err) {
+      console.error('Failed to mark read:', err);
+      loadFeed(true);
+    }
+  };
+
+  // Save for Later with Optimistic UI and Undo Toast
+  const handleToggleSave = async (item: FeedItem, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+
+    const targetId = item.id;
+
+    // Optimistically remove from unhandled feed when saved
+    setItems((prev) => prev.filter((i) => i.id !== targetId));
+    if (selectedItem?.id === targetId) {
+      setSelectedItem(null);
+      handleCloseDrawer();
+    }
+
+    if (summary) {
+      setSummary({
+        ...summary,
+        unreadClusters: Math.max(0, summary.unreadClusters - 1),
+        totalInWindow: Math.max(0, summary.totalInWindow - 1),
+      });
+    }
+
+    setAriaAnnouncement(`${item.stockSymbol} saved to Market Memory`);
+
+    try {
+      const res = await feedApiService.saveItem(targetId);
+      const undoToken = res?.undoToken;
+
+      addToast(
+        `Saved ${item.stockSymbol} to Market Memory`,
+        'success',
+        15000,
+        {
+          label: 'View in Memory',
+          onClick: () => navigate('/memory'),
+        },
+        undoToken
+          ? {
+              label: 'Undo',
+              onClick: async () => {
+                await feedApiService.undoAction(undoToken);
+                loadFeed(true);
+                addToast(`Restored ${item.stockSymbol} update to Attention Feed`, 'info', 3000);
+              },
+            }
+          : undefined
+      );
+    } catch (err) {
+      console.error('Failed to save item:', err);
+      loadFeed(true);
+    }
+  };
+
+  // Delete item with Optimistic UI and Undo Toast (Stage C2)
+  const handleDeleteItem = async (item: FeedItem, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+
+    const targetId = item.id;
+
+    // Optimistically remove from feed
+    setItems((prev) => prev.filter((i) => i.id !== targetId));
+    if (selectedItem?.id === targetId) {
+      setSelectedItem(null);
+      handleCloseDrawer();
+    }
+
+    if (summary) {
+      setSummary({
+        ...summary,
+        unreadClusters: Math.max(0, summary.unreadClusters - 1),
+        totalInWindow: Math.max(0, summary.totalInWindow - 1),
+      });
+    }
+
+    setAriaAnnouncement(`${item.stockSymbol} update deleted`);
+
+    try {
+      const res = await feedApiService.deleteItem(targetId);
+      const undoToken = res?.undoToken;
+
+      addToast(
+        `Deleted ${item.stockSymbol} update`,
+        'success',
+        15000,
+        {
+          label: 'View in Memory',
+          onClick: () => navigate('/memory?tab=deleted'),
+        },
+        undoToken
+          ? {
+              label: 'Undo',
+              onClick: async () => {
+                await feedApiService.undoAction(undoToken);
+                loadFeed(true);
+                addToast(`Restored ${item.stockSymbol} update to Attention Feed`, 'info', 3000);
+              },
+            }
+          : undefined
+      );
+    } catch (err) {
+      console.error('Failed to delete item:', err);
+      loadFeed(true);
+    }
+  };
+
+
+  const handleMarkCaughtUp = async () => {
+    setIsMarkingCaughtUp(true);
+    try {
+      const res = await feedApiService.markCaughtUp();
+      const count = res?.count || 0;
+      const undoToken = res?.undoToken;
+
+      setItems([]);
+      if (summary) {
+        setSummary({
+          ...summary,
+          unreadClusters: 0,
+          totalInWindow: 0,
+          headline: `You are all caught up · 0 unread updates across monitored stocks`,
+        });
+      }
+
+      setAriaAnnouncement('You are all caught up');
+
+      addToast(
+        `You're all caught up (${count} updates marked read)`,
+        'success',
+        15000,
+        undoToken
+          ? {
+              label: 'Undo',
+              onClick: async () => {
+                await feedApiService.undoAction(undoToken);
+                loadFeed(true);
+                addToast('Restored updates to Attention Feed', 'info', 3000);
+              },
+            }
+          : undefined,
+        {
+          label: 'View in Memory',
+          onClick: () => navigate('/memory'),
+        }
+      );
+    } catch (err) {
+      console.error('Failed to mark caught up:', err);
+    } finally {
+      setIsMarkingCaughtUp(false);
+    }
+  };
+
+  // Keyboard navigation (j/k, Enter/Space, r to toggle read, s to toggle save, Esc to close)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (
@@ -239,18 +515,18 @@ export const AttentionFeedPage: React.FC = () => {
         return;
       }
 
+      if (e.key === 'Escape' && selectedItem) {
+        e.preventDefault();
+        handleCloseDrawer();
+        return;
+      }
+
       if (e.key === 'j' || e.key === 'ArrowDown') {
         e.preventDefault();
-        setSelectedIndex((prev) => {
-          const next = Math.min(items.length - 1, prev + 1);
-          return next;
-        });
+        setSelectedIndex((prev) => Math.min(items.length - 1, prev + 1));
       } else if (e.key === 'k' || e.key === 'ArrowUp') {
         e.preventDefault();
-        setSelectedIndex((prev) => {
-          const next = Math.max(0, prev - 1);
-          return next;
-        });
+        setSelectedIndex((prev) => Math.max(0, prev - 1));
       } else if ((e.key === 'Enter' || e.key === ' ') && selectedIndex >= 0 && items[selectedIndex]) {
         e.preventDefault();
         handleSelectItem(items[selectedIndex]);
@@ -260,85 +536,15 @@ export const AttentionFeedPage: React.FC = () => {
       } else if (e.key === 's' && selectedIndex >= 0 && items[selectedIndex]) {
         e.preventDefault();
         handleToggleSave(items[selectedIndex]);
+      } else if (e.key === 'd' && selectedIndex >= 0 && items[selectedIndex]) {
+        e.preventDefault();
+        handleDeleteItem(items[selectedIndex]);
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [items, selectedIndex]);
-
-  // Item Actions
-  const handleSelectItem = (item: FeedItem) => {
-    setSelectedItem(item);
-    const newParams = new URLSearchParams(searchParams);
-    newParams.set('event', item.id);
-    setSearchParams(newParams, { replace: true });
-  };
-
-  const handleCloseDrawer = () => {
-    setSelectedItem(null);
-    const newParams = new URLSearchParams(searchParams);
-    newParams.delete('event');
-    setSearchParams(newParams, { replace: true });
-  };
-
-  const handleToggleRead = async (item: FeedItem, e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
-
-    const newIsUnread = !item.isUnread;
-    setItems((prev) =>
-      prev.map((i) => (i.id === item.id ? { ...i, isUnread: newIsUnread } : i))
-    );
-    if (selectedItem?.id === item.id) {
-      setSelectedItem((prev) => (prev ? { ...prev, isUnread: newIsUnread } : null));
-    }
-
-    if (summary) {
-      setSummary({
-        ...summary,
-        unreadClusters: Math.max(0, summary.unreadClusters + (newIsUnread ? 1 : -1)),
-      });
-    }
-
-    if (!newIsUnread) {
-      await feedApiService.markItemRead(item.id);
-    }
-  };
-
-  const handleToggleSave = async (item: FeedItem, e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
-
-    const newIsSaved = !item.isSaved;
-    setItems((prev) =>
-      prev.map((i) => (i.id === item.id ? { ...i, isSaved: newIsSaved } : i))
-    );
-    if (selectedItem?.id === item.id) {
-      setSelectedItem((prev) => (prev ? { ...prev, isSaved: newIsSaved } : null));
-    }
-
-    await feedApiService.toggleSave(item.id);
-  };
-
-  const handleMarkCaughtUp = async () => {
-    setIsMarkingCaughtUp(true);
-    try {
-      const res = await feedApiService.markCaughtUp();
-      if (res?.success) {
-        setItems((prev) => prev.map((i) => ({ ...i, isUnread: false })));
-        if (summary) {
-          setSummary({
-            ...summary,
-            unreadClusters: 0,
-            headline: `You are all caught up · 0 unread updates across monitored stocks`,
-          });
-        }
-      }
-    } catch (err) {
-      console.error('Failed to mark caught up:', err);
-    } finally {
-      setIsMarkingCaughtUp(false);
-    }
-  };
+  }, [items, selectedIndex, selectedItem]);
 
   const handleRefresh = () => {
     setIsRefreshing(true);
@@ -350,8 +556,6 @@ export const AttentionFeedPage: React.FC = () => {
     setSelectedWatchlistId('all');
     setSelectedPriority('ALL');
     setSelectedType('ALL');
-    setUnreadOnly(false);
-    setSavedOnly(false);
     if (symbolParam) {
       const newParams = new URLSearchParams(searchParams);
       newParams.delete('symbol');
@@ -363,9 +567,7 @@ export const AttentionFeedPage: React.FC = () => {
     searchQuery.trim() !== '' ||
     selectedWatchlistId !== 'all' ||
     selectedPriority !== 'ALL' ||
-    selectedType !== 'ALL' ||
-    unreadOnly ||
-    savedOnly;
+    selectedType !== 'ALL';
 
   const distinctStockCount = new Set(items.map((i) => i.stockSymbol)).size;
   const serverNowOffsetMs = summary?.serverNow
@@ -374,7 +576,12 @@ export const AttentionFeedPage: React.FC = () => {
 
   return (
     <PageContainer>
-      <div className="max-w-4xl mx-auto space-y-4">
+      {/* Screen reader live announcement */}
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
+        {ariaAnnouncement}
+      </div>
+
+      <div className="w-full space-y-4 sm:space-y-5">
         {/* Real-time New Updates Floating Pill */}
         {newUpdatesAvailable > 0 && (
           <div className="sticky top-20 z-30 flex justify-center animate-fade-in">
@@ -404,7 +611,6 @@ export const AttentionFeedPage: React.FC = () => {
           serverNowOffsetMs={serverNowOffsetMs}
         />
 
-
         {/* 2. Controls & Search Bar */}
         <FeedControlsBar
           searchQuery={searchQuery}
@@ -417,10 +623,6 @@ export const AttentionFeedPage: React.FC = () => {
           onSelectPriority={setSelectedPriority}
           selectedType={selectedType}
           onSelectType={setSelectedType}
-          unreadOnly={unreadOnly}
-          onToggleUnreadOnly={() => setUnreadOnly((prev) => !prev)}
-          savedOnly={savedOnly}
-          onToggleSavedOnly={() => setSavedOnly((prev) => !prev)}
           onResetFilters={handleResetFilters}
           isFiltered={isFiltered}
           totalFilteredCount={totalCount}
@@ -433,7 +635,7 @@ export const AttentionFeedPage: React.FC = () => {
             <div className="flex items-center gap-2 min-w-0">
               <Lightbulb className="w-4 h-4 text-indigo-400 flex-shrink-0" />
               <span className="truncate">
-                <span className="font-semibold">Tip:</span> Click any update to see what happened, why it moved, sources and the price chart.
+                <span className="font-semibold">Tip:</span> Use <kbd className="px-1.5 py-0.5 rounded bg-surface border border-border font-mono text-[10px] text-slate-200">j</kbd> / <kbd className="px-1.5 py-0.5 rounded bg-surface border border-border font-mono text-[10px] text-slate-200">k</kbd> to navigate, <kbd className="px-1.5 py-0.5 rounded bg-surface border border-border font-mono text-[10px] text-slate-200">r</kbd> to mark read, <kbd className="px-1.5 py-0.5 rounded bg-surface border border-border font-mono text-[10px] text-slate-200">s</kbd> to save.
               </span>
             </div>
             <button
@@ -449,7 +651,7 @@ export const AttentionFeedPage: React.FC = () => {
         )}
 
         {/* 4. Feed List Stream */}
-        <div className="space-y-3 pt-1">
+        <div className="space-y-3.5 pt-1">
           {isLoading && items.length === 0 ? (
             <FeedSkeleton />
           ) : error ? (
@@ -461,7 +663,8 @@ export const AttentionFeedPage: React.FC = () => {
             />
           ) : items.length > 0 ? (
             <>
-              {items.map((item, idx) => (
+              {/* Primary Feed Items (Urgent, Important, Worth a look) */}
+              {primaryItems.map((item, idx) => (
                 <FeedListCard
                   key={item.id}
                   item={item}
@@ -469,8 +672,52 @@ export const AttentionFeedPage: React.FC = () => {
                   onSelect={handleSelectItem}
                   onToggleRead={handleToggleRead}
                   onToggleSave={handleToggleSave}
+                  onDelete={handleDeleteItem}
                 />
               ))}
+
+              {/* Collapsible Show All / Lower Priority Section */}
+              {fyiItems.length > 0 && (
+                <div className="pt-2">
+                  {!isOtherSectionOpen ? (
+                    <button
+                      type="button"
+                      onClick={() => setIsOtherSectionOpen(true)}
+                      className="w-full p-3.5 rounded-2xl bg-surface/80 hover:bg-surface-hover border border-border/80 hover:border-slate-600 flex items-center justify-center gap-2 text-xs sm:text-sm font-semibold text-indigo-400 hover:text-indigo-300 transition-all shadow-sm group cursor-pointer"
+                    >
+                      <ChevronDown className="w-4 h-4 text-indigo-400 group-hover:translate-y-0.5 transition-transform" />
+                      <span>Show all ({fyiItems.length} more update{fyiItems.length > 1 ? 's' : ''})</span>
+                    </button>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between px-1 pt-1 pb-1">
+                        <span className="text-xs font-semibold text-slate-400">
+                          Showing all {items.length} updates
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setIsOtherSectionOpen(false)}
+                          className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold hover:underline cursor-pointer"
+                        >
+                          Show fewer
+                        </button>
+                      </div>
+
+                      {fyiItems.map((item, idx) => (
+                        <FeedListCard
+                          key={item.id}
+                          item={item}
+                          isSelected={selectedIndex === primaryItems.length + idx || selectedItem?.id === item.id}
+                          onSelect={handleSelectItem}
+                          onToggleRead={handleToggleRead}
+                          onToggleSave={handleToggleSave}
+                          onDelete={handleDeleteItem}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Cursor-based "Load more" button */}
               {hasMore && (
@@ -488,9 +735,31 @@ export const AttentionFeedPage: React.FC = () => {
               )}
             </>
           ) : (
-            /* Empty State */
+            /* Distinct Empty States */
             <div className="p-8 sm:p-12 rounded-2xl bg-surface border border-border text-center space-y-4">
-              {isFiltered ? (
+              {userWatchlists.length === 0 ? (
+                /* No stocks tracked state */
+                <div className="max-w-md mx-auto space-y-3">
+                  <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center justify-center mx-auto">
+                    <PlusCircle className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-base sm:text-lg font-bold text-slate-100">
+                    No stocks tracked yet
+                  </h3>
+                  <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
+                    Add stocks to your watchlists to start monitoring real-time price anomalies, filings, and earnings.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/watchlist')}
+                    className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white transition-colors shadow-md shadow-indigo-500/20"
+                  >
+                    <PlusCircle className="w-3.5 h-3.5" />
+                    <span>Go to Watchlist</span>
+                  </button>
+                </div>
+              ) : isFiltered ? (
+                /* Filters match nothing state */
                 <div className="max-w-md mx-auto space-y-3">
                   <div className="w-12 h-12 rounded-2xl bg-surface-subtle text-slate-400 border border-border flex items-center justify-center mx-auto">
                     <Search className="w-6 h-6" />
@@ -511,7 +780,8 @@ export const AttentionFeedPage: React.FC = () => {
                   </button>
                 </div>
               ) : (
-                <div className="max-w-md mx-auto space-y-3">
+                /* All Caught Up state */
+                <div className="max-w-md mx-auto space-y-4">
                   <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center mx-auto">
                     <CheckCircle2 className="w-6 h-6" />
                   </div>
@@ -523,6 +793,16 @@ export const AttentionFeedPage: React.FC = () => {
                       ? 'Markets were closed during this period. No new anomalies detected for your watchlists.'
                       : 'No unhandled market anomalies require attention for your monitored stocks in this time window.'}
                   </p>
+                  <div className="pt-2 flex items-center justify-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => navigate('/memory')}
+                      className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-surface-subtle hover:bg-surface-hover border border-border text-xs font-semibold text-slate-200 transition-colors"
+                    >
+                      <Inbox className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>Open Market Memory</span>
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -537,7 +817,10 @@ export const AttentionFeedPage: React.FC = () => {
         onClose={handleCloseDrawer}
         onToggleRead={handleToggleRead}
         onToggleSave={handleToggleSave}
+        onDelete={handleDeleteItem}
+        onViewStock={(sym) => navigate(`/watchlist?symbol=${sym}`)}
       />
+
     </PageContainer>
   );
 };

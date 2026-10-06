@@ -33,8 +33,8 @@ export const AppLayout: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  const activeDigest = digests.find((d) => d.id === selectedDigestId);
-  const digestEvents = activeDigest ? getDigestEvents(activeDigest.id) : [];
+  const activeDigest = Array.isArray(digests) ? digests.find((d) => d.id === selectedDigestId) : undefined;
+  const digestEvents = activeDigest && typeof getDigestEvents === 'function' ? getDigestEvents(activeDigest.id) : [];
 
   return (
     <div className="min-h-screen bg-background text-slate-100 flex overflow-hidden">
@@ -45,7 +45,7 @@ export const AppLayout: React.FC = () => {
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
         <Header />
 
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6 pb-20 lg:pb-8">
+        <main className="flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-5 space-y-5 pb-20 lg:pb-8">
           <Outlet />
         </main>
       </div>

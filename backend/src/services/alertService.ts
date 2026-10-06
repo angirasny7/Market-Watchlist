@@ -1,5 +1,6 @@
 import { AlertType, EventType, Priority, Prisma } from '@prisma/client';
 import { prisma } from '../config/prisma.js';
+import { feedStreamManager } from '../utils/feedStreamManager.js';
 
 export interface EvaluateAlertOptions {
   historicalBars?: Map<
@@ -139,6 +140,13 @@ export class AlertService {
         },
       },
     });
+
+    // Evaluate immediately for this symbol so if condition is already satisfied, alert triggers right away
+    try {
+      await this.evaluateAlerts([symbol]);
+    } catch (evalErr: any) {
+      console.warn(`[AlertService] Immediate evaluation error on create: ${evalErr.message}`);
+    }
 
     return {
       id: alert.id,
@@ -457,6 +465,7 @@ export class AlertService {
           },
         });
 
+        let createdNotification: any = null;
         await prisma.$transaction(async (tx) => {
           // 1. Deactivate alert and record trigger timestamp
           await tx.alert.update({
@@ -468,7 +477,7 @@ export class AlertService {
           });
 
           // 2. Create user notification
-          await tx.notification.create({
+          createdNotification = await tx.notification.create({
             data: {
               userId: alert.userId,
               alertId: alert.id,
@@ -530,6 +539,38 @@ export class AlertService {
             });
           }
         });
+
+        // 4. Real-time broadcast to user via SSE
+        try {
+          const unreadCount = await prisma.notification.count({
+            where: { userId: alert.userId, isRead: false },
+          });
+
+          feedStreamManager.broadcastToUser(alert.userId, 'notification_created', {
+            action: 'notification:new',
+            unreadCount,
+            notification: createdNotification
+              ? {
+                  id: createdNotification.id,
+                  userId: alert.userId,
+                  alertId: alert.id,
+                  type: createdNotification.type,
+                  title: createdNotification.title,
+                  message: createdNotification.message,
+                  isRead: false,
+                  createdAt: createdNotification.createdAt.toISOString(),
+                  stockSymbol: alert.stockSymbol,
+                }
+              : null,
+          });
+
+          feedStreamManager.broadcastToUser(alert.userId, 'feed_state_change', {
+            action: 'notification:new',
+            unreadCount,
+          });
+        } catch (streamErr: any) {
+          console.warn(`[AlertService] SSE broadcast error: ${streamErr.message}`);
+        }
 
         triggeredCount++;
       }

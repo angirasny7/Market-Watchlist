@@ -1,94 +1,102 @@
 import { prisma } from '../config/prisma.js';
-import { EventType, MarketMood } from '@prisma/client';
-import { getUserWatchlistSymbols } from '../utils/userOnboarding.js';
-import { isEventDemo } from './eventService.js';
-import { feedService } from './feedService.js';
+import { Priority } from '@prisma/client';
+import { undoStore } from '../utils/undoStore.js';
+
+export type FeedPriorityLabel = 'Urgent' | 'Important' | 'Worth a look' | 'FYI';
+
+export type MemoryTab = 'SAVED' | 'READ' | 'DELETED';
+
+export interface MemoryItem {
+  id: string; // eventId
+  tab: MemoryTab;
+  stockSymbol: string;
+  companyName: string;
+  exchange: string;
+  currency: string;
+  eventType: string;
+  priority: Priority;
+  priorityLabel: FeedPriorityLabel;
+  meaningfulnessScore: number | null;
+  headline: string;
+  whatHappened: string;
+  signals: Array<{ type: string; label: string }>;
+  currentPrice: number | null;
+  dayChangePercent: number | null;
+  eventPrice: number | null;
+  priceAtSave: number | null;
+  priceChangeSinceSaved: number | null;
+  note: string | null;
+  savedAt: string | null;
+  readAt: string | null;
+  deletedAt: string | null;
+  expiresAt: string | null;
+  occurredAt: string;
+  detectedAt: string;
+  timestamp: string;
+  source: string | null;
+  sourceUrl: string | null;
+  sourceTrustTier: string | null;
+  sources: any[] | null;
+  whyShown: string | null;
+}
 
 export interface MemoryQueryOptions {
-  userId: string;
-  memoryType?: 'ALL' | 'ARCHIVED' | 'SAVED' | 'EXPIRED' | string;
-  dateRange?: string; // 'ALL' | 'TODAY' | 'YESTERDAY' | 'LAST_7_DAYS' | 'LAST_30_DAYS' | 'THIS_MONTH' | 'SINCE_LAST_LOGIN' | 'CUSTOM'
+  tab?: MemoryTab | 'ARCHIVED' | 'ALL';
+  search?: string;
+  stock?: string;
+  watchlistId?: string;
+  priority?: string;
+  eventType?: string;
   startDate?: string;
   endDate?: string;
-  symbol?: string;
-  watchlistOnly?: boolean;
-  eventType?: string;
-  marketMood?: string;
-  search?: string;
+  dateFilterType?: 'eventDate' | 'actionDate';
+  hasNote?: boolean;
+  sortBy?: 'recent_action' | 'event_date_desc' | 'event_date_asc' | 'stock_name' | 'priority' | 'change_since_saved';
+  cursor?: string;
   limit?: number;
+}
+
+export interface MemoryResponse {
+  items: MemoryItem[];
+  total: number;
+  hasMore: boolean;
+  nextCursor: string | null;
+  counts: {
+    savedCount: number;
+    readCount: number;
+    deletedCount: number;
+    totalCount: number;
+  };
 }
 
 export class MemoryService {
   /**
-   * Retrieves events from the user's personal memory vault (Archived, Saved, or Expired).
-   * Unhandled events are never returned here.
+   * Helper mapping Priority enum to human label
    */
-  async getArchivedEvents(options: MemoryQueryOptions) {
-    const { userId } = options;
-    if (!userId) {
-      throw new Error('User ID is required for accessing Market Memory');
+  public mapPriorityToLabel(p: Priority): FeedPriorityLabel {
+    switch (p) {
+      case 'CRITICAL':
+        return 'Urgent';
+      case 'HIGH':
+        return 'Important';
+      case 'MEDIUM':
+        return 'Worth a look';
+      case 'LOW':
+      default:
+        return 'FYI';
     }
+  }
 
-    const memoryType = (options.memoryType || 'ALL').toUpperCase();
+  /**
+   * Shared database event filter excluding hidden, demo, duplicate, simulated, or invalidated events
+   */
+  private getSharedEventFilter() {
     const allowDemo = process.env.NODE_ENV === 'development' && process.env.SEED_DEMO_EVENTS === 'true';
-
-    // 1. Date Range Filtering computation
-    let start: Date | undefined;
-    let end: Date | undefined;
-
-    if (options.dateRange && options.dateRange !== 'ALL') {
-      const now = new Date();
-
-      switch (options.dateRange.toUpperCase()) {
-        case 'TODAY':
-          start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-          end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-          break;
-        case 'YESTERDAY':
-          start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 0, 0, 0, 0);
-          end = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59, 999);
-          break;
-        case 'LAST_7_DAYS':
-        case '7D':
-          start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-          end = now;
-          break;
-        case 'LAST_30_DAYS':
-        case '30D':
-          start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-          end = now;
-          break;
-        case 'THIS_MONTH':
-          start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-          end = now;
-          break;
-        case 'SINCE_LAST_LOGIN': {
-          const userState = await prisma.userState.findUnique({ where: { userId } });
-          if (userState?.lastLoginAt) {
-            start = userState.lastLoginAt;
-            end = now;
-          }
-          break;
-        }
-        case 'CUSTOM':
-          if (options.startDate) {
-            start = new Date(options.startDate);
-          }
-          if (options.endDate) {
-            end = new Date(options.endDate);
-            if (options.endDate.length <= 10) {
-              end.setHours(23, 59, 59, 999);
-            }
-          }
-          break;
-      }
-    }
-
-    // 2. Stock and Watchlist Filtering
-    const eventFilter: any = {
+    return {
       isHidden: false,
       isDuplicate: false,
       isInvalidated: false,
+      isSimulated: false,
       ...(allowDemo
         ? {}
         : {
@@ -99,340 +107,452 @@ export class MemoryService {
             ],
           }),
     };
+  }
 
-    const user = await prisma.user.findUnique({ where: { id: userId }, select: { createdAt: true } });
-    const userCreatedAt = user?.createdAt || new Date(0);
+  /**
+   * Single source of truth for Memory counters.
+   * Guaranteed: savedCount, readCount, deletedCount match list length.
+   */
+  async getMemoryCounts(userId: string): Promise<{
+    savedCount: number;
+    readCount: number;
+    deletedCount: number;
+    archivedCount: number;
+    totalCount: number;
+  }> {
+    const eventFilter = this.getSharedEventFilter();
 
-    const userWatchlistStocks = await prisma.watchlistStock.findMany({
-      where: { watchlist: { userId } },
-      select: { stockSymbol: true, addedAt: true },
-    });
-    const watchedSinceMap = new Map<string, Date>();
-    for (const ws of userWatchlistStocks) {
-      const existing = watchedSinceMap.get(ws.stockSymbol);
-      const effectiveAddedAt = ws.addedAt > userCreatedAt ? ws.addedAt : userCreatedAt;
-      if (!existing || effectiveAddedAt < existing) {
-        watchedSinceMap.set(ws.stockSymbol, effectiveAddedAt);
-      }
+    const [savedCount, readCount, deletedCount] = await Promise.all([
+      prisma.userSavedEvent.count({
+        where: {
+          userId,
+          event: eventFilter,
+        },
+      }),
+      prisma.userEventRead.count({
+        where: {
+          userId,
+          readSource: { not: 'auto' },
+          event: eventFilter,
+        },
+      }),
+      prisma.userEventDelete.count({
+        where: {
+          userId,
+          expiresAt: { gt: new Date() },
+          event: eventFilter,
+        },
+      }),
+    ]);
+
+    return {
+      savedCount,
+      readCount,
+      deletedCount,
+      archivedCount: readCount,
+      totalCount: savedCount + readCount,
+    };
+  }
+
+  /**
+   * Primary shared query engine for Market Memory
+   */
+  async getMemoryItems(userId: string, options?: MemoryQueryOptions): Promise<MemoryResponse> {
+    const limit = Math.min(100, Math.max(1, options?.limit || 20));
+    const tab: MemoryTab =
+      options?.tab === 'READ' || options?.tab === 'ARCHIVED'
+        ? 'READ'
+        : options?.tab === 'DELETED'
+        ? 'DELETED'
+        : 'SAVED';
+
+    const eventFilter = this.getSharedEventFilter();
+    const counts = await this.getMemoryCounts(userId);
+
+    // Resolve watchlist symbols filter if watchlistId is provided
+    let allowedSymbols: string[] | undefined;
+    if (options?.watchlistId && options.watchlistId !== 'all') {
+      const ws = await prisma.watchlistStock.findMany({
+        where: { watchlistId: options.watchlistId, watchlist: { userId } },
+        select: { stockSymbol: true },
+      });
+      allowedSymbols = ws.map((w) => w.stockSymbol);
     }
 
-    if (options.watchlistOnly) {
-      const watchlistSymbols = Array.from(watchedSinceMap.keys());
-      if (watchlistSymbols.length === 0) {
-        return [];
-      }
-      eventFilter.stockSymbol = { in: watchlistSymbols };
+    let rawItems: MemoryItem[] = [];
+
+    if (tab === 'SAVED') {
+      const saves = await prisma.userSavedEvent.findMany({
+        where: {
+          userId,
+          event: eventFilter,
+        },
+        include: {
+          event: {
+            include: { stock: true },
+          },
+        },
+        orderBy: { savedAt: 'desc' },
+      });
+
+      rawItems = saves.map((s) => {
+        const ev = s.event;
+        const stock = ev.stock;
+        const delta = (ev.metricsDelta as any) || {};
+        const priceAtSave = s.priceAtSave ? Number(s.priceAtSave) : null;
+        const currentPrice = stock?.currentPrice ? Number(stock.currentPrice) : null;
+        const priceChangeSinceSaved =
+          priceAtSave && currentPrice ? parseFloat((((currentPrice - priceAtSave) / priceAtSave) * 100).toFixed(2)) : null;
+
+        const changePercent = typeof delta.changePercent === 'number' ? delta.changePercent : stock?.changePercent ? Number(stock.changePercent) : 0;
+        const volumeRatio = delta.volumeRatio || 1.0;
+
+        return {
+          id: ev.id,
+          tab: 'SAVED',
+          stockSymbol: ev.stockSymbol,
+          companyName: stock?.companyName || ev.stockSymbol,
+          exchange: stock?.exchange || 'NSE',
+          currency: stock?.currency || '₹',
+          eventType: ev.eventType,
+          priority: ev.priority,
+          priorityLabel: this.mapPriorityToLabel(ev.priority),
+          meaningfulnessScore: ev.meaningfulnessScore,
+          headline: delta.headline || delta.title || `${stock?.companyName || ev.stockSymbol} ${ev.eventType}`,
+          whatHappened: ev.whyShown || delta.summary || delta.whatHappened || '',
+          signals: [{ type: ev.eventType, label: `${ev.eventType} (${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(1)}%)` }],
+          currentPrice,
+          dayChangePercent: stock?.changePercent ? Number(stock.changePercent) : null,
+          eventPrice: delta.dayClose ? Number(delta.dayClose) : currentPrice,
+          priceAtSave,
+          priceChangeSinceSaved,
+          note: s.note,
+          savedAt: s.savedAt.toISOString(),
+          readAt: null,
+          deletedAt: null,
+          expiresAt: null,
+          occurredAt: (ev.occurredAt || ev.occurredOn || ev.timestamp).toISOString(),
+          detectedAt: (ev.detectedAt || ev.timestamp).toISOString(),
+          timestamp: ev.timestamp.toISOString(),
+          source: ev.source,
+          sourceUrl: ev.sourceUrl,
+          sourceTrustTier: ev.sourceTrustTier,
+          sources: (ev.sources as any[]) || null,
+          whyShown: ev.whyShown,
+        };
+      });
+    } else if (tab === 'READ') {
+      const reads = await prisma.userEventRead.findMany({
+        where: {
+          userId,
+          readSource: { not: 'auto' },
+          event: eventFilter,
+        },
+        include: {
+          event: {
+            include: { stock: true },
+          },
+        },
+        orderBy: { readAt: 'desc' },
+      });
+
+      rawItems = reads.map((r) => {
+        const ev = r.event;
+        const stock = ev.stock;
+        const delta = (ev.metricsDelta as any) || {};
+        const currentPrice = stock?.currentPrice ? Number(stock.currentPrice) : null;
+        const changePercent = typeof delta.changePercent === 'number' ? delta.changePercent : stock?.changePercent ? Number(stock.changePercent) : 0;
+
+        return {
+          id: ev.id,
+          tab: 'READ',
+          stockSymbol: ev.stockSymbol,
+          companyName: stock?.companyName || ev.stockSymbol,
+          exchange: stock?.exchange || 'NSE',
+          currency: stock?.currency || '₹',
+          eventType: ev.eventType,
+          priority: ev.priority,
+          priorityLabel: this.mapPriorityToLabel(ev.priority),
+          meaningfulnessScore: ev.meaningfulnessScore,
+          headline: delta.headline || delta.title || `${stock?.companyName || ev.stockSymbol} ${ev.eventType}`,
+          whatHappened: ev.whyShown || delta.summary || delta.whatHappened || '',
+          signals: [{ type: ev.eventType, label: `${ev.eventType} (${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(1)}%)` }],
+          currentPrice,
+          dayChangePercent: stock?.changePercent ? Number(stock.changePercent) : null,
+          eventPrice: delta.dayClose ? Number(delta.dayClose) : currentPrice,
+          priceAtSave: null,
+          priceChangeSinceSaved: null,
+          note: null,
+          savedAt: null,
+          readAt: r.readAt.toISOString(),
+          deletedAt: null,
+          expiresAt: null,
+          occurredAt: (ev.occurredAt || ev.occurredOn || ev.timestamp).toISOString(),
+          detectedAt: (ev.detectedAt || ev.timestamp).toISOString(),
+          timestamp: ev.timestamp.toISOString(),
+          source: ev.source,
+          sourceUrl: ev.sourceUrl,
+          sourceTrustTier: ev.sourceTrustTier,
+          sources: (ev.sources as any[]) || null,
+          whyShown: ev.whyShown,
+        };
+      });
+    } else {
+      // DELETED
+      const deletes = await prisma.userEventDelete.findMany({
+        where: {
+          userId,
+          expiresAt: { gt: new Date() },
+          event: eventFilter,
+        },
+        include: {
+          event: {
+            include: { stock: true },
+          },
+        },
+        orderBy: { deletedAt: 'desc' },
+      });
+
+      rawItems = deletes.map((d) => {
+        const ev = d.event;
+        const stock = ev.stock;
+        const delta = (ev.metricsDelta as any) || {};
+        const currentPrice = stock?.currentPrice ? Number(stock.currentPrice) : null;
+        const changePercent = typeof delta.changePercent === 'number' ? delta.changePercent : stock?.changePercent ? Number(stock.changePercent) : 0;
+
+        return {
+          id: ev.id,
+          tab: 'DELETED',
+          stockSymbol: ev.stockSymbol,
+          companyName: stock?.companyName || ev.stockSymbol,
+          exchange: stock?.exchange || 'NSE',
+          currency: stock?.currency || '₹',
+          eventType: ev.eventType,
+          priority: ev.priority,
+          priorityLabel: this.mapPriorityToLabel(ev.priority),
+          meaningfulnessScore: ev.meaningfulnessScore,
+          headline: delta.headline || delta.title || `${stock?.companyName || ev.stockSymbol} ${ev.eventType}`,
+          whatHappened: ev.whyShown || delta.summary || delta.whatHappened || '',
+          signals: [{ type: ev.eventType, label: `${ev.eventType} (${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(1)}%)` }],
+          currentPrice,
+          dayChangePercent: stock?.changePercent ? Number(stock.changePercent) : null,
+          eventPrice: delta.dayClose ? Number(delta.dayClose) : currentPrice,
+          priceAtSave: null,
+          priceChangeSinceSaved: null,
+          note: null,
+          savedAt: null,
+          readAt: null,
+          deletedAt: d.deletedAt.toISOString(),
+          expiresAt: d.expiresAt.toISOString(),
+          occurredAt: (ev.occurredAt || ev.occurredOn || ev.timestamp).toISOString(),
+          detectedAt: (ev.detectedAt || ev.timestamp).toISOString(),
+          timestamp: ev.timestamp.toISOString(),
+          source: ev.source,
+          sourceUrl: ev.sourceUrl,
+          sourceTrustTier: ev.sourceTrustTier,
+          sources: (ev.sources as any[]) || null,
+          whyShown: ev.whyShown,
+        };
+      });
     }
 
-    if (options.symbol && options.symbol.toUpperCase() !== 'ALL') {
-      const sym = options.symbol.toUpperCase().trim();
-      if (options.watchlistOnly && eventFilter.stockSymbol?.in) {
-        if (!eventFilter.stockSymbol.in.includes(sym)) {
-          return [];
+    // Apply In-Memory Filtering
+    let filtered = rawItems;
+
+    // 1. Stock / Watchlist filter
+    if (options?.stock && options.stock !== 'ALL') {
+      const sym = options.stock.toUpperCase();
+      filtered = filtered.filter((i) => i.stockSymbol === sym);
+    } else if (allowedSymbols) {
+      filtered = filtered.filter((i) => allowedSymbols!.includes(i.stockSymbol));
+    }
+
+    // 2. Priority filter
+    if (options?.priority && options.priority !== 'ALL') {
+      filtered = filtered.filter((i) => i.priority === options.priority);
+    }
+
+    // 3. EventType filter
+    if (options?.eventType && options.eventType !== 'ALL') {
+      filtered = filtered.filter((i) => i.eventType === options.eventType);
+    }
+
+    // 4. Has Note filter
+    if (options?.hasNote) {
+      filtered = filtered.filter((i) => i.note && i.note.trim() !== '');
+    }
+
+    // 5. Date Range filter
+    if (options?.startDate || options?.endDate) {
+      const startMs = options.startDate ? new Date(options.startDate).getTime() : 0;
+      const endMs = options.endDate ? new Date(options.endDate).getTime() : Infinity;
+      const dateKey = options.dateFilterType === 'eventDate' ? 'occurredAt' : tab === 'SAVED' ? 'savedAt' : tab === 'DELETED' ? 'deletedAt' : 'readAt';
+
+      filtered = filtered.filter((i) => {
+        const itemDateStr = (i as any)[dateKey] || i.timestamp;
+        const itemMs = new Date(itemDateStr).getTime();
+        return itemMs >= startMs && itemMs <= endMs;
+      });
+    }
+
+    // 6. Search query
+    if (options?.search && options.search.trim() !== '') {
+      const q = options.search.trim().toLowerCase();
+      filtered = filtered.filter(
+        (i) =>
+          i.stockSymbol.toLowerCase().includes(q) ||
+          i.companyName.toLowerCase().includes(q) ||
+          i.headline.toLowerCase().includes(q) ||
+          (i.note && i.note.toLowerCase().includes(q)) ||
+          (i.source && i.source.toLowerCase().includes(q)) ||
+          i.signals.some((s) => s.label.toLowerCase().includes(q))
+      );
+    }
+
+    // 7. Sorting
+    filtered.sort((a, b) => {
+      switch (options?.sortBy) {
+        case 'event_date_desc':
+          return new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime();
+        case 'event_date_asc':
+          return new Date(a.occurredAt).getTime() - new Date(b.occurredAt).getTime();
+        case 'stock_name':
+          return a.companyName.localeCompare(b.companyName);
+        case 'priority': {
+          const pWeight: Record<Priority, number> = { CRITICAL: 4, HIGH: 3, MEDIUM: 2, LOW: 1 };
+          return pWeight[b.priority] - pWeight[a.priority];
+        }
+        case 'change_since_saved':
+          return (b.priceChangeSinceSaved ?? -999) - (a.priceChangeSinceSaved ?? -999);
+        case 'recent_action':
+        default: {
+          const dateA = new Date(a.savedAt || a.readAt || a.deletedAt || a.timestamp).getTime();
+          const dateB = new Date(b.savedAt || b.readAt || b.deletedAt || b.timestamp).getTime();
+          return dateB - dateA;
         }
       }
-      eventFilter.stockSymbol = sym;
-    }
-
-    // 3. Catalyst / Event Type Filtering
-    if (options.eventType && options.eventType.toUpperCase() !== 'ALL') {
-      let mappedType = options.eventType.toUpperCase();
-      if (mappedType === '52_WEEK_HIGH') mappedType = 'FIFTY_TWO_WEEK_HIGH';
-      if (mappedType === '52_WEEK_LOW') mappedType = 'FIFTY_TWO_WEEK_LOW';
-      if (mappedType === 'PRICE_SPIKE') mappedType = 'PRICE_SURGE';
-      if (mappedType === 'EARNINGS_RELEASE') mappedType = 'EARNINGS_BEAT';
-
-      eventFilter.eventType = mappedType as EventType;
-    }
-
-    const includeEvent = {
-      event: {
-        include: {
-          stock: true,
-          insights: true,
-          digestEvents: {
-            include: {
-              digest: true,
-            },
-            take: 1,
-          },
-        },
-      },
-    };
-
-    const watchlistSymbols = new Set(Array.from(watchedSinceMap.keys()));
-
-    // 4. Fetch UserEventRead (Archived / Read / Expired)
-    let archivedItems: any[] = [];
-    if (memoryType === 'ALL' || memoryType === 'ARCHIVED' || memoryType === 'READ' || memoryType === 'EXPIRED') {
-      const readWhere: any = { userId };
-      if (memoryType === 'EXPIRED') {
-        readWhere.readSource = 'auto';
-      } else if (memoryType === 'READ' || memoryType === 'ARCHIVED') {
-        readWhere.readSource = { not: 'auto' };
-      }
-
-      if (start || end) {
-        readWhere.readAt = {};
-        if (start) readWhere.readAt.gte = start;
-        if (end) readWhere.readAt.lte = end;
-      }
-      if (Object.keys(eventFilter).length > 0) {
-        readWhere.event = eventFilter;
-      }
-
-      const reads = await prisma.userEventRead.findMany({
-        where: readWhere,
-        orderBy: { readAt: 'desc' },
-        take: options.limit || 200,
-        include: includeEvent,
-      });
-
-      archivedItems = reads
-        .filter((r) => allowDemo || !isEventDemo(r.event))
-        .map((read) => {
-          const e = read.event;
-          const metrics = (e.metricsDelta as any) || {};
-
-          let eventMood: MarketMood = MarketMood.NEUTRAL;
-          const changePct = Number(e.stock.changePercent);
-          if (changePct >= 1.5) eventMood = MarketMood.EXTREME_GREED;
-          else if (changePct >= 0.3) eventMood = MarketMood.BULLISH;
-          else if (changePct <= -1.5) eventMood = MarketMood.BEARISH;
-          else if (changePct <= -0.3) eventMood = MarketMood.CHOPPY;
-
-          const primaryInsight = e.insights[0];
-
-          return {
-            id: e.id,
-            readId: read.id,
-            readAt: read.readAt.toISOString(),
-            readSource: read.readSource,
-            memoryType: read.readSource === 'auto' ? ('EXPIRED' as const) : ('ARCHIVED' as const),
-            stockSymbol: e.stockSymbol,
-            companyName: e.stock.companyName,
-            eventType: e.eventType,
-            priority: e.priority,
-            headline: metrics.headline || `${e.stock.companyName} ${e.eventType}`,
-            whatHappened: metrics.whatHappened || metrics.summary || metrics.headline || '',
-            price: Number(e.stock.currentPrice),
-            changeAmount: Number(e.stock.changeAmount),
-            changePercent: Number(e.stock.changePercent),
-            timestamp: e.timestamp.toISOString(),
-            read: true,
-            acknowledged: e.acknowledged,
-            inWatchlist: watchlistSymbols.has(e.stockSymbol),
-            marketMood: read.event.digestEvents[0]?.digest?.marketMood || eventMood,
-            stock: {
-              ...e.stock,
-              currentPrice: Number(e.stock.currentPrice),
-              changeAmount: Number(e.stock.changeAmount),
-              changePercent: Number(e.stock.changePercent),
-              volume: Number(e.stock.volume),
-              avgVolume20D: Number(e.stock.avgVolume20D),
-              peRatio: e.stock.peRatio ? Number(e.stock.peRatio) : null,
-              high52w: Number(e.stock.high52w),
-              low52w: Number(e.stock.low52w),
-            },
-            insights: e.insights.map((ins) => ({
-              ...ins,
-              confidenceScore: Number(ins.confidenceScore),
-            })),
-            primaryInsight: primaryInsight
-              ? {
-                  ...primaryInsight,
-                  confidenceScore: Number(primaryInsight.confidenceScore),
-                }
-              : null,
-          };
-        });
-    }
-
-    // 5. Fetch UserSavedEvent (Saved) if requested
-    let savedItems: any[] = [];
-    if (memoryType === 'ALL' || memoryType === 'SAVED') {
-      const saveWhere: any = { userId };
-      if (start || end) {
-        saveWhere.savedAt = {};
-        if (start) saveWhere.savedAt.gte = start;
-        if (end) saveWhere.savedAt.lte = end;
-      }
-      if (Object.keys(eventFilter).length > 0) {
-        saveWhere.event = eventFilter;
-      }
-
-      const saves = await prisma.userSavedEvent.findMany({
-        where: saveWhere,
-        orderBy: { savedAt: 'desc' },
-        take: options.limit || 200,
-        include: includeEvent,
-      });
-
-      savedItems = saves
-        .filter((s) => allowDemo || !isEventDemo(s.event))
-        .map((save) => {
-          const e = save.event;
-          const metrics = (e.metricsDelta as any) || {};
-
-          let eventMood: MarketMood = MarketMood.NEUTRAL;
-          const changePct = Number(e.stock.changePercent);
-          if (changePct >= 1.5) eventMood = MarketMood.EXTREME_GREED;
-          else if (changePct >= 0.3) eventMood = MarketMood.BULLISH;
-          else if (changePct <= -1.5) eventMood = MarketMood.BEARISH;
-          else if (changePct <= -0.3) eventMood = MarketMood.CHOPPY;
-
-          const primaryInsight = e.insights[0];
-
-          return {
-            id: e.id,
-            saveId: save.id,
-            savedAt: save.savedAt.toISOString(),
-            memoryType: 'SAVED' as const,
-            stockSymbol: e.stockSymbol,
-            companyName: e.stock.companyName,
-            eventType: e.eventType,
-            priority: e.priority,
-            headline: metrics.headline || `${e.stock.companyName} ${e.eventType}`,
-            whatHappened: metrics.whatHappened || metrics.summary || metrics.headline || '',
-            price: Number(e.stock.currentPrice),
-            changeAmount: Number(e.stock.changeAmount),
-            changePercent: Number(e.stock.changePercent),
-            timestamp: e.timestamp.toISOString(),
-            read: false,
-            acknowledged: true,
-            inWatchlist: watchlistSymbols.has(e.stockSymbol),
-            marketMood: save.event.digestEvents[0]?.digest?.marketMood || eventMood,
-            stock: {
-              ...e.stock,
-              currentPrice: Number(e.stock.currentPrice),
-              changeAmount: Number(e.stock.changeAmount),
-              changePercent: Number(e.stock.changePercent),
-              volume: Number(e.stock.volume),
-              avgVolume20D: Number(e.stock.avgVolume20D),
-              peRatio: e.stock.peRatio ? Number(e.stock.peRatio) : null,
-              high52w: Number(e.stock.high52w),
-              low52w: Number(e.stock.low52w),
-            },
-            insights: e.insights.map((ins) => ({
-              ...ins,
-              confidenceScore: Number(ins.confidenceScore),
-            })),
-            primaryInsight: primaryInsight
-              ? {
-                  ...primaryInsight,
-                  confidenceScore: Number(primaryInsight.confidenceScore),
-                }
-              : null,
-          };
-        });
-    }
-
-    // 6. Combine & Sort newest first
-    let results = [...archivedItems, ...savedItems];
-
-    // 7. Market Mood Filter
-    if (options.marketMood && options.marketMood.toUpperCase() !== 'ALL') {
-      const moodFilter = options.marketMood.toUpperCase();
-      results = results.filter((item) => item.marketMood === moodFilter);
-    }
-
-    // 8. Search Query Filter
-    if (options.search && options.search.trim() !== '') {
-      const q = options.search.toLowerCase().trim();
-      results = results.filter((item) => {
-        const matchHeadline = item.headline.toLowerCase().includes(q);
-        const matchSymbol = item.stockSymbol.toLowerCase().includes(q);
-        const matchCompany = item.companyName.toLowerCase().includes(q);
-        const matchWhatHappened = item.whatHappened.toLowerCase().includes(q);
-        const matchInsight = item.insights.some(
-          (ins: any) =>
-            ins.headline?.toLowerCase().includes(q) ||
-            ins.possibleExplanation?.toLowerCase().includes(q) ||
-            ins.whyItMatters?.toLowerCase().includes(q)
-        );
-
-        return matchHeadline || matchSymbol || matchCompany || matchWhatHappened || matchInsight;
-      });
-    }
-
-    // Sort newest first by their memory action timestamp
-    results.sort((a, b) => {
-      const timeA = new Date(a.savedAt || a.readAt || a.timestamp).getTime();
-      const timeB = new Date(b.savedAt || b.readAt || b.timestamp).getTime();
-      return timeB - timeA;
     });
 
-    if (options.limit && results.length > options.limit) {
-      results = results.slice(0, options.limit);
+    const total = filtered.length;
+
+    // 8. Cursor Pagination
+    let startIndex = 0;
+    if (options?.cursor) {
+      const cursorIdx = filtered.findIndex((i) => i.id === options.cursor);
+      if (cursorIdx !== -1) {
+        startIndex = cursorIdx + 1;
+      }
     }
 
-    return results;
-  }
+    const pagedItems = filtered.slice(startIndex, startIndex + limit);
+    const hasMore = startIndex + limit < filtered.length;
+    const nextCursor = hasMore && pagedItems.length > 0 ? pagedItems[pagedItems.length - 1].id : null;
 
-  /**
-   * Retrieves aggregated memory counters for the authenticated user
-   */
-  async getMemoryCounts(userId: string) {
-    const feedCounts = await feedService.getFeedCounts(userId);
     return {
-      archivedCount: feedCounts.readCount,
-      savedCount: feedCounts.savedCount,
-      expiredCount: feedCounts.expiredCount,
-      totalCount: feedCounts.readCount + feedCounts.savedCount,
+      items: pagedItems,
+      total,
+      hasMore,
+      nextCursor,
+      counts,
     };
   }
 
   /**
-   * Retrieves historical digests scoped to authenticated user
+   * Update or delete private note on a saved item
    */
-  async getArchivedDigests(options: { userId: string; search?: string; limit?: number }) {
-    const watchlistSymbols = await getUserWatchlistSymbols(options.userId);
-    if (watchlistSymbols.length === 0) {
-      return [];
+  async updateNote(userId: string, eventId: string, note: string | null): Promise<{ success: boolean; note: string | null }> {
+    const sanitizedNote = note ? note.trim().slice(0, 500) : null;
+
+    const existing = await prisma.userSavedEvent.findUnique({
+      where: { userId_eventId: { userId, eventId } },
+    });
+
+    if (!existing) {
+      // If not yet saved, save it with note
+      const event = await prisma.event.findUnique({
+        where: { id: eventId },
+        include: { stock: true },
+      });
+      if (!event) {
+        throw new Error('Event not found');
+      }
+
+      await prisma.userSavedEvent.create({
+        data: {
+          userId,
+          eventId,
+          savedAt: new Date(),
+          priceAtSave: event.stock?.currentPrice || null,
+          note: sanitizedNote,
+        },
+      });
+    } else {
+      await prisma.userSavedEvent.update({
+        where: { userId_eventId: { userId, eventId } },
+        data: { note: sanitizedNote },
+      });
     }
 
-    const where: any = {
-      AND: [{ OR: [{ userId: null }, { userId: options.userId }] }],
-      digestEvents: {
-        some: {
-          event: {
-            stockSymbol: { in: watchlistSymbols },
-          },
-        },
+    return { success: true, note: sanitizedNote };
+  }
+
+  /**
+   * Restore an item from Market Memory back to the Attention Feed (marks unread)
+   */
+  async restoreToFeed(userId: string, eventId: string): Promise<{ success: boolean; undoToken?: string }> {
+    await Promise.all([
+      prisma.userEventRead.deleteMany({ where: { userId, eventId } }),
+      prisma.userSavedEvent.deleteMany({ where: { userId, eventId } }),
+      prisma.userEventDelete.deleteMany({ where: { userId, eventId } }),
+    ]);
+
+    const undoToken = undoStore.createUndoToken(userId, 'restore', [eventId]);
+    return { success: true, undoToken };
+  }
+
+  /**
+   * Permanently delete an item from Deleted section (expires immediately)
+   */
+  async permanentlyDeleteItem(userId: string, eventId: string): Promise<{ success: boolean; eventId: string }> {
+    await prisma.userEventDelete.upsert({
+      where: { userId_eventId: { userId, eventId } },
+      create: {
+        userId,
+        eventId,
+        deletedAt: new Date(),
+        expiresAt: new Date(0),
       },
-    };
-
-    if (options.search && options.search.trim() !== '') {
-      const q = options.search.trim();
-      where.OR = [
-        { headline: { contains: q, mode: 'insensitive' } },
-        { executiveSummary: { contains: q, mode: 'insensitive' } },
-      ];
-    }
-
-    const digests = await prisma.digest.findMany({
-      where,
-      orderBy: { timestamp: 'desc' },
-      take: options.limit || 20,
-      include: {
-        digestEvents: {
-          include: {
-            event: {
-              include: {
-                stock: true,
-              },
-            },
-          },
-        },
-        digestInsights: {
-          include: {
-            insight: true,
-          },
-        },
+      update: {
+        expiresAt: new Date(0),
       },
     });
 
-    return digests;
+    return { success: true, eventId };
+  }
+
+  /**
+   * Backward-compatibility aliases
+   */
+  async getArchivedEvents(options: any) {
+    const memoryType = options.memoryType?.toUpperCase();
+    const tab: MemoryTab =
+      memoryType === 'SAVED' ? 'SAVED' : memoryType === 'DELETED' ? 'DELETED' : 'READ';
+    const res = await this.getMemoryItems(options.userId, {
+      tab,
+      search: options.search,
+      stock: options.symbol,
+      watchlistId: options.watchlistOnly ? undefined : undefined,
+      limit: options.limit,
+    });
+    return res.items;
+  }
+
+  async getSavedEvents(userId: string, options?: any) {
+    return this.getMemoryItems(userId, { tab: 'SAVED', ...options });
+  }
+
+  async getDeletedEvents(userId: string, options?: any) {
+    return this.getMemoryItems(userId, { tab: 'DELETED', ...options });
   }
 }
 

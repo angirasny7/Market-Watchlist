@@ -1,110 +1,127 @@
 import React, { useState } from 'react';
 import { Zap, Plus, Check, Eye, Layers } from 'lucide-react';
-import { useMarketStore } from '../../store/useMarketStore';
-import { MarketMover } from '../../types/market';
-import { StockQuote } from '../../types/stock';
+import { MarketHighlightsData, MarketMoverItem } from '../../types/market';
 import { DeltaBadge } from '../common';
-import { stockCatalog } from '../../data/mockStocks';
+import { useMarketStore } from '../../store/useMarketStore';
 
-type MoverFilter = 'ALL' | 'WATCHLIST' | 'DISCOVER';
+interface MarketMoversGridProps {
+  movers: MarketHighlightsData['movers'];
+}
 
-export const MarketMoversGrid: React.FC = () => {
-  const { marketMovers, watchlist, addStock } = useMarketStore();
-  const [filter, setFilter] = useState<MoverFilter>('ALL');
-  const [addedSymbols, setAddedSymbols] = useState<Set<string>>(new Set());
+type RegionTab = 'india' | 'us';
+type CategoryTab = 'gainers' | 'losers' | 'mostActive';
 
-  // Check if a symbol is in the live watchlist (either by mock state or added by user)
-  const isStockInWatchlist = (symbol: string) => {
-    return watchlist.some((s) => s.symbol === symbol);
+export const MarketMoversGrid: React.FC<MarketMoversGridProps> = ({ movers }) => {
+  const [region, setRegion] = useState<RegionTab>('india');
+  const [category, setCategory] = useState<CategoryTab>('gainers');
+  const [addingSymbol, setAddingSymbol] = useState<string | null>(null);
+
+  const { addStockToActiveWatchlist, watchlistOverview } = useMarketStore();
+
+  const isStockInWatchlist = (symbol: string, defaultInWatchlist: boolean) => {
+    if (watchlistOverview?.stocks) {
+      return watchlistOverview.stocks.some((s) => s.symbol === symbol);
+    }
+    return defaultInWatchlist;
   };
 
-  const filteredMovers = marketMovers.filter((mover) => {
-    const inLiveWatchlist = isStockInWatchlist(mover.symbol);
-    if (filter === 'WATCHLIST') return inLiveWatchlist;
-    if (filter === 'DISCOVER') return !inLiveWatchlist;
-    return true;
-  });
-
-  const handleAddMoverToWatchlist = (mover: MarketMover) => {
-    // Check if in stockCatalog
-    const catalogItem = stockCatalog.find((s) => s.symbol === mover.symbol);
-
-    const stockToAdd: StockQuote = catalogItem || {
-      symbol: mover.symbol,
-      name: mover.name,
-      currency: '₹',
-      currentPrice: mover.price,
-      changeAmount: (mover.price * mover.changePercent) / 100,
-      changePercent: mover.changePercent,
-      lastUpdated: 'Just added',
-      sector: mover.symbol === 'SUZLON' ? 'Energy & Petrochemicals' : 'Consumer Goods',
-      volume: 12500000,
-      avgVolume20D: 4500000,
-      marketCap: '₹1.15 Lakh Cr',
-      peRatio: 38.4,
-      high52w: mover.price * 1.05,
-      low52w: mover.price * 0.65,
-      tags: ['Market Mover', 'Volume Spike'],
-      sparkline: [
-        { date: 'Day -6', price: mover.price * 0.93 },
-        { date: 'Day -5', price: mover.price * 0.94 },
-        { date: 'Day -4', price: mover.price * 0.95 },
-        { date: 'Day -3', price: mover.price * 0.96 },
-        { date: 'Day -2', price: mover.price * 0.97 },
-        { date: 'Yesterday', price: mover.price * 0.98 },
-        { date: 'Today', price: mover.price },
-      ],
-    };
-
-    addStock(stockToAdd);
-    setAddedSymbols((prev) => new Set(prev).add(mover.symbol));
+  const handleTrackStock = async (symbol: string) => {
+    try {
+      setAddingSymbol(symbol);
+      await addStockToActiveWatchlist(symbol);
+    } finally {
+      setAddingSymbol(null);
+    }
   };
+
+  const currentList: MarketMoverItem[] = movers[region][category] || [];
 
   return (
     <div className="space-y-4">
-      {/* Section Header & Filters */}
+      {/* Header and Controls */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <Zap className="w-4 h-4 text-cyan-400" />
+        <div className="flex items-center gap-2">
+          <div className="p-1.5 rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+            <Zap className="w-4 h-4" />
+          </div>
+          <div>
             <h2 className="text-sm font-bold uppercase tracking-wider text-slate-200">
               Significant Market Movers
             </h2>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Top gainers, losers, and abnormal volume leaders across the market universe
+            </p>
           </div>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Heavy volume institutional activity and catalyst-driven breakouts across the broader market
-          </p>
         </div>
 
-        {/* Filter Pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
-          {(
-            [
-              { id: 'ALL', label: 'All Movers' },
-              { id: 'WATCHLIST', label: 'In Watchlist' },
-              { id: 'DISCOVER', label: 'Discover New' },
-            ] as const
-          ).map((tab) => (
+        {/* Region & Category Pills */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Region selector */}
+          <div className="flex items-center bg-surface border border-border rounded-lg p-0.5">
             <button
-              key={tab.id}
-              onClick={() => setFilter(tab.id)}
-              className={`text-xs px-2.5 py-1 rounded-lg font-medium whitespace-nowrap transition-colors ${
-                filter === tab.id
-                  ? 'bg-cyan-500/10 text-cyan-300 border border-cyan-500/30'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-surface'
+              onClick={() => setRegion('india')}
+              className={`text-xs font-medium px-2.5 py-1 rounded transition-colors ${
+                region === 'india'
+                  ? 'bg-cyan-500/20 text-cyan-300 font-bold'
+                  : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              {tab.label}
+              🇮🇳 India (NSE)
             </button>
-          ))}
+            <button
+              onClick={() => setRegion('us')}
+              className={`text-xs font-medium px-2.5 py-1 rounded transition-colors ${
+                region === 'us'
+                  ? 'bg-cyan-500/20 text-cyan-300 font-bold'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              🇺🇸 US Markets
+            </button>
+          </div>
+
+          {/* Category selector */}
+          <div className="flex items-center bg-surface border border-border rounded-lg p-0.5">
+            <button
+              onClick={() => setCategory('gainers')}
+              className={`text-xs font-medium px-2.5 py-1 rounded transition-colors ${
+                category === 'gainers'
+                  ? 'bg-emerald-500/20 text-emerald-300 font-bold'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Gainers
+            </button>
+            <button
+              onClick={() => setCategory('losers')}
+              className={`text-xs font-medium px-2.5 py-1 rounded transition-colors ${
+                category === 'losers'
+                  ? 'bg-rose-500/20 text-rose-300 font-bold'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Losers
+            </button>
+            <button
+              onClick={() => setCategory('mostActive')}
+              className={`text-xs font-medium px-2.5 py-1 rounded transition-colors ${
+                category === 'mostActive'
+                  ? 'bg-amber-500/20 text-amber-300 font-bold'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Most Active
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Movers Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredMovers.map((mover) => {
-          const inWatchlist = isStockInWatchlist(mover.symbol);
-          const wasJustAdded = addedSymbols.has(mover.symbol);
+      {/* Grid of Movers (Max 5 rows) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+        {currentList.map((mover) => {
+          const inWatchlist = isStockInWatchlist(mover.symbol, mover.isInWatchlist);
+          const isAdding = addingSymbol === mover.symbol;
+          const currency = mover.exchange === 'NSE' || mover.exchange === 'BSE' ? '₹' : '$';
 
           return (
             <div
@@ -115,7 +132,7 @@ export const MarketMoversGrid: React.FC = () => {
                 {/* Header: Symbol, Name & Watchlist status */}
                 <div className="flex items-start justify-between gap-2 min-w-0">
                   <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                    <div className="flex flex-wrap items-center gap-1.5">
                       <span className="text-sm font-bold font-mono text-slate-100 shrink-0">
                         {mover.symbol}
                       </span>
@@ -124,13 +141,13 @@ export const MarketMoversGrid: React.FC = () => {
                           In Watchlist
                         </span>
                       ) : (
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 shrink-0">
-                          Market Discovery
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700 shrink-0">
+                          Universe
                         </span>
                       )}
                     </div>
                     <p className="text-xs text-slate-400 mt-0.5 truncate">
-                      {mover.name}
+                      {mover.companyName}
                     </p>
                   </div>
 
@@ -138,22 +155,20 @@ export const MarketMoversGrid: React.FC = () => {
                 </div>
 
                 {/* Price & Volume Ratio */}
-                <div className="flex items-baseline justify-between pt-1 gap-2 min-w-0">
-                  <span className="text-lg font-bold font-mono text-slate-100 truncate">
-                    ₹{mover.price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                <div className="flex items-baseline justify-between pt-1 gap-2 min-w-0 border-t border-border/50">
+                  <span className="text-base sm:text-lg font-bold font-mono text-slate-100 truncate">
+                    {currency}{mover.currentPrice > 0 ? mover.currentPrice.toLocaleString() : '—'}
                   </span>
 
                   <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded bg-slate-800 text-cyan-300 border border-slate-700/60 flex items-center gap-1 shrink-0">
                     <Layers className="w-3 h-3 text-cyan-400 shrink-0" />
-                    {mover.volumeRatio}
+                    Vol: {mover.volumeRatio}
                   </span>
                 </div>
 
-                {/* Catalyst Explanation */}
-                <div className="p-2.5 rounded-lg bg-slate-900/60 border border-border/80 overflow-hidden">
-                  <p className="text-xs text-slate-300 leading-relaxed break-words">
-                    {mover.catalystSummary}
-                  </p>
+                {/* Sector tag */}
+                <div className="text-[11px] font-mono text-slate-400">
+                  Sector: <span className="text-slate-300">{mover.sector}</span>
                 </div>
               </div>
 
@@ -162,18 +177,18 @@ export const MarketMoversGrid: React.FC = () => {
                 {inWatchlist ? (
                   <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-medium">
                     <Check className="w-3.5 h-3.5" />
-                    <span>Monitored in Watchlist</span>
+                    <span>Tracked in Watchlist</span>
                   </div>
                 ) : (
                   <button
-                    onClick={() => handleAddMoverToWatchlist(mover)}
-                    disabled={wasJustAdded}
-                    className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-xs font-medium transition-colors"
+                    onClick={() => handleTrackStock(mover.symbol)}
+                    disabled={isAdding}
+                    className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-xs font-medium transition-colors disabled:opacity-60"
                   >
-                    {wasJustAdded ? (
+                    {isAdding ? (
                       <>
-                        <Check className="w-3.5 h-3.5 text-emerald-400" />
-                        <span className="text-emerald-400">Added to Watchlist!</span>
+                        <span className="w-3.5 h-3.5 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+                        <span>Adding...</span>
                       </>
                     ) : (
                       <>

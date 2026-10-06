@@ -157,7 +157,7 @@ export function formatVisitTime(options: {
   timeZoneAbbr: string;
   isNewUser: boolean;
 } {
-  const { timestamp, endReason, timeZone, serverNowOffsetMs = 0 } = options;
+  const { timestamp, timeZone, serverNowOffsetMs = 0 } = options;
 
   if (!timestamp) {
     return {
@@ -190,7 +190,12 @@ export function formatVisitTime(options: {
   const tzAbbr = getTimeZoneAbbreviation(date, tz);
   const relative = formatRelativeTime(date, false, serverNowOffsetMs);
 
-  const prefix = endReason === 'logout' ? 'Last visit ended' : 'Last active';
+  const prefix =
+    options.endReason === 'logout'
+      ? 'Last visit ended'
+      : options.endReason === 'inactivity' || options.endReason === 'tab_closed'
+      ? 'Last active'
+      : 'Last login time';
   const formattedDate = `${weekday} ${day} ${month}, ${time} ${tzAbbr}`;
   const label = `${prefix}: ${formattedDate} · (${relative})`;
 

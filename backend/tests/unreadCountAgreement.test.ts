@@ -13,9 +13,10 @@ describe('Unread Count Single Source of Truth (F0.5)', () => {
     const user = await prisma.user.findFirst({ where: { email: 'alex@example.com' } });
     if (!user) return;
 
+    const { feedService } = await import('../src/services/feedService.js');
     const unreadCount = await eventService.getUnreadFeedCount(user.id);
-    const feedEvents = await eventService.getEvents({ userId: user.id, limit: 1000 });
-    const feedUnreadCount = feedEvents.filter((e) => !e.read).length;
+    const feedRes = await feedService.getFeed(user.id, { limit: 1000 });
+    const feedUnreadCount = feedRes.items.filter((e) => e.isUnread).length;
 
     expect(unreadCount).toBe(feedUnreadCount);
   });

@@ -17,6 +17,16 @@ export interface FeedItem {
   occurredAt?: string | null;
   periodStart?: string | null;
   detectedAt?: string | null;
+  publishedAt?: string | null;
+  receivedAt?: string | null;
+  source?: string | null;
+  sourceUrl?: string | null;
+  sourceTrustTier?: string | null;
+  meaningfulnessScore?: number | null;
+  whyShown?: string | null;
+  sources?: any[] | null;
+  confirmedCount?: number;
+  isIntraday?: boolean;
   isCumulative?: boolean;
   eventType?: string;
   priority: FeedPriority;
@@ -24,6 +34,7 @@ export interface FeedItem {
   isUnread: boolean;
   isSaved: boolean;
   isNew: boolean;
+  isUpdated?: boolean;
   isAlertTriggered: boolean;
   isDemo: boolean;
   changePercent: number;
@@ -128,6 +139,7 @@ export interface FeedSummary {
   isDelayed: boolean;
   delayNotice: string;
   windowCounts?: {
+    toReview?: number;
     sinceLastVisit: number;
     '24h': number;
     '7d': number;
@@ -140,5 +152,5 @@ export interface FeedSummary {
   serverNow?: string;
 }
 
-export type FeedTimeWindow = 'sinceLastVisit' | '24h' | '7d' | '30d';
+export type FeedTimeWindow = 'toReview' | 'sinceLastVisit' | '24h' | '7d' | '30d';
 

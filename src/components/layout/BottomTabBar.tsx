@@ -4,9 +4,8 @@ import { useMarketStore } from '../../store/useMarketStore';
 import { MAIN_NAV_ITEMS } from '../../config/navigation';
 
 export const BottomTabBar: React.FC = () => {
-  const { events, digests } = useMarketStore();
-  const unreadCount = events.filter((e) => !e.read).length;
-  const hasUnacknowledgedDigest = digests.some((d) => !d.isAcknowledged);
+  const { events } = useMarketStore();
+  const unreadCount = Array.isArray(events) ? events.filter((e) => !e?.read).length : 0;
 
   return (
     <nav
@@ -16,7 +15,7 @@ export const BottomTabBar: React.FC = () => {
       {MAIN_NAV_ITEMS.map((tab) => {
         const Icon = tab.icon;
         const badge = tab.id === 'feed' && unreadCount > 0 ? unreadCount : undefined;
-        const showDot = tab.id === 'memory' && hasUnacknowledgedDigest;
+        const showDot = false;
 
         return (
           <NavLink

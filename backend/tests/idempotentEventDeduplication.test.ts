@@ -40,13 +40,10 @@ describe('Idempotent Event Deduplication (F0.8)', () => {
       },
     });
 
-    // Clean any prior events for this symbol today
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
+    // Clean any prior events for this symbol
     await prisma.event.deleteMany({
       where: {
         stockSymbol: testSymbol,
-        timestamp: { gte: startOfDay },
       },
     });
   });
@@ -69,7 +66,6 @@ describe('Idempotent Event Deduplication (F0.8)', () => {
       where: {
         stockSymbol: testSymbol,
         eventType: EventType.PRICE_SURGE,
-        timestamp: { gte: todayStart },
       },
     });
     expect(eventsAfterFirstRun.length).toBe(1);
@@ -93,7 +89,6 @@ describe('Idempotent Event Deduplication (F0.8)', () => {
       where: {
         stockSymbol: testSymbol,
         eventType: EventType.PRICE_SURGE,
-        timestamp: { gte: todayStart },
       },
     });
     expect(eventsAfterSecondRun.length).toBe(1);

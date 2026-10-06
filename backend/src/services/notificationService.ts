@@ -1,4 +1,5 @@
 import { prisma } from '../config/prisma.js';
+import { feedStreamManager } from '../utils/feedStreamManager.js';
 
 export class NotificationService {
   async listNotifications(userId: string, limit = 20) {
@@ -55,9 +56,28 @@ export class NotificationService {
       data: { isRead: true },
     });
 
+    const unreadCount = await prisma.notification.count({
+      where: { userId, isRead: false },
+    });
+
+    try {
+      feedStreamManager.broadcastToUser(userId, 'notification_updated', {
+        action: 'notification:updated',
+        notificationId,
+        unreadCount,
+      });
+      feedStreamManager.broadcastToUser(userId, 'feed_state_change', {
+        action: 'notification:updated',
+        unreadCount,
+      });
+    } catch {
+      // ignore
+    }
+
     return {
       id: updated.id,
       isRead: updated.isRead,
+      unreadCount,
     };
   }
 
@@ -67,7 +87,20 @@ export class NotificationService {
       data: { isRead: true },
     });
 
-    return { success: true, count: result.count };
+    try {
+      feedStreamManager.broadcastToUser(userId, 'notification_updated', {
+        action: 'notification:cleared',
+        unreadCount: 0,
+      });
+      feedStreamManager.broadcastToUser(userId, 'feed_state_change', {
+        action: 'notification:cleared',
+        unreadCount: 0,
+      });
+    } catch {
+      // ignore
+    }
+
+    return { success: true, count: result.count, unreadCount: 0 };
   }
 
   async getUnreadCount(userId: string): Promise<number> {

@@ -1,10 +1,5 @@
 import React from 'react';
-import {
-  Bookmark,
-  CheckCircle2,
-  X,
-} from 'lucide-react';
-import { cn } from '../../lib/utils';
+import { X } from 'lucide-react';
 import { UserWatchlist } from '../../services/watchlistService';
 import { SearchInput } from '../common/SearchInput';
 
@@ -19,10 +14,6 @@ interface FeedControlsBarProps {
   onSelectPriority: (p: string) => void;
   selectedType: string;
   onSelectType: (t: string) => void;
-  unreadOnly: boolean;
-  onToggleUnreadOnly: () => void;
-  savedOnly: boolean;
-  onToggleSavedOnly: () => void;
   onResetFilters: () => void;
   isFiltered: boolean;
   totalFilteredCount: number;
@@ -40,10 +31,6 @@ export const FeedControlsBar: React.FC<FeedControlsBarProps> = ({
   onSelectPriority,
   selectedType,
   onSelectType,
-  unreadOnly,
-  onToggleUnreadOnly,
-  savedOnly,
-  onToggleSavedOnly,
   onResetFilters,
   isFiltered,
   totalFilteredCount,
@@ -127,39 +114,6 @@ export const FeedControlsBar: React.FC<FeedControlsBarProps> = ({
             </option>
           ))}
         </select>
-
-        {/* Quick Toggles: Unread Only & Saved Only */}
-        <div className="flex items-center gap-1.5 self-end sm:self-auto shrink-0">
-          <button
-            type="button"
-            onClick={onToggleUnreadOnly}
-            aria-label="Toggle unread only"
-            className={cn(
-              'h-10 inline-flex items-center gap-1.5 px-3 rounded-lg border text-xs font-semibold transition-colors',
-              unreadOnly
-                ? 'bg-indigo-500/15 border-indigo-500/40 text-indigo-300'
-                : 'bg-surface border-border text-slate-400 hover:text-slate-200 hover:bg-surface-hover'
-            )}
-          >
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            <span>Unread</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={onToggleSavedOnly}
-            aria-label="Toggle saved only"
-            className={cn(
-              'h-10 inline-flex items-center gap-1.5 px-3 rounded-lg border text-xs font-semibold transition-colors',
-              savedOnly
-                ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
-                : 'bg-surface border-border text-slate-400 hover:text-slate-200 hover:bg-surface-hover'
-            )}
-          >
-            <Bookmark className="w-3.5 h-3.5" />
-            <span>Saved</span>
-          </button>
-        </div>
       </div>
 
       {/* Active Filter Tags & Results Count */}
@@ -220,34 +174,6 @@ export const FeedControlsBar: React.FC<FeedControlsBarProps> = ({
                 type="button"
                 aria-label="Clear type filter"
                 onClick={() => onSelectType('ALL')}
-                className="p-0.5 hover:text-white transition-colors"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </span>
-          )}
-
-          {unreadOnly && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-surface border border-border text-xs text-indigo-300">
-              <span>Unread Only</span>
-              <button
-                type="button"
-                aria-label="Clear unread only filter"
-                onClick={onToggleUnreadOnly}
-                className="p-0.5 hover:text-white transition-colors"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </span>
-          )}
-
-          {savedOnly && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-surface border border-border text-xs text-amber-300">
-              <span>Saved Only</span>
-              <button
-                type="button"
-                aria-label="Clear saved only filter"
-                onClick={onToggleSavedOnly}
                 className="p-0.5 hover:text-white transition-colors"
               >
                 <X className="w-3 h-3" />

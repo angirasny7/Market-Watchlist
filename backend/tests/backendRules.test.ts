@@ -47,6 +47,9 @@ describe('Backend Watchlist and Alert Rules Test Suite', () => {
           currentPrice: 1000.0,
           changeAmount: 50.0,
           changePercent: 5.0,
+          marketCap: '1000Cr',
+          high52w: 1200.0,
+          low52w: 800.0,
         },
         update: {},
       });
@@ -59,6 +62,9 @@ describe('Backend Watchlist and Alert Rules Test Suite', () => {
           currentPrice: 500.0,
           changeAmount: -25.0,
           changePercent: -5.0,
+          marketCap: '500Cr',
+          high52w: 600.0,
+          low52w: 400.0,
         },
         update: {},
       });

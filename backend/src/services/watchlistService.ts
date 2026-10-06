@@ -500,13 +500,21 @@ export class WatchlistService {
       unreadEvents = await prisma.event.findMany({
         where: {
           stockSymbol: { in: distinctSymbols },
-          AND: [{ OR: [{ userId: null }, { userId }] }],
+          AND: [
+            { OR: [{ userId: null }, { userId }] },
+            {
+              OR: [
+                { occurredAt: { gte: eventWindowDate } },
+                { AND: [{ occurredAt: null }, { occurredOn: { gte: eventWindowDate } }] },
+                { AND: [{ occurredAt: null }, { occurredOn: null }, { timestamp: { gte: eventWindowDate } }] },
+              ],
+            },
+          ],
           userReads: { none: { userId } },
           userSaves: { none: { userId } },
           isHidden: false,
           isDuplicate: false,
           isInvalidated: false,
-          timestamp: { gte: eventWindowDate },
           ...(allowDemo
             ? {}
             : {

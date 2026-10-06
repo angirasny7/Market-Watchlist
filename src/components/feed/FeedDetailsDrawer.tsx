@@ -22,9 +22,10 @@ import {
   Activity,
   Bell,
   BarChart2,
+  Trash2,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { formatEventTime, formatEventTooltip } from '../../lib/formatEventTime';
+import { formatEventTime, formatEventTooltip, getSupportingSourceUrl } from '../../lib/formatEventTime';
 import { formatPublishedTimestamp } from '../../lib/dateUtils';
 
 interface FeedDetailsDrawerProps {
@@ -33,6 +34,8 @@ interface FeedDetailsDrawerProps {
   onClose: () => void;
   onToggleRead: (item: FeedItem) => void;
   onToggleSave: (item: FeedItem) => void;
+  onDelete?: (item: FeedItem) => void;
+  onViewStock?: (symbol: string) => void;
   initialTab?: string;
 }
 
@@ -44,6 +47,8 @@ export const FeedDetailsDrawer: React.FC<FeedDetailsDrawerProps> = ({
   onClose,
   onToggleRead,
   onToggleSave,
+  onDelete,
+  onViewStock,
   initialTab = 'happened',
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>(initialTab as TabType);
@@ -51,6 +56,7 @@ export const FeedDetailsDrawer: React.FC<FeedDetailsDrawerProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
   const [chartRange, setChartRange] = useState<'1D' | '1W' | '1M'>('1M');
+  const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(null);
 
   useEffect(() => {
     if (initialTab && ['happened', 'why', 'matters', 'sources', 'price', 'alert'].includes(initialTab)) {
@@ -101,6 +107,7 @@ export const FeedDetailsDrawer: React.FC<FeedDetailsDrawerProps> = ({
   if (!isOpen || !item) return null;
 
   const isPositive = item.changePercent >= 0;
+  const supportingUrl = getSupportingSourceUrl(item);
 
   const handleCopyLink = () => {
     const url = `${window.location.origin}/feed?event=${item.id}`;
@@ -154,6 +161,17 @@ export const FeedDetailsDrawer: React.FC<FeedDetailsDrawerProps> = ({
 
               {/* Actions & Close */}
               <div className="flex items-center gap-1.5">
+                <a
+                  href={supportingUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Open supporting news or source website"
+                  aria-label="Open supporting news or source website in new tab"
+                  className="p-2 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-surface-hover border border-border/50 transition-colors"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+
                 <button
                   type="button"
                   title="Copy direct link"
@@ -569,21 +587,31 @@ export const FeedDetailsDrawer: React.FC<FeedDetailsDrawerProps> = ({
                   </div>
                 )}
 
-                {/* 5. Tab: PRICE & CHART */}
+                {/* 5. Tab: PRICE & CONTEXT */}
                 {activeTab === 'price' && (
                   <div className="space-y-5 animate-fade-in">
+                    {/* Range Buttons & Headline */}
                     <div className="flex items-center justify-between">
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                        Historical Trajectory
-                      </h4>
-                      <div className="flex items-center gap-1 p-1 bg-surface-subtle rounded-lg border border-border text-xs">
+                      <div>
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                          Price Action & Context
+                        </h4>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          Historical trend leading up to this event
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-1 p-1 bg-surface-subtle rounded-xl border border-border text-xs">
                         {(['1D', '1W', '1M'] as const).map((range) => (
                           <button
                             key={range}
                             type="button"
-                            onClick={() => setChartRange(range)}
+                            onClick={() => {
+                              setChartRange(range);
+                              setHoveredPointIndex(null);
+                            }}
                             className={cn(
-                              'px-2.5 py-1 rounded font-semibold transition-colors',
+                              'px-3 py-1 rounded-lg font-semibold transition-colors cursor-pointer',
                               chartRange === range
                                 ? 'bg-indigo-600 text-white shadow-sm'
                                 : 'text-slate-400 hover:text-slate-200'
@@ -595,56 +623,267 @@ export const FeedDetailsDrawer: React.FC<FeedDetailsDrawerProps> = ({
                       </div>
                     </div>
 
-                    {/* Mini Price Visualizer */}
-                    <div className="p-4 rounded-xl bg-surface-subtle border border-border space-y-3">
-                      {details.price.series1M && details.price.series1M.length > 0 ? (
-                        <div className="h-44 flex items-end gap-1.5 pt-4 pb-2">
-                          {(() => {
-                            const data =
-                              chartRange === '1D'
-                                ? details.price.series1D
-                                : chartRange === '1W'
-                                ? details.price.series1W
-                                : details.price.series1M;
+                    {(() => {
+                      // Resolve Active Series Data
+                      const rawData =
+                        chartRange === '1D'
+                          ? details.price.series1D
+                          : chartRange === '1W'
+                          ? details.price.series1W
+                          : details.price.series1M;
 
-                            const prices = data.map((d) => d.price);
-                            const min = Math.min(...prices);
-                            const max = Math.max(...prices);
-                            const range = max - min || 1;
+                      const data = (rawData && rawData.length > 0)
+                        ? rawData
+                        : [
+                            { timestamp: new Date(Date.now() - 30 * 86400000).toISOString(), price: (item.currentPrice ?? 100) * 0.95, volume: 100000 },
+                            { timestamp: new Date().toISOString(), price: item.currentPrice ?? 100, volume: 150000 }
+                          ];
 
-                            return data.map((d, i) => {
-                              const heightPct = Math.max(10, Math.min(100, ((d.price - min) / range) * 90 + 10));
-                              const isLast = i === data.length - 1;
+                      const prices = data.map((d) => d.price);
+                      const startPrice = prices[0];
+                      const endPrice = prices[prices.length - 1];
+                      const minPrice = Math.min(...prices);
+                      const maxPrice = Math.max(...prices);
+                      const priceDelta = endPrice - startPrice;
+                      const periodReturn = startPrice > 0 ? (priceDelta / startPrice) * 100 : 0;
+                      const isPeriodPositive = periodReturn >= 0;
 
-                              return (
-                                <div
-                                  key={i}
-                                  className="flex-1 flex flex-col items-center justify-end h-full group relative"
-                                >
-                                  {/* Tooltip on hover */}
-                                  <div className="opacity-0 group-hover:opacity-100 pointer-events-none absolute -top-8 px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-[10px] font-mono text-slate-100 whitespace-nowrap z-10 transition-opacity">
-                                    {formatMoney(d.price, item.currency)}
-                                  </div>
-                                  <div
-                                    style={{ height: `${heightPct}%` }}
+                      // Active hovered point or last point
+                      const activeIdx = hoveredPointIndex !== null && hoveredPointIndex < data.length ? hoveredPointIndex : data.length - 1;
+                      const activePoint = data[activeIdx];
+                      const activePrice = activePoint.price;
+                      const activeDelta = activePrice - startPrice;
+                      const activeReturn = startPrice > 0 ? (activeDelta / startPrice) * 100 : 0;
+
+                      // SVG Dimensions
+                      const width = 500;
+                      const height = 180;
+                      const padding = { top: 20, right: 65, bottom: 25, left: 15 };
+                      const chartW = width - padding.left - padding.right;
+                      const chartH = height - padding.top - padding.bottom;
+                      const rangeVal = maxPrice - minPrice || 1;
+
+                      // Coordinate mapper
+                      const points = data.map((d, i) => {
+                        const x = padding.left + (data.length === 1 ? chartW / 2 : (i / (data.length - 1)) * chartW);
+                        const y = padding.top + chartH - ((d.price - minPrice) / rangeVal) * chartH;
+                        return { x, y, ...d };
+                      });
+
+                      // SVG Line Path & Area Path
+                      const linePath = points.reduce((acc, p, i) => (i === 0 ? `M ${p.x} ${p.y}` : `${acc} L ${p.x} ${p.y}`), '');
+                      const areaPath = `${linePath} L ${points[points.length - 1].x} ${padding.top + chartH} L ${points[0].x} ${padding.top + chartH} Z`;
+
+                      return (
+                        <div className="space-y-4">
+                          {/* 1. At-a-Glance Period Metrics Card */}
+                          <div className="p-4 rounded-2xl bg-surface-subtle border border-border/80 space-y-3">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <span className="text-[11px] text-slate-400 font-medium">
+                                  {chartRange === '1D' ? '1-Day Range' : chartRange === '1W' ? '1-Week Trend' : '1-Month Trajectory'}
+                                </span>
+                                <div className="flex items-baseline gap-2 mt-0.5">
+                                  <span className="text-xl font-bold font-mono text-slate-100">
+                                    {formatMoney(activePrice, item.currency)}
+                                  </span>
+                                  <span
                                     className={cn(
-                                      'w-full rounded-t-sm transition-all',
-                                      isLast
-                                        ? 'bg-indigo-500'
-                                        : 'bg-indigo-500/40 group-hover:bg-indigo-500/70'
+                                      'text-xs font-bold font-mono flex items-center gap-0.5',
+                                      activeReturn >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                                    )}
+                                  >
+                                    {activeReturn >= 0 ? '+' : ''}{activeReturn.toFixed(2)}% ({activeDelta >= 0 ? '+' : ''}{formatMoney(activeDelta, item.currency)})
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="text-right text-xs space-y-0.5 font-mono">
+                                <div className="text-slate-400">
+                                  High: <span className="text-emerald-400 font-semibold">{formatMoney(maxPrice, item.currency)}</span>
+                                </div>
+                                <div className="text-slate-400">
+                                  Low: <span className="text-rose-400 font-semibold">{formatMoney(minPrice, item.currency)}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* 2. Interactive SVG Area Chart */}
+                            <div className="relative pt-2">
+                              <svg
+                                viewBox={`0 0 ${width} ${height}`}
+                                className="w-full h-44 select-none overflow-visible"
+                                onMouseLeave={() => setHoveredPointIndex(null)}
+                              >
+                                <defs>
+                                  <linearGradient id="feedPriceGrad" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stopColor={isPeriodPositive ? '#10b981' : '#f43f5e'} stopOpacity="0.35" />
+                                    <stop offset="90%" stopColor={isPeriodPositive ? '#10b981' : '#f43f5e'} stopOpacity="0.0" />
+                                  </linearGradient>
+                                </defs>
+
+                                {/* Horizontal Reference Gridlines */}
+                                {[0, 0.5, 1].map((ratio, gIdx) => {
+                                  const y = padding.top + chartH * ratio;
+                                  const priceLabel = maxPrice - ratio * rangeVal;
+                                  return (
+                                    <g key={gIdx}>
+                                      <line
+                                        x1={padding.left}
+                                        y1={y}
+                                        x2={padding.left + chartW}
+                                        y2={y}
+                                        stroke="rgba(51, 65, 85, 0.4)"
+                                        strokeDasharray="3 3"
+                                      />
+                                      <text
+                                        x={padding.left + chartW + 6}
+                                        y={y + 3.5}
+                                        fill="#94a3b8"
+                                        fontSize="9"
+                                        fontFamily="monospace"
+                                      >
+                                        {formatMoney(priceLabel, item.currency)}
+                                      </text>
+                                    </g>
+                                  );
+                                })}
+
+                                {/* Area fill */}
+                                <path d={areaPath} fill="url(#feedPriceGrad)" />
+
+                                {/* Main Curve Line */}
+                                <path
+                                  d={linePath}
+                                  fill="none"
+                                  stroke={isPeriodPositive ? '#10b981' : '#f43f5e'}
+                                  strokeWidth="2.5"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                />
+
+                                {/* Interactive Touch / Hover Hotspots */}
+                                {points.map((p, idx) => (
+                                  <circle
+                                    key={idx}
+                                    cx={p.x}
+                                    cy={p.y}
+                                    r="8"
+                                    fill="transparent"
+                                    className="cursor-crosshair"
+                                    onMouseEnter={() => setHoveredPointIndex(idx)}
+                                    onTouchStart={() => setHoveredPointIndex(idx)}
+                                  />
+                                ))}
+
+                                {/* Active Hover Marker / Guideline */}
+                                {hoveredPointIndex !== null && points[hoveredPointIndex] && (
+                                  <g>
+                                    <line
+                                      x1={points[hoveredPointIndex].x}
+                                      y1={padding.top}
+                                      x2={points[hoveredPointIndex].x}
+                                      y2={padding.top + chartH}
+                                      stroke="#818cf8"
+                                      strokeWidth="1.5"
+                                      strokeDasharray="2 2"
+                                    />
+                                    <circle
+                                      cx={points[hoveredPointIndex].x}
+                                      cy={points[hoveredPointIndex].y}
+                                      r="4.5"
+                                      fill="#818cf8"
+                                      stroke="#0f172a"
+                                      strokeWidth="2"
+                                    />
+                                  </g>
+                                )}
+
+                                {/* X-axis Date Ticks */}
+                                {points.length > 1 && (
+                                  <>
+                                    <text
+                                      x={padding.left}
+                                      y={height - 5}
+                                      fill="#64748b"
+                                      fontSize="9"
+                                      fontFamily="sans-serif"
+                                    >
+                                      {new Date(data[0].timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                                    </text>
+                                    <text
+                                      x={padding.left + chartW}
+                                      y={height - 5}
+                                      fill="#64748b"
+                                      fontSize="9"
+                                      fontFamily="sans-serif"
+                                      textAnchor="end"
+                                    >
+                                      {new Date(data[data.length - 1].timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                                    </text>
+                                  </>
+                                )}
+                              </svg>
+
+                              {/* Hover Floating Info */}
+                              {hoveredPointIndex !== null && points[hoveredPointIndex] && (
+                                <div className="text-[11px] font-mono text-center text-indigo-300 pt-1">
+                                  Point: {new Date(points[hoveredPointIndex].timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' })} · {formatMoney(points[hoveredPointIndex].price, item.currency)}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* 3. Trading Ranges (Day & 52-Week Channels) */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {/* Day Range Channel */}
+                            <div className="p-3.5 rounded-xl bg-surface-subtle border border-border space-y-2">
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="font-semibold text-slate-300">Day Range</span>
+                                <span className="font-mono text-slate-400 text-[11px]">
+                                  {formatMoney(details.happened.dayLow, item.currency)} - {formatMoney(details.happened.dayHigh, item.currency)}
+                                </span>
+                              </div>
+                              {/* Range Visual Track */}
+                              {details.happened.dayLow !== null && details.happened.dayHigh !== null && (
+                                <div className="relative w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                                  <div
+                                    style={{
+                                      width: `${Math.max(5, Math.min(100, (((details.happened.currentPrice ?? activePrice) - details.happened.dayLow) / ((details.happened.dayHigh - details.happened.dayLow) || 1)) * 100))}%`
+                                    }}
+                                    className={cn(
+                                      'h-full rounded-full',
+                                      isPositive ? 'bg-emerald-500' : 'bg-rose-500'
                                     )}
                                   />
                                 </div>
-                              );
-                            });
-                          })()}
+                              )}
+                            </div>
+
+                            {/* 52-Week Range Channel */}
+                            <div className="p-3.5 rounded-xl bg-surface-subtle border border-border space-y-2">
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="font-semibold text-slate-300">52-Week Range</span>
+                                <span className="font-mono text-slate-400 text-[11px]">
+                                  {formatMoney(details.happened.low52w, item.currency)} - {formatMoney(details.happened.high52w, item.currency)}
+                                </span>
+                              </div>
+                              {/* 52W Visual Track */}
+                              {details.happened.low52w !== null && details.happened.high52w !== null && (
+                                <div className="relative w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                                  <div
+                                    style={{
+                                      width: `${Math.max(5, Math.min(100, (((details.happened.currentPrice ?? activePrice) - details.happened.low52w) / ((details.happened.high52w - details.happened.low52w) || 1)) * 100))}%`
+                                    }}
+                                    className="h-full bg-indigo-500 rounded-full"
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                      ) : (
-                        <div className="text-center py-8 text-xs text-slate-400">
-                          Price chart data currently syncing.
-                        </div>
-                      )}
-                    </div>
+                      );
+                    })()}
                   </div>
                 )}
 
@@ -682,6 +921,70 @@ export const FeedDetailsDrawer: React.FC<FeedDetailsDrawerProps> = ({
                 Failed to load details.
               </div>
             )}
+          </div>
+
+          {/* Sticky Drawer Footer with Primary Actions */}
+          <div className="p-4 border-t border-border/80 bg-surface/95 backdrop-blur flex items-center justify-between gap-3 flex-shrink-0">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => item && onToggleSave(item)}
+                className={cn(
+                  'flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold border transition-all duration-150',
+                  item?.isSaved
+                    ? 'bg-amber-500/15 border-amber-500/30 text-amber-400 shadow-sm'
+                    : 'bg-surface-subtle border-border text-slate-300 hover:text-white hover:bg-surface-hover'
+                )}
+              >
+                <Bookmark className={cn('w-4 h-4', item?.isSaved && 'fill-amber-400')} />
+                <span>{item?.isSaved ? 'Saved in Memory' : 'Save for later'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => item && onToggleRead(item)}
+                className={cn(
+                  'flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold border transition-all duration-150',
+                  !item?.isUnread
+                    ? 'bg-indigo-500/15 border-indigo-500/30 text-indigo-400'
+                    : 'bg-indigo-600 hover:bg-indigo-500 text-white border-transparent shadow-sm'
+                )}
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>{item?.isUnread ? 'Mark as read' : 'Read'}</span>
+              </button>
+
+              {onDelete && (
+                <button
+                  type="button"
+                  onClick={() => item && onDelete(item)}
+                  title="Delete update"
+                  className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-semibold border border-border/80 bg-surface-subtle text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 hover:border-rose-500/30 transition-all duration-150"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Delete</span>
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              {onViewStock && item && (
+                <button
+                  type="button"
+                  onClick={() => onViewStock(item.stockSymbol)}
+                  className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-surface-subtle border border-border text-indigo-300 hover:text-white hover:bg-surface-hover transition-colors"
+                >
+                  View stock
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-surface-subtle transition-colors"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       </div>

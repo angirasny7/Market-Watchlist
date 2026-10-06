@@ -24,9 +24,13 @@ export interface StockHistoryData {
 export interface StockDetailsExtended extends StockQuote {
   events?: Array<{
     id: string;
+    eventType?: string;
     headline: string;
+    reason?: string | null;
+    whyShown?: string | null;
     priority: string;
     timestamp: string;
+    occurredAt?: string;
     metricsDelta?: any;
     insights?: Array<{
       id: string;
@@ -60,6 +64,14 @@ export class StockService {
 
   async getStockBySymbol(symbol: string): Promise<StockDetailsExtended | null> {
     const res = await apiClient.get<StockDetailsExtended>(`/stocks/${symbol}`);
+    if (res.success && res.data) {
+      return res.data;
+    }
+    return null;
+  }
+
+  async getStockQuote(symbol: string): Promise<StockQuote | null> {
+    const res = await apiClient.get<StockQuote>(`/stocks/${symbol}`);
     if (res.success && res.data) {
       return res.data;
     }

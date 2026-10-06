@@ -10,9 +10,11 @@ import {
   Clock,
   Sparkles,
   ChevronRight,
+  Trash2,
+  ExternalLink,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { formatEventTime, formatEventTooltip } from '../../lib/formatEventTime';
+import { formatEventTime, formatEventTooltip, getSupportingSourceUrl } from '../../lib/formatEventTime';
 
 interface FeedListCardProps {
   item: FeedItem;
@@ -20,6 +22,7 @@ interface FeedListCardProps {
   onSelect: (item: FeedItem) => void;
   onToggleRead: (item: FeedItem, e: React.MouseEvent) => void;
   onToggleSave: (item: FeedItem, e: React.MouseEvent) => void;
+  onDelete?: (item: FeedItem, e: React.MouseEvent) => void;
 }
 
 export const FeedListCard: React.FC<FeedListCardProps> = ({
@@ -28,6 +31,7 @@ export const FeedListCard: React.FC<FeedListCardProps> = ({
   onSelect,
   onToggleRead,
   onToggleSave,
+  onDelete,
 }) => {
   const isPositive = item.changePercent >= 0;
 
@@ -62,6 +66,10 @@ export const FeedListCard: React.FC<FeedListCardProps> = ({
   const pStyle = priorityStyles[item.priorityLabel] || priorityStyles.FYI;
   const timeLabel = formatEventTime(item);
   const timeTooltip = formatEventTooltip(item);
+  const supportingUrl = getSupportingSourceUrl(item);
+
+  // Secondary explanatory context to fill the card story
+  const contextSnippet = item.whyShown || (item.signals.length > 0 ? `Triggered by ${item.signals.map(s => s.label).join(', ')}` : 'Market activity detected across monitored watchlist');
 
   return (
     <div
@@ -75,110 +83,140 @@ export const FeedListCard: React.FC<FeedListCardProps> = ({
         }
       }}
       className={cn(
-        'group relative p-4 sm:p-5 rounded-2xl bg-surface border transition-all duration-200 cursor-pointer text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500',
+        'group relative p-4 rounded-xl bg-surface border transition-all duration-150 cursor-pointer text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500',
         isSelected
           ? 'border-indigo-500 ring-2 ring-indigo-500/30 bg-surface-subtle shadow-lg'
           : item.isUnread
-          ? 'border-slate-700/80 hover:border-slate-600 bg-surface/90 hover:bg-surface-hover/80 shadow-sm'
-          : 'border-border/60 hover:border-border bg-surface/50 hover:bg-surface/80 opacity-85 hover:opacity-100'
+          ? 'border-slate-700/90 hover:border-slate-600 bg-surface/95 hover:bg-surface-hover/90 shadow-sm'
+          : 'border-border/60 hover:border-border bg-surface/60 hover:bg-surface/90 opacity-90 hover:opacity-100'
       )}
     >
-      <div className="flex items-start justify-between gap-3">
-        {/* Left column: Unread indicator + Main details */}
-        <div className="flex items-start gap-3 min-w-0 flex-1">
-          {/* Unread Status Dot */}
-          <div className="pt-1 flex-shrink-0">
+      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+        {/* 1. Left Section: Ticker, Headline, Explanation, and Badges */}
+        <div className="flex-1 min-w-0 space-y-1.5">
+          {/* Header Row: Priority + Symbol + Company + Badges */}
+          <div className="flex items-center gap-2 min-w-0 flex-wrap">
+            {/* Unread Status Dot */}
             {item.isUnread ? (
               <span
                 title="Unread item"
-                className="block w-2.5 h-2.5 rounded-full bg-indigo-500 ring-4 ring-indigo-500/20"
+                className="w-2 h-2 rounded-full bg-indigo-500 ring-2 ring-indigo-500/30 shrink-0"
               />
             ) : (
-              <span className="block w-2.5 h-2.5 rounded-full bg-transparent" />
+              <span className="w-2 h-2 rounded-full bg-transparent shrink-0" />
+            )}
+
+            {/* Priority Badge */}
+            <span
+              className={cn(
+                'inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-semibold border text-[10px]',
+                pStyle.bg,
+                pStyle.text,
+                pStyle.border
+              )}
+            >
+              <span className={cn('w-1.5 h-1.5 rounded-full', pStyle.dot)} />
+              {item.priorityLabel}
+            </span>
+
+            {item.isDemo && (
+              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                Demo
+              </span>
+            )}
+
+            {item.isNew && (
+              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                <Sparkles className="w-2.5 h-2.5" />
+                New
+              </span>
+            )}
+
+            {item.isUpdated && (
+              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-sky-500/20 text-sky-300 border border-sky-500/30">
+                Updated
+              </span>
+            )}
+
+            {/* Stock Symbol */}
+            <span className="font-mono font-bold text-slate-100 text-sm tracking-wide">
+              {item.stockSymbol}
+            </span>
+
+            {/* Company Name */}
+            <span className="text-slate-400 font-medium text-xs truncate max-w-[160px] sm:max-w-[260px]">
+              {item.companyName}
+            </span>
+
+            {/* Exchange Pill */}
+            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-surface-subtle text-slate-400 border border-border/50">
+              {item.exchange}
+            </span>
+
+            {item.isAlertTriggered && (
+              <span title="Triggered your price alert" className="text-amber-400 flex items-center">
+                <Bell className="w-3.5 h-3.5 fill-amber-400/20" />
+              </span>
             )}
           </div>
 
-          <div className="min-w-0 flex-1 space-y-2">
-            {/* Top row: Priority badge + Ticker + Company + Exchange */}
-            <div className="flex flex-wrap items-center gap-2 text-xs">
+          {/* Headline */}
+          <h3
+            className={cn(
+              'text-sm sm:text-base font-semibold text-slate-100 leading-snug group-hover:text-indigo-200 transition-colors',
+              item.isUnread ? 'font-bold text-white' : 'font-semibold text-slate-200'
+            )}
+          >
+            {item.headline}
+          </h3>
+
+          {/* Explanatory Context Subtitle */}
+          <p className="text-xs text-slate-400 leading-relaxed line-clamp-1">
+            {contextSnippet}
+          </p>
+
+          {/* Bottom Tags / Content Availability */}
+          <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+            {item.signals.map((signal, idx) => (
               <span
-                className={cn(
-                  'inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-semibold border text-[11px]',
-                  pStyle.bg,
-                  pStyle.text,
-                  pStyle.border
-                )}
+                key={idx}
+                className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-800/90 text-indigo-200 border border-slate-700/70 font-mono"
               >
-                <span className={cn('w-1.5 h-1.5 rounded-full', pStyle.dot)} />
-                {item.priorityLabel}
+                {signal.label}
               </span>
+            ))}
 
-              {item.isDemo && (
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                  Demo
-                </span>
-              )}
-
-              {item.isNew && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  <Sparkles className="w-2.5 h-2.5" />
-                  New
-                </span>
-              )}
-
-              <span className="font-mono font-bold text-slate-100 text-sm tracking-wide">
-                {item.stockSymbol}
+            {item.extraSignalsCount > 0 && (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-slate-800/40 text-slate-400 border border-slate-700/40">
+                +{item.extraSignalsCount} more
               </span>
+            )}
 
-              <span className="text-slate-400 font-medium truncate max-w-[140px] sm:max-w-[220px]">
-                {item.companyName}
+            <div className="flex items-center gap-1 text-[10px] text-slate-500 ml-1">
+              <span>Inside:</span>
+              <span className="px-1.5 py-0.5 rounded bg-surface-subtle border border-border/50 text-slate-300">
+                What happened
               </span>
-
-              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-surface-subtle text-slate-400 border border-border/50">
-                {item.exchange}
+              <span className="px-1.5 py-0.5 rounded bg-surface-subtle border border-border/50 text-slate-300">
+                Why
               </span>
-
+              <span className="px-1.5 py-0.5 rounded bg-surface-subtle border border-border/50 text-slate-300">
+                Price chart
+              </span>
               {item.isAlertTriggered && (
-                <span title="Triggered your price alert" className="text-amber-400 flex items-center">
-                  <Bell className="w-3.5 h-3.5 fill-amber-400/20" />
-                </span>
-              )}
-            </div>
-
-            {/* Dynamic Headline */}
-            <h3
-              className={cn(
-                'text-sm sm:text-base font-semibold text-slate-100 leading-snug group-hover:text-indigo-200 transition-colors',
-                item.isUnread ? 'font-bold' : 'font-medium text-slate-200'
-              )}
-            >
-              {item.headline}
-            </h3>
-
-            {/* Signal Chips */}
-            <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-              {item.signals.map((signal, idx) => (
-                <span
-                  key={idx}
-                  className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-800/80 text-slate-300 border border-slate-700/60"
-                >
-                  {signal.label}
-                </span>
-              ))}
-
-              {item.extraSignalsCount > 0 && (
-                <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-medium bg-slate-800/40 text-slate-400 border border-slate-700/40">
-                  +{item.extraSignalsCount} more
+                <span className="px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-300 font-medium flex items-center gap-0.5">
+                  <Bell className="w-2.5 h-2.5" /> Alert
                 </span>
               )}
             </div>
           </div>
         </div>
 
-        {/* Right column: Price / Change & Action Icons */}
-        <div className="flex flex-col items-end justify-between gap-3 flex-shrink-0">
+        {/* 3. Right Section: Price, Day Change, Timestamp & Quick Actions */}
+        <div className="flex flex-col items-end justify-between gap-2.5 shrink-0 min-w-[140px]">
+          {/* Price & Change */}
           <div className="text-right">
-            <div className="text-sm sm:text-base font-bold font-mono text-slate-100">
+            <div className="text-base sm:text-lg font-bold font-mono text-slate-100 tracking-tight">
               {formatMoney(item.currentPrice ?? item.eventPrice, item.currency)}
             </div>
             <div
@@ -195,36 +233,49 @@ export const FeedListCard: React.FC<FeedListCardProps> = ({
             </div>
           </div>
 
-          {/* Timestamp and Quick Action buttons */}
+          {/* Timestamp & Action Buttons */}
           <div className="flex items-center gap-1.5 text-slate-400">
             <span
               title={timeTooltip}
-              className="text-[11px] font-medium text-slate-400 hover:text-slate-300 mr-1 flex items-center gap-1 transition-colors cursor-help"
+              className="text-[11px] font-mono text-slate-400 hover:text-slate-300 mr-1 flex items-center gap-1 transition-colors cursor-help"
             >
               <Clock className="w-3 h-3 text-slate-400" />
               {timeLabel}
             </span>
 
-            {/* Save / Bookmark Button (isolated click target) */}
+            {/* External Source Link */}
+            <a
+              href={supportingUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Open supporting news or market source website"
+              aria-label="Open supporting news or market source website in new tab"
+              onClick={(e) => e.stopPropagation()}
+              className="p-1.5 rounded-lg border border-border/60 bg-surface-subtle/60 text-slate-400 hover:text-indigo-300 hover:bg-surface-hover hover:border-border transition-all"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+
+            {/* Save / Bookmark Button */}
             <button
               type="button"
               aria-label={item.isSaved ? 'Remove from saved' : 'Save for later'}
-              title={item.isSaved ? 'Saved' : 'Save for later (s)'}
+              title={item.isSaved ? 'Saved to Market Memory' : 'Save for later (s)'}
               onClick={(e) => {
                 e.stopPropagation();
                 onToggleSave(item, e);
               }}
               className={cn(
-                'p-1.5 rounded-lg border transition-colors',
+                'p-1.5 rounded-lg border transition-all',
                 item.isSaved
-                  ? 'bg-amber-500/15 border-amber-500/30 text-amber-400'
-                  : 'bg-surface-subtle/60 border-border/60 text-slate-400 hover:text-slate-200 hover:bg-surface-hover'
+                  ? 'bg-amber-500/15 border-amber-500/30 text-amber-400 shadow-sm'
+                  : 'bg-surface-subtle/60 border-border/60 text-slate-400 hover:text-slate-200 hover:bg-surface-hover hover:border-border'
               )}
             >
               <Bookmark className={cn('w-3.5 h-3.5', item.isSaved && 'fill-amber-400')} />
             </button>
 
-            {/* Mark Read/Unread Button (isolated click target) */}
+            {/* Mark Read/Unread Button */}
             <button
               type="button"
               aria-label={item.isUnread ? 'Mark as read' : 'Mark as unread'}
@@ -234,42 +285,37 @@ export const FeedListCard: React.FC<FeedListCardProps> = ({
                 onToggleRead(item, e);
               }}
               className={cn(
-                'p-1.5 rounded-lg border transition-colors',
+                'p-1.5 rounded-lg border transition-all',
                 !item.isUnread
-                  ? 'bg-indigo-500/15 border-indigo-500/30 text-indigo-400'
-                  : 'bg-surface-subtle/60 border-border/60 text-slate-400 hover:text-slate-200 hover:bg-surface-hover'
+                  ? 'bg-indigo-500/15 border-indigo-500/30 text-indigo-400 shadow-sm'
+                  : 'bg-surface-subtle/60 border-border/60 text-slate-400 hover:text-slate-200 hover:bg-surface-hover hover:border-border'
               )}
             >
               <CheckCircle2 className="w-3.5 h-3.5" />
             </button>
+
+            {/* Delete Button */}
+            {onDelete && (
+              <button
+                type="button"
+                aria-label="Delete update"
+                title="Delete update (d)"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(item, e);
+                }}
+                className="p-1.5 rounded-lg border border-border/60 bg-surface-subtle/60 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 hover:border-rose-500/30 transition-all"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
-        </div>
-      </div>
 
-      {/* Progressive Teaser Row & View Details Affordance */}
-      <div className="flex items-center justify-between pt-3 mt-3 border-t border-border/40 text-[11px] text-slate-400 gap-2 flex-wrap">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-slate-500 font-medium">Inside:</span>
-          <span className="px-1.5 py-0.5 rounded bg-surface-subtle border border-border/60 text-slate-300">
-            What happened
-          </span>
-          <span className="px-1.5 py-0.5 rounded bg-surface-subtle border border-border/60 text-slate-300">
-            Why
-          </span>
-          <span className="px-1.5 py-0.5 rounded bg-surface-subtle border border-border/60 text-slate-300">
-            Price chart
-          </span>
-          {item.isAlertTriggered && (
-            <span className="px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-300 font-medium flex items-center gap-1">
-              <Bell className="w-2.5 h-2.5" /> Alert
-            </span>
-          )}
-        </div>
-
-        {/* View Details Affordance */}
-        <div className="flex items-center gap-1 text-indigo-400 group-hover:text-indigo-300 font-semibold transition-colors flex-shrink-0 ml-auto">
-          <span>View details</span>
-          <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+          {/* View Details Link */}
+          <div className="flex items-center gap-0.5 text-xs text-indigo-400 group-hover:text-indigo-300 font-semibold transition-colors mt-0.5">
+            <span>View details</span>
+            <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+          </div>
         </div>
       </div>
     </div>

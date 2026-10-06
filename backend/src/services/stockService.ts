@@ -137,11 +137,28 @@ export class StockService {
   }
 
   async getStockBySymbol(symbol: string) {
+    const allowDemo = process.env.NODE_ENV === 'development' && process.env.SEED_DEMO_EVENTS === 'true';
+
     const stock = await prisma.stock.findUnique({
       where: { symbol: symbol.toUpperCase() },
       include: {
         events: {
-          orderBy: { timestamp: 'desc' },
+          where: {
+            isHidden: false,
+            isDuplicate: false,
+            isInvalidated: false,
+            isSimulated: false,
+            ...(allowDemo
+              ? {}
+              : {
+                  isDemo: false,
+                  NOT: [
+                    { id: { startsWith: 'demo_' } },
+                    { id: { in: ['evt_001', 'evt_002', 'evt_003', 'evt_004'] } },
+                  ],
+                }),
+          },
+          orderBy: [{ priority: 'desc' }, { timestamp: 'desc' }],
           take: 5,
           include: { insights: true },
         },
@@ -162,8 +179,38 @@ export class StockService {
       throw error;
     }
 
+    const formattedEvents = stock.events.map((e) => {
+      const delta = (e.metricsDelta as any) || {};
+      const headline =
+        delta.headline ||
+        delta.title ||
+        e.whyShown ||
+        `${stock.companyName || symbol} ${e.eventType.replace(/_/g, ' ')}`;
+      const reason =
+        e.whyShown ||
+        delta.summary ||
+        delta.enrichment?.summary ||
+        delta.whatHappened ||
+        e.insights?.[0]?.possibleExplanation ||
+        null;
+
+      return {
+        id: e.id,
+        eventType: e.eventType,
+        priority: e.priority,
+        headline,
+        reason,
+        whyShown: e.whyShown,
+        timestamp: e.timestamp.toISOString(),
+        occurredAt: (e.occurredAt || e.occurredOn || e.timestamp).toISOString(),
+        metricsDelta: delta,
+        insights: e.insights,
+      };
+    });
+
     return {
       ...stock,
+      events: formattedEvents,
       currentPrice: Number(stock.currentPrice),
       changeAmount: Number(stock.changeAmount),
       changePercent: Number(stock.changePercent),

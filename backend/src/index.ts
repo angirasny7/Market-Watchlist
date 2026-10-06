@@ -107,6 +107,13 @@ if (process.env.NODE_ENV !== 'test') {
     stockService.ensureMasterCatalogSeeded().catch((err) => {
       console.error('[Startup] Failed to auto-seed master stock catalog:', err);
     });
+
+    // Seed market universe and sync benchmark quotes
+    import('./services/marketUniverseService.js').then(({ marketUniverseService }) => {
+      marketUniverseService.ensureUniverseSeeded()
+        .then(() => marketUniverseService.syncBenchmarkQuotes())
+        .catch((err) => console.error('[Startup] Failed to initialize market universe:', err));
+    });
   });
 }
 

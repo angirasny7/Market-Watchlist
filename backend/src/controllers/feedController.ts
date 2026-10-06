@@ -1,5 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { feedService } from '../services/feedService.js';
+import { userVisitService } from '../services/userVisitService.js';
+import { feedStreamManager } from '../utils/feedStreamManager.js';
 
 export class FeedController {
   private resolveUserId(req: any): string {
@@ -9,6 +11,26 @@ export class FeedController {
     const err: any = new Error('Unauthorized: Authentication required via Bearer JWT');
     err.statusCode = 401;
     throw err;
+  }
+
+  /**
+   * GET /api/feed/stream
+   * Real-time Server-Sent Events stream for instant multi-device synchronization
+   */
+  async streamFeed(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = this.resolveUserId(req);
+
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no');
+      res.flushHeaders?.();
+
+      feedStreamManager.addClient(userId, res);
+    } catch (err) {
+      next(err);
+    }
   }
 
   /**
@@ -133,6 +155,12 @@ export class FeedController {
         readSource,
       });
 
+      feedStreamManager.broadcastToUser(userId, 'feed_state_change', {
+        action: 'mark_read',
+        eventIds: eventIds || [],
+        count: result.count,
+      });
+
       res.status(200).json({
         success: true,
         data: result,
@@ -152,6 +180,11 @@ export class FeedController {
       const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
 
       const result = await feedService.markRead(userId, { eventIds: [id], readSource: 'manual' });
+
+      feedStreamManager.broadcastToUser(userId, 'feed_state_change', {
+        action: 'mark_item_read',
+        eventId: id,
+      });
 
       res.status(200).json({
         success: true,
@@ -173,6 +206,12 @@ export class FeedController {
 
       const result = await feedService.saveItem(userId, id);
 
+      feedStreamManager.broadcastToUser(userId, 'feed_state_change', {
+        action: 'save_item',
+        eventId: id,
+        isSaved: true,
+      });
+
       res.status(200).json({
         success: true,
         data: result,
@@ -193,6 +232,54 @@ export class FeedController {
 
       const result = await feedService.unsaveItem(userId, id);
 
+      feedStreamManager.broadcastToUser(userId, 'feed_state_change', {
+        action: 'unsave_item',
+        eventId: id,
+        isSaved: false,
+      });
+
+      res.status(200).json({
+        success: true,
+        data: result,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * POST /api/feed/viewed
+   * Mark feed viewed after 3 seconds of page visibility (B1)
+   */
+  async recordFeedViewed(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = this.resolveUserId(req);
+      const result = await userVisitService.recordFeedViewed(userId);
+      res.status(200).json({
+        success: true,
+        data: result,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * POST /api/feed/items/:id/delete
+   * Per-user soft delete item into UserEventDelete with undo token (C2)
+   */
+  async deleteItem(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = this.resolveUserId(req);
+      const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+
+      const result = await feedService.deleteItem(userId, id);
+
+      feedStreamManager.broadcastToUser(userId, 'feed_state_change', {
+        action: 'delete_item',
+        eventId: id,
+      });
+
       res.status(200).json({
         success: true,
         data: result,
@@ -212,6 +299,11 @@ export class FeedController {
       const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
 
       const result = await feedService.restoreItem(userId, id);
+
+      feedStreamManager.broadcastToUser(userId, 'feed_state_change', {
+        action: 'restore_item',
+        eventId: id,
+      });
 
       res.status(200).json({
         success: true,
@@ -238,6 +330,11 @@ export class FeedController {
 
       const result = await feedService.undoAction(userId, undoToken);
 
+      feedStreamManager.broadcastToUser(userId, 'feed_state_change', {
+        action: 'undo',
+        result,
+      });
+
       res.status(200).json({
         success: true,
         data: result,
@@ -256,6 +353,11 @@ export class FeedController {
       const userId = this.resolveUserId(req);
       const { expectedCount } = req.body || {};
       const result = await feedService.markCaughtUp(userId, expectedCount);
+
+      feedStreamManager.broadcastToUser(userId, 'feed_state_change', {
+        action: 'caught_up',
+        count: result.count,
+      });
 
       res.status(200).json({
         success: true,

@@ -1,7 +1,9 @@
 import { EventType } from '@prisma/client';
 import { prisma } from '../config/prisma.js';
 import { attentionScoringService } from '../services/attentionScoringService.js';
+import { meaningfulnessScoreService } from '../services/meaningfulnessScoreService.js';
 import { contextEnrichmentService } from '../services/contextEnrichmentService.js';
+import { getExchangeMarketSession } from '../utils/exchangeCalendar.js';
 
 export interface ChangeDetectionResult {
   jobRunId: string;
@@ -138,36 +140,43 @@ export async function runChangeDetectionJob(): Promise<ChangeDetectionResult> {
       }
 
       // Deduplicate and persist each detected anomaly (Calendar-day idempotency)
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
-      const todayEnd = new Date();
-      todayEnd.setHours(23, 59, 59, 999);
-
       const baselinePrice = currentPrice - changeAmount;
 
       for (const anomaly of potentialAnomalies) {
+        // Resolve exchange session truth timestamp
+        const sessionInfo = getExchangeMarketSession(stock.exchange || 'NSE', new Date());
+        const sessionDateObj = sessionInfo.occurredAt;
+        const sessionStart = new Date(sessionDateObj);
+        sessionStart.setUTCHours(0, 0, 0, 0);
+        const sessionEnd = new Date(sessionDateObj);
+        sessionEnd.setUTCHours(23, 59, 59, 999);
+
         const existingEventToday = await prisma.event.findFirst({
           where: {
             stockSymbol: stock.symbol,
             eventType: anomaly.eventType,
-            timestamp: {
-              gte: todayStart,
-              lte: todayEnd,
-            },
+            OR: [
+              { occurredAt: { gte: sessionStart, lte: sessionEnd } },
+              { occurredOn: { gte: sessionStart, lte: sessionEnd } },
+              { timestamp: { gte: sessionStart, lte: sessionEnd } },
+            ],
           },
         });
 
-        const scoreResult = attentionScoringService.calculateScore({
+        const scoreResult = meaningfulnessScoreService.calculateScore({
           changePercent,
-          volume,
-          avgVolume20D,
+          volumeRatio: avgVolume20D > 0 ? parseFloat((volume / avgVolume20D).toFixed(2)) : 1.0,
           eventType: anomaly.eventType,
+          trustTier: 'OFFICIAL_EXCHANGE',
         });
 
         const metricsData = {
           attentionScore: scoreResult.score,
+          meaningfulnessScore: scoreResult.score,
+          whyShown: scoreResult.whyShown,
           detectionReason: anomaly.reason,
-          explanation: scoreResult.explanation,
+          sessionLabel: sessionInfo.sessionLabel,
+          isIntraday: sessionInfo.isIntraday,
           baselinePrice: parseFloat(baselinePrice.toFixed(2)),
           price: currentPrice,
           eventPrice: currentPrice,
@@ -182,7 +191,7 @@ export async function runChangeDetectionJob(): Promise<ChangeDetectionResult> {
         };
 
         if (existingEventToday) {
-          // Idempotent update: update metrics if new data is available on the same calendar day
+          // Idempotent update: update metrics if new data is available on the same session
           const updatedMetrics = {
             ...((existingEventToday.metricsDelta as any) || {}),
             ...metricsData,
@@ -200,6 +209,8 @@ export async function runChangeDetectionJob(): Promise<ChangeDetectionResult> {
             where: { id: existingEventToday.id },
             data: {
               priority: scoreResult.priority,
+              meaningfulnessScore: scoreResult.score,
+              whyShown: scoreResult.whyShown,
               metricsDelta: {
                 ...updatedMetrics,
                 enrichment,
@@ -216,10 +227,16 @@ export async function runChangeDetectionJob(): Promise<ChangeDetectionResult> {
             stockSymbol: stock.symbol,
             eventType: anomaly.eventType,
             priority: scoreResult.priority,
-            timestamp: new Date(),
-            occurredOn: new Date(),
-            occurredAt: new Date(),
+            timestamp: sessionDateObj,
+            occurredOn: sessionDateObj,
+            occurredAt: sessionDateObj,
             detectedAt: new Date(),
+            receivedAt: new Date(),
+            publishedAt: sessionDateObj,
+            source: stock.exchange ? `${stock.exchange} Market Data` : 'NSE Market Data',
+            sourceTrustTier: 'OFFICIAL_EXCHANGE',
+            meaningfulnessScore: scoreResult.score,
+            whyShown: scoreResult.whyShown,
             metricsDelta: metricsData,
           },
         });

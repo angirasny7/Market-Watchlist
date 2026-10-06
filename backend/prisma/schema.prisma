@@ -22,6 +22,7 @@ model User {
   digestReads     UserDigestRead[]
   eventReads      UserEventRead[]
   savedEvents     UserSavedEvent[]
+  eventDeletes    UserEventDelete[]
   userState       UserState?
   watchlists      Watchlist[]
   alerts          Alert[]
@@ -53,6 +54,8 @@ model UserState {
   previousSessionStartedAt DateTime?
   previousSessionEndReason String?
   caughtUpAt               DateTime?
+  feedBoundaryAt           DateTime?
+  lastFeedViewedAt         DateTime?
   user                     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, lastActivityAt])
@@ -158,6 +161,14 @@ model Event {
   occurredAt   DateTime?
   periodStart  DateTime?
   detectedAt   DateTime         @default(now())
+  publishedAt  DateTime?
+  receivedAt   DateTime?        @default(now())
+  source       String?
+  sourceUrl    String?
+  sourceTrustTier String?
+  meaningfulnessScore Int?
+  whyShown     String?
+  sources      Json?
   read         Boolean          @default(false)
   acknowledged Boolean          @default(false)
   isSimulated      Boolean          @default(false)
@@ -175,6 +186,7 @@ model Event {
   insights         Insight[]
   userReads        UserEventRead[]
   userSaves        UserSavedEvent[]
+  userDeletes      UserEventDelete[]
 
   @@index([stockSymbol, timestamp(sort: Desc)])
   @@index([userId])
@@ -306,13 +318,15 @@ model UserDigestRead {
 }
 
 model UserSavedEvent {
-  id         String    @id @default(uuid())
-  userId     String
-  eventId    String
-  savedAt    DateTime  @default(now())
-  restoredAt DateTime?
-  event      Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String    @id @default(uuid())
+  userId      String
+  eventId     String
+  savedAt     DateTime  @default(now())
+  restoredAt  DateTime?
+  priceAtSave Decimal?  @db.Decimal(12, 2)
+  note        String?
+  event       Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, eventId])
   @@index([userId])
@@ -454,3 +468,59 @@ model CorporateEvent {
   @@index([eventDate])
   @@map("corporate_events")
 }
+
+model UserEventDelete {
+  id         String    @id @default(uuid())
+  userId     String
+  eventId    String
+  deletedAt  DateTime  @default(now())
+  expiresAt  DateTime
+  event      Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, eventId])
+  @@index([userId])
+  @@index([eventId])
+  @@index([expiresAt])
+  @@map("user_event_deletes")
+}
+
+model MarketUniverseItem {
+  id             String   @id @default(uuid())
+  symbol         String
+  indexName      String
+  exchange       String
+  sector         String
+  sourceUrl      String?
+  lastVerifiedAt DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([indexName, symbol])
+  @@index([indexName])
+  @@index([symbol])
+  @@index([sector])
+  @@map("market_universe")
+}
+
+model MarketIndexQuote {
+  id           String   @id @default(uuid())
+  symbol       String   @unique
+  name         String
+  category     String
+  currentPrice Decimal  @db.Decimal(12, 2)
+  changeAmount Decimal  @db.Decimal(12, 2)
+  changePercent Decimal @db.Decimal(8, 2)
+  dayHigh      Decimal? @db.Decimal(12, 2)
+  dayLow       Decimal? @db.Decimal(12, 2)
+  exchange     String?
+  delayMinutes Int      @default(15)
+  sparkline    Json?
+  lastSyncedAt DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([category])
+  @@map("market_index_quotes")
+}
+

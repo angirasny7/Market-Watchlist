@@ -1,6 +1,7 @@
 import { prisma } from '../config/prisma.js';
 import { ProviderFactory } from '../providers/providerFactory.js';
 import { recordStockSyncCompleted } from './scheduler.js';
+import { alertService } from '../services/alertService.js';
 
 export interface SyncStocksResult {
   jobRunId: string;
@@ -148,6 +149,15 @@ export async function runSyncStocksJob(targetSymbols?: string[]): Promise<SyncSt
           }
         })
       );
+    }
+
+    // Evaluate alerts for the updated stocks in real time
+    if (symbols.length > 0) {
+      try {
+        await alertService.evaluateAlerts(symbols);
+      } catch (alertErr: any) {
+        console.warn(`[SyncStocksJob] Alert evaluation error: ${alertErr.message}`);
+      }
     }
 
     const durationMs = Date.now() - startTime;

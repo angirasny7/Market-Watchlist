@@ -535,85 +535,8 @@ export class CatchUpService {
       }
     }
 
-    // 5. Create digests for the gap
-    let digestsCreated = 0;
-    const gapEvents = await prisma.event.findMany({
-      where: {
-        stockSymbol: { in: watchlistSymbols },
-        AND: [{ OR: [{ userId: null }, { userId }] }],
-        timestamp: { gte: since },
-        digestEvents: { none: { digest: { userId } } },
-      },
-      include: {
-        stock: true,
-        insights: true,
-      },
-      orderBy: { timestamp: 'desc' },
-    });
-
-    if (gapEvents.length > 0) {
-      if (daysSince <= 7) {
-        // Group by calendar day (one digest per missed trading day)
-        const dayMap = new Map<string, typeof gapEvents>();
-        for (const ev of gapEvents) {
-          const dStr = new Date(ev.timestamp).toISOString().split('T')[0];
-          if (!dayMap.has(dStr)) dayMap.set(dStr, []);
-          dayMap.get(dStr)!.push(ev);
-        }
-
-        for (const [dayKey, dayEvts] of dayMap.entries()) {
-          const dateObj = new Date(dayKey);
-          const formattedDate = dateObj.toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric',
-          });
-
-          const mood = this.determineMoodFromEvents(dayEvts);
-          const topSymbol = dayEvts[0].stockSymbol;
-          const headline = `${topSymbol} & Watchlist Developments (${formattedDate})`;
-          const executiveSummary = `${dayEvts.length} notable event(s) detected across your tracked stocks on ${formattedDate}.`;
-
-          const digest = await prisma.digest.create({
-            data: {
-              userId,
-              headline,
-              executiveSummary,
-              marketMood: mood,
-              timeRange: `${formattedDate} Session`,
-              benchmarkCloses: { nifty50: null, sensex: null, indiaVix: null },
-              read: false,
-              digestEvents: {
-                create: dayEvts.map((e) => ({ eventId: e.id })),
-              },
-            },
-          });
-          if (digest) digestsCreated++;
-        }
-      } else {
-        // Single summary digest for the gap
-        const mood = this.determineMoodFromEvents(gapEvents);
-        const topSymbol = gapEvents[0].stockSymbol;
-        const headline = `${daysSince}-Day Market Dossier: ${topSymbol} & Watchlist Developments`;
-        const executiveSummary = `Comprehensive summary of ${gapEvents.length} watchlist events detected while you were away (${daysSince} days).`;
-
-        const digest = await prisma.digest.create({
-          data: {
-            userId,
-            headline,
-            executiveSummary,
-            marketMood: mood,
-            timeRange: `${since.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} (${daysSince} Days)`,
-            benchmarkCloses: { nifty50: null, sensex: null, indiaVix: null },
-            read: false,
-            digestEvents: {
-              create: gapEvents.map((e) => ({ eventId: e.id })),
-            },
-          },
-        });
-        if (digest) digestsCreated++;
-      }
-    }
+    // 5. Digests are deprecated / bypassed for Attention Feed v2 & Market Memory
+    const digestsCreated = 0;
 
     // Evaluate active alerts for the user's watchlist symbols with historical crossing detection
     try {

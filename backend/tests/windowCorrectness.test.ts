@@ -1,10 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { PrismaClient, EventType, Priority } from '@prisma/client';
-import { authService } from '../src/services/authService';
-import { feedService } from '../src/services/feedService';
-import { catchUpService } from '../src/services/catchUpService';
-
-const prisma = new PrismaClient();
+import { EventType, Priority } from '@prisma/client';
+import { prisma } from '../src/config/prisma.js';
+import { authService } from '../src/services/authService.js';
+import { feedService } from '../src/services/feedService.js';
+import { catchUpService } from '../src/services/catchUpService.js';
 
 describe('Publish Time and Window Correctness (Part 2)', () => {
   let testUser: any;
@@ -20,6 +19,24 @@ describe('Publish Time and Window Correctness (Part 2)', () => {
       password: testPassword,
     });
     testUser = reg.user;
+
+    await prisma.stock.upsert({
+      where: { symbol: 'ITC' },
+      create: {
+        symbol: 'ITC',
+        companyName: 'ITC Limited',
+        sector: 'Consumer Goods',
+        exchange: 'NSE',
+        currency: '₹',
+        currentPrice: 430.0,
+        changeAmount: 1.5,
+        changePercent: 0.35,
+        marketCap: '5L Cr',
+        high52w: 500.0,
+        low52w: 390.0,
+      },
+      update: {},
+    });
 
     const ws = await prisma.watchlist.findFirst({ where: { userId: testUser.id } });
     if (ws) {

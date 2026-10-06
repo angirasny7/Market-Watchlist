@@ -55,6 +55,35 @@
   .glow-indigo {
     box-shadow: 0 0 25px -5px rgba(99, 102, 241, 0.15);
   }
+
+  /* Live Infinite Market Marquee (Groww style) */
+  .marquee-container {
+    display: flex;
+    overflow: hidden;
+    user-select: none;
+    mask-image: linear-gradient(to right, transparent, black 4%, black 96%, transparent);
+    -webkit-mask-image: linear-gradient(to right, transparent, black 4%, black 96%, transparent);
+  }
+
+  .marquee-content {
+    display: flex;
+    flex-shrink: 0;
+    width: max-content;
+    animation: marquee-slide 45s linear infinite;
+  }
+
+  .marquee-container:hover .marquee-content {
+    animation-play-state: paused;
+  }
+
+  @keyframes marquee-slide {
+    from {
+      transform: translateX(0%);
+    }
+    to {
+      transform: translateX(-50%);
+    }
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -67,4 +96,3 @@
     scroll-behavior: auto !important;
   }
 }
-

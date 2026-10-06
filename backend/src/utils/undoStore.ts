@@ -1,13 +1,14 @@
 export interface UndoEntry {
   id: string;
   userId: string;
-  action: 'mark_read' | 'save' | 'unsave' | 'restore' | 'caught_up';
+  action: 'mark_read' | 'save' | 'unsave' | 'restore' | 'caught_up' | 'delete';
   eventIds: string[];
   previousState?: {
     previousSessionAt?: Date | null;
     previousLastSeenAt?: Date | null;
     wasReadIds?: string[];
     wasSavedIds?: string[];
+    wasDeletedIds?: string[];
   };
   createdAt: number;
   expiresAt: number;

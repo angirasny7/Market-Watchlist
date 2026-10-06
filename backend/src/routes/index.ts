@@ -15,6 +15,7 @@ import internalRoutes from './internalRoutes.js';
 import alertRoutes from './alertRoutes.js';
 import notificationRoutes from './notificationRoutes.js';
 import feedRoutes from './feedRoutes.js';
+import marketHighlightsRoutes from './marketHighlightsRoutes.js';
 
 const router = Router();
 
@@ -48,6 +49,7 @@ router.use('/internal', internalRoutes);
 router.use('/alerts', alertRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/feed', feedRoutes);
+router.use('/market', marketHighlightsRoutes);
 
 export default router;
 

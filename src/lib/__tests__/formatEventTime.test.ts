@@ -1,117 +1,88 @@
 import { describe, it, expect } from 'vitest';
 import { formatEventTime, formatEventTooltip } from '../formatEventTime';
 
-describe('formatEventTime', () => {
-  const fixedNow = new Date('2026-10-03T12:00:00Z');
+describe('formatEventTime (A6 Truth Formatting)', () => {
+  const fixedNow = new Date('2026-10-06T12:00:00Z');
 
-  it('formats cumulative "since last visit" events using baseline and end close dates', () => {
+  it('formats completed session market signals without "Today close"', () => {
     const item = {
-      isCumulative: true,
-      periodStart: '2026-10-01T00:00:00Z',
-      occurredOn: '2026-10-02T10:00:00Z',
+      occurredAt: '2026-10-05T10:00:00Z',
       eventType: 'PRICE_SURGE',
       exchange: 'NSE',
     };
     const result = formatEventTime(item, fixedNow);
-    expect(result).toBe('Thu 1 Oct close -> Fri 2 Oct close');
+    expect(result).toBe('Mon 5 Oct session · NSE data');
+    expect(result).not.toContain('Today close');
   });
 
-  it('formats single-day price/volume move from yesterday (trading day) as Yesterday close', () => {
-    // When now is a trading day (e.g. Wednesday), Tuesday move is Yesterday close
-    const wednesdayNow = new Date('2026-09-30T12:00:00Z');
+  it('formats intraday market signals with detection time and delayed notice', () => {
     const item = {
-      occurredOn: '2026-09-29T12:00:00Z',
-      eventType: 'PRICE_DROP',
-      exchange: 'NSE',
-    };
-    const result = formatEventTime(item, wednesdayNow);
-    expect(result).toBe('Yesterday close');
-  });
-
-  it('formats single-day price/volume move from today (trading day) as Today close', () => {
-    const wednesdayNow = new Date('2026-09-30T12:00:00Z');
-    const item = {
-      occurredOn: '2026-09-30T08:00:00Z',
+      detectedAt: '2026-10-06T06:12:00Z', // 11:42 AM IST
+      isIntraday: true,
       eventType: 'PRICE_SURGE',
       exchange: 'NSE',
     };
-    const result = formatEventTime(item, wednesdayNow);
-    expect(result).toBe('Today close');
+    const result = formatEventTime(item, fixedNow);
+    expect(result).toContain('Detected');
+    expect(result).toContain('11:42 AM IST');
+    expect(result).toContain('NSE data (~15 min delayed)');
   });
 
-  it('formats single-day price/volume move from earlier dates as Weekday Day Month close', () => {
+  it('formats regulatory filings with source and announcement time', () => {
     const item = {
-      occurredOn: '2026-09-28T10:00:00Z',
-      eventType: 'VOLUME_SPIKE',
+      publishedAt: '2026-10-06T03:32:00Z', // 9:02 AM IST
+      eventType: 'FILING',
+      source: 'NSE filing',
       exchange: 'NSE',
     };
     const result = formatEventTime(item, fixedNow);
-    expect(result).toBe('Mon 28 Sep close');
+    expect(result).toBe('NSE filing · Announced Tue 6 Oct, 9:02 AM IST');
   });
 
-  it('formats earnings events correctly for today and past dates', () => {
-    const todayEarnings = {
-      occurredOn: '2026-10-03T05:00:00Z',
-      eventType: 'EARNINGS_BEAT',
+  it('formats news items with publisher and publication time', () => {
+    const item = {
+      publishedAt: '2026-10-06T03:44:00Z', // 9:14 AM IST
+      eventType: 'NEWS',
+      source: 'Reuters',
       exchange: 'NSE',
     };
-    expect(formatEventTime(todayEarnings, fixedNow)).toBe('Earnings today');
-
-    const pastEarnings = {
-      occurredOn: '2026-10-02T05:00:00Z',
-      eventType: 'EARNINGS_MISS',
-      exchange: 'NSE',
-    };
-    expect(formatEventTime(pastEarnings, fixedNow)).toBe('Reported yesterday');
-
-    const earlierEarnings = {
-      occurredOn: '2026-09-25T05:00:00Z',
-      eventType: 'EARNINGS_BEAT',
-      exchange: 'NSE',
-    };
-    expect(formatEventTime(earlierEarnings, fixedNow)).toBe('Reported 25 Sep');
-  });
-
-  it('formats dividend announcement events', () => {
-    const divItem = {
-      occurredOn: '2026-10-01T05:00:00Z',
-      eventType: 'DIVIDEND_ANNOUNCED',
-      exchange: 'NSE',
-    };
-    expect(formatEventTime(divItem, fixedNow)).toBe('Dividend announced 1 Oct');
+    const result = formatEventTime(item, fixedNow);
+    expect(result).toBe('Reuters · Published Tue 6 Oct, 9:14 AM IST');
   });
 
   it('formats alert-triggered events with full date and time in exchange timezone', () => {
     const alertNSE = {
       isAlertTriggered: true,
-      detectedAt: '2026-10-02T09:29:00Z', // 2:59 PM IST
+      detectedAt: '2026-10-06T05:01:00Z', // 10:31 AM IST
       exchange: 'NSE',
       eventType: 'PRICE_SURGE',
     };
     const formatted = formatEventTime(alertNSE, fixedNow);
-    expect(formatted).toContain('Triggered Fri 2 Oct');
-    expect(formatted).toMatch(/2:59\s*PM/i);
+    expect(formatted).toBe('Your alert · Triggered Tue 6 Oct, 10:31 AM IST');
   });
 
-  it('never outputs a bare clock time without date', () => {
+  it('never outputs the phrase "Today close" or bare clock time', () => {
     const bareItem = {
-      timestamp: '2026-10-02T09:29:00Z',
+      timestamp: '2026-10-05T10:00:00Z',
+      exchange: 'NSE',
     };
     const formatted = formatEventTime(bareItem, fixedNow);
-    expect(formatted).not.toBe('02:59 PM');
-    expect(formatted).not.toBe('2:59 PM');
-    expect(formatted).toContain('close');
+    expect(formatted).not.toContain('Today close');
+    expect(formatted).not.toBe('10:00 AM');
+    expect(formatted).toContain('session · NSE data');
   });
 
-  it('generates rich audit tooltip containing market date and detection timestamp', () => {
+  it('generates rich audit tooltip containing publish time and receipt timestamp', () => {
     const item = {
-      occurredOn: '2026-10-02T00:00:00Z',
-      detectedAt: '2026-10-02T09:29:00Z',
+      publishedAt: '2026-10-06T03:44:00Z',
+      receivedAt: '2026-10-06T03:46:00Z',
+      source: 'Reuters',
+      sourceTrustTier: 'MAJOR_PUBLISHER',
       exchange: 'NSE',
     };
     const tooltip = formatEventTooltip(item);
-    expect(tooltip).toContain('Market Date:');
-    expect(tooltip).toContain('Detected:');
-    expect(tooltip).toContain('Asia/Kolkata');
+    expect(tooltip).toContain('Published: Tue 6 Oct, 9:14 AM IST');
+    expect(tooltip).toContain('Received by us at Tue 6 Oct, 9:16 AM IST');
+    expect(tooltip).toContain('Source: Reuters (MAJOR_PUBLISHER)');
   });
 });

@@ -57,8 +57,8 @@ export const ArchivedEventCard: React.FC<ArchivedEventCardProps> = ({ event, onM
       {/* Header: Company, Symbol, Catalyst, and Read Timestamp */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/60 pb-3 min-w-0">
         <div className="flex flex-wrap items-center gap-2">
-          <EventTypeBadge eventType={event.eventType} />
-          {event.priority && <PriorityBadge priority={event.priority} size="sm" />}
+          <EventTypeBadge eventType={event.eventType as any} />
+          {event.priority && <PriorityBadge priority={event.priority as any} size="sm" />}
 
           <div className="flex items-center gap-1.5 ml-1">
             <span className="font-extrabold text-sm sm:text-base text-slate-100 tracking-tight">
@@ -112,9 +112,9 @@ export const ArchivedEventCard: React.FC<ArchivedEventCardProps> = ({ event, onM
         <div className="flex items-center gap-2.5 shrink-0">
           <div className="text-right font-mono">
             <div className="text-sm sm:text-base font-bold text-slate-100">
-              {currency}{event.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              {currency}{(event.currentPrice ?? event.price ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
-            <DeltaBadge value={event.changePercent} size="sm" />
+            <DeltaBadge value={event.dayChangePercent ?? event.changePercent ?? 0} size="sm" />
           </div>
           {event.marketMood && (
             <MarketMoodBadge mood={event.marketMood as MarketMoodType} size="sm" />

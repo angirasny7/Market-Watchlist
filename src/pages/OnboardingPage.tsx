@@ -148,7 +148,7 @@ export const OnboardingPage: React.FC = () => {
       <div className="flex items-center justify-between pb-6 border-b border-border/80">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-100">
-            Welcome to Smart Market Watchlist
+            Welcome to SignalLens
           </h1>
           <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
             Set up your monitored stocks in two quick steps.

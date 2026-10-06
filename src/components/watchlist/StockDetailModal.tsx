@@ -21,6 +21,8 @@ import {
   StockHistoryData,
 } from '../../services/stockService';
 import { StockInteractiveChart } from './StockInteractiveChart';
+import { formatRelativeTime } from '../../lib/dateUtils';
+import { cn } from '../../lib/utils';
 
 interface StockDetailModalProps {
   symbol: string | null;
@@ -356,49 +358,55 @@ export const StockDetailModal: React.FC<StockDetailModalProps> = ({
           ))}
         </div>
 
-        {/* 5. Recent Anomalies & Intelligence Signals */}
-        {stockDetails?.events && stockDetails.events.length > 0 && (
-          <div className="space-y-2 pt-1">
+        {/* 5. Primary Market Catalyst (Single strongest reason or cleanly omitted) */}
+        {stockDetails?.events && stockDetails.events.length > 0 && stockDetails.events[0] && (
+          <div className="p-3.5 rounded-2xl bg-surface-subtle/90 border border-border space-y-2">
             <div className="flex items-center justify-between text-xs font-semibold text-slate-300">
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 text-indigo-300">
                 <Activity className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Recent Anomaly Events</span>
+                <span className="uppercase tracking-wider text-[11px] font-bold">Key Market Catalyst</span>
               </div>
+              <span
+                className={cn(
+                  'px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider',
+                  stockDetails.events[0].priority === 'CRITICAL'
+                    ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
+                    : stockDetails.events[0].priority === 'HIGH'
+                    ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                    : stockDetails.events[0].priority === 'MEDIUM'
+                    ? 'bg-sky-500/15 text-sky-400 border border-sky-500/30'
+                    : 'bg-slate-500/15 text-slate-400 border border-slate-500/30'
+                )}
+              >
+                {stockDetails.events[0].priority}
+              </span>
+            </div>
+
+            <div className="space-y-1 pt-0.5">
+              <h4 className="text-xs sm:text-sm font-semibold text-slate-100 leading-snug">
+                {stockDetails.events[0].headline}
+              </h4>
+              {stockDetails.events[0].reason && stockDetails.events[0].reason !== stockDetails.events[0].headline && (
+                <p className="text-xs text-slate-400 leading-relaxed line-clamp-2">
+                  {stockDetails.events[0].reason}
+                </p>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between pt-1.5 border-t border-border/40 text-[11px] text-slate-500">
+              <span>
+                {stockDetails.events[0].occurredAt || stockDetails.events[0].timestamp
+                  ? `Detected ${formatRelativeTime(stockDetails.events[0].occurredAt || stockDetails.events[0].timestamp)}`
+                  : ''}
+              </span>
               <button
                 type="button"
                 onClick={handleViewInFeed}
-                className="text-[11px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1"
+                className="text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-medium transition-colors"
               >
-                <span>View all in feed</span>
+                <span>View in Attention Feed</span>
                 <ExternalLink className="w-3 h-3" />
               </button>
-            </div>
-
-            <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
-              {stockDetails.events.slice(0, 3).map((ev) => (
-                <div
-                  key={ev.id}
-                  className="p-2.5 rounded-xl bg-surface-subtle border border-border/80 flex items-start justify-between gap-3 text-xs"
-                >
-                  <div className="space-y-1">
-                    <div className="font-medium text-slate-200">{ev.headline}</div>
-                    {ev.insights && ev.insights[0] && (
-                      <p className="text-[11px] text-slate-400 line-clamp-1">
-                        {ev.insights[0].explanation}
-                      </p>
-                    )}
-                  </div>
-                  <span
-                    className={`px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase shrink-0 ${
-                      ev.priority === 'CRITICAL'
-                        ? 'bg-rose-500/15 text-rose-400'
-                        : 'bg-amber-500/15 text-amber-400'
-                    }`}
-                  >
-                    {ev.priority}
-                  </span>
-                </div>
-              ))}
             </div>
           </div>
         )}

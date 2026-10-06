@@ -34,6 +34,42 @@ describe('Public Endpoints & Provider Quota Protection (Item 3)', () => {
       email: reg.user.email,
       token: reg.token,
     };
+
+    await prisma.stock.upsert({
+      where: { symbol: 'AAPL' },
+      create: {
+        symbol: 'AAPL',
+        companyName: 'Apple Inc.',
+        sector: 'Technology',
+        exchange: 'NASDAQ',
+        currency: '$',
+        currentPrice: 180.0,
+        changeAmount: 2.5,
+        changePercent: 1.4,
+        marketCap: '3T',
+        high52w: 199.0,
+        low52w: 140.0,
+      },
+      update: {},
+    });
+
+    await prisma.stock.upsert({
+      where: { symbol: 'RELIANCE' },
+      create: {
+        symbol: 'RELIANCE',
+        companyName: 'Reliance Industries',
+        sector: 'Energy',
+        exchange: 'NSE',
+        currency: '₹',
+        currentPrice: 2950.0,
+        changeAmount: 30.0,
+        changePercent: 1.0,
+        marketCap: '20L Cr',
+        high52w: 3000.0,
+        low52w: 2200.0,
+      },
+      update: {},
+    });
   });
 
   afterAll(async () => {

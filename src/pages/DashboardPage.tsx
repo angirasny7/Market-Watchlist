@@ -4,7 +4,7 @@ import { PageContainer } from '../components/common';
 
 export const DashboardPage: React.FC = () => {
   return (
-    <PageContainer>
+    <PageContainer className="max-w-7xl">
       <SimpleDashboard />
     </PageContainer>
   );

@@ -67,7 +67,7 @@ export const Header: React.FC<HeaderProps> = () => {
       case '/highlights':
         return 'Highlights';
       default:
-        return 'Smart Market Watchlist';
+        return 'SignalLens';
     }
   }, [location.pathname]);
 
@@ -204,7 +204,7 @@ export const Header: React.FC<HeaderProps> = () => {
               role="dialog"
               aria-modal="true"
               aria-label="Profile and session details"
-              className="absolute right-0 mt-2 w-72 sm:w-80 rounded-2xl bg-surface/98 border border-border shadow-2xl backdrop-blur-xl p-4 z-50 animate-fade-in space-y-3.5"
+              className="absolute right-0 mt-2 w-72 sm:w-80 rounded-2xl bg-[#111622] border border-slate-700 shadow-2xl shadow-black/90 p-4 z-50 animate-fade-in space-y-3.5"
             >
               {/* User Identity Header */}
               <div className="pb-3 border-b border-border/80">

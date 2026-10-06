@@ -75,7 +75,7 @@ describe('Trading Calendar & Exchange Holidays 2026 (Part C & B)', () => {
       saturday
     );
 
-    expect(result).toBe('Fri 2 Oct close');
+    expect(result).toBe('Fri 2 Oct session · NSE data');
   });
 
   it('6. Latest completed trading date calculation', () => {

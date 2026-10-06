@@ -23,17 +23,22 @@ export const authenticateJwt = (
   next: NextFunction
 ): void => {
   const authHeader = req.headers.authorization;
+  let token: string | undefined;
 
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.split(' ')[1];
+  } else if (typeof req.query.token === 'string' && req.query.token.trim() !== '') {
+    token = req.query.token.trim();
+  }
+
+  if (!token) {
     res.status(401).json({
       success: false,
       message: 'Unauthorized',
-      error: 'Access token is required. Format: Bearer <token>',
+      error: 'Access token is required. Format: Bearer <token> or ?token=<jwt>',
     });
     return;
   }
-
-  const token = authHeader.split(' ')[1];
 
   try {
     const decoded = jwt.verify(token, config.jwtSecret) as AuthenticatedUserPayload;

@@ -14,6 +14,7 @@ export default {
           subtle: '#0E121C',
           hover: '#171E2E',
           active: '#1E273B',
+          elevated: '#141A29',
         },
         border: {
           DEFAULT: '#1E2638',
@@ -80,11 +81,16 @@ export default {
           '0%': { opacity: '0', transform: 'translateY(4px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
         },
+        marquee: {
+          '0%': { transform: 'translateX(0%)' },
+          '100%': { transform: 'translateX(-50%)' },
+        },
       },
       animation: {
         'pulse-glow': 'pulseGlow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
         'slide-in-right': 'slideInRight 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
         'fade-in': 'fadeIn 0.2s ease-out',
+        'marquee': 'marquee 40s linear infinite',
       },
     },
   },
