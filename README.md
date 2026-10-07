@@ -1,8 +1,6 @@
 # Smart Market Watchlist
 
-> **A watchlist that tells you what changed, why it changed, and whether it matters — not just the latest price.**
-
-Built for **CODE 2026 Hackathon**.
+> **A personal market intelligence workspace that tells you what changed, why it changed, and whether it matters — not just the latest price.**
 
 ---
 
@@ -29,7 +27,8 @@ Smart Market Watchlist transforms raw market volatility into actionable, evidenc
 
 ### Key Implemented Features
 
-- **Watchlist Management**: Add, remove, and pin stocks in personalized watchlists with both Grid and Table view modes. Single-write master stock architecture ensures real-time price updates propagate without database write amplification.
+- **Multi-Watchlist Management**: Create, rename, delete, and organize multiple custom watchlists with pinned stock support in both Grid and Table view modes. Single-write master stock architecture ensures real-time price updates propagate without database write amplification.
+- **Modern Obsidian & Emerald Interface**: Unified dark theme with ambient emerald glows, live responsive layout, and customized trading dashboard.
 - **Change Detection Engine (`changeDetectionJob.ts`)**: Evaluates all active stock quotes in PostgreSQL on a recurring background cycle with a 4-hour event deduplication window against 6 concrete anomaly rules:
   - **Rule 1: Price Surge** — Intraday price change $\ge +5.0\%$
   - **Rule 2: Price Drop** — Intraday price change $\le -5.0\%$
@@ -37,7 +36,8 @@ Smart Market Watchlist transforms raw market volatility into actionable, evidenc
   - **Rule 4: 52-Week High** — Current price within $0.5\%$ of or exceeding the 52-week peak (`currentPrice >= high52w * 0.995`)
   - **Rule 5: 52-Week Low** — Current price within $0.5\%$ of or breaching the 52-week floor (`currentPrice <= low52w * 1.005`)
   - **Rule 6: News Catalyst Detection** — Keyword matching across recent news covering both earnings (`earnings`, `q1`–`q4`, `profit`) classifying events into `EARNINGS_BEAT` or `EARNINGS_MISS` based on sentiment and price movement, and capital distribution (`dividend`, `bonus`, `buyback`) generating `DIVIDEND_ANNOUNCED` events
-- **Attention Scoring (`attentionScoringService.ts`)**: Computes a dynamic 0–100 attention score and assigns priority tiers (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`) factoring in price magnitude, volume ratio, and anomaly category.
+- **Attention Scoring & Filtering (`attentionScoringService.ts`)**: Computes a dynamic 0–100 attention score and assigns priority tiers (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`) factoring in price magnitude, volume ratio, and anomaly category. The Attention Feed supports quick time-window filters (`Since last visit`, `To review`, `Last 24h`, `Last 7d`, `Last 30d`).
+- **Real-Time Cross-Tab / Multi-Device Synchronization**: Live Server-Sent Events (SSE) stream (`/api/feed/stream`) guarantees that read, saved, acknowledged, and caught-up state instantly updates across open tabs and devices.
 - **Context Enrichment & Confidence Scoring (`contextEnrichmentService.ts`, `confidenceScoringService.ts`)**: Derives deterministic, non-fabricated confidence scores (0–100) based on weighted evidence:
   - News coverage presence: up to 25 pts
   - Official exchange filings / regulatory disclosures: up to 26 pts
@@ -46,22 +46,22 @@ Smart Market Watchlist transforms raw market volatility into actionable, evidenc
   - Multi-source corroboration: up to 10 pts
   - *Strict Safety Fallback*: If zero verified evidence exists, the summary defaults strictly to `"Supporting evidence currently unavailable."` with empty drivers.
 - **Personalized Market Intelligence Digests (`digestGenerationJob.ts`, `digestService.ts`)**: Generates periodic executive dossiers synthesizing top market anomalies, benchmark index closes (Nifty 50, Sensex, India VIX), and per-stock forward performance drift.
-- **Market Memory Archive (`memoryService.ts`)**: Long-term archive for historical intelligence dossiers, saved events, and acknowledged insights with full search and status filtering.
+- **Market Memory Archive (`memoryService.ts`)**: Long-term personal repository for historical intelligence dossiers, saved events, and notes with full search and status filtering.
 - **Since-Last-Visit Tracking (`sinceLastVisitService.ts`)**: Tracks per-user session timestamps (`lastActivityAt`, `lastLoginAt`, `previousLoginAt`) to compute an exact delta: duration away, new anomalies detected since last departure, unread critical alerts, and new digests.
-- **Cross-Device Continuity & JWT Auth (`authService.ts`)**: Full registration, login, device-type tracking (Desktop, Mobile, Tablet), and 180-day finite JWT authentication.
+- **Cross-Device Continuity & JWT Auth (`authService.ts`)**: Full registration, login, device-type tracking (Desktop, Mobile, Tablet), and 180-day finite JWT authentication. Direct dashboard landing on login.
 
 ---
 
 ## 3. What's Real vs. Simulated
 
-To guarantee both production viability and reliable, zero-dependency offline judging, the system cleanly separates live integrations from simulated fallbacks via a provider abstraction layer.
+To guarantee both live production viability and zero-dependency local development testing, the system cleanly separates live integrations from simulated fallbacks via a provider abstraction layer.
 
 | Layer / Feature | Real Implementation | Simulated / Mock Fallback | Notes |
 | :--- | :--- | :--- | :--- |
-| **Market Quotes** | `YahooFinanceProvider`<br>(Live quotes via `yahoo-finance2` for NSE/BSE and US stocks) | `SimulatedMarketDataProvider`<br>(Deterministic variations based on seed stock catalog) | Defaults to live Yahoo Finance and live RSS feeds (MARKET_PROVIDER/NEWS_PROVIDER unset). Set MARKET_PROVIDER=simulated and NEWS_PROVIDER=simulated if you'd prefer offline, rate-limit-free evaluation with deterministic demo data instead. |
+| **Market Quotes** | `YahooFinanceProvider`<br>(Live quotes via `yahoo-finance2` for NSE/BSE and US stocks) | `SimulatedMarketDataProvider`<br>(Deterministic variations based on seed stock catalog) | Defaults to live Yahoo Finance and live RSS feeds (MARKET_PROVIDER/NEWS_PROVIDER unset). Set `MARKET_PROVIDER=simulated` and `NEWS_PROVIDER=simulated` for offline development testing with deterministic demo data. |
 | **Financial News & Disclosures** | `NewsApiProvider`<br>(Live RSS feeds via `rss-parser` from Google News, Economic Times, Yahoo Finance) | `SimulatedNewsProvider`<br>(Pre-seeded realistic contextual news disclosures) | Configurable via `NEWS_PROVIDER=rss` or `simulated`. Defaults to live RSS feeds when unset. |
 | **Benchmark Indices in Digests** | Live Yahoo Finance quotes for `^NSEI` (Nifty 50), `^BSESN` (Sensex), `^INDIAVIX` (India VIX) | Returns null for any benchmark index that fails to fetch (verified via forced-failure testing), rather than caching a stale value or fabricating one. | Real index values and percentage changes embedded in synthesized digests. |
-| **Forward Return Calculations** | `historicalPatternService.ts`<br>Empirically computes forward returns and win rates from `StockPriceHistory` table rows | Returns `null` when empirical sample size is $< 5$ (zero fabrication) | Run `npm run prisma:seed-historical-demo` to populate historical sample bars for demo backtesting. |
+| **Forward Return Calculations** | `historicalPatternService.ts`<br>Empirically computes forward returns and win rates from `StockPriceHistory` table rows | Returns `null` when empirical sample size is $< 5$ (zero fabrication) | Run `npm run prisma:seed-historical-demo` to populate historical sample bars for backtesting. |
 | **Database & Persistence** | PostgreSQL via Prisma ORM (`Stock`, `Event`, `Insight`, `Digest`, `User`, `UserState`) | None | 100% live database persistence for all user watchlists, events, and insights. |
 | **Top-Level Highlights Banner** | None | `src/data/mockMarket.ts`<br>(Macro alerts, sector performance heatmap, broad index tiles) | The top Highlights banner uses static mock data on the frontend; individual stock data, the Attention Feed, Insights, and Digests are 100% backend-driven. |
 
@@ -193,7 +193,7 @@ cd "Smart Market Watchlist"
    | `NEWS_PROVIDER` | News feed provider (`simulated` or `rss`) | Leave unset (defaults to live RSS feeds); optional override: `simulated` for offline evaluation |
    | `NEWS_API_KEY` | Optional API key for NewsAPI | Leave blank when using default live RSS or `simulated` |
 
-   > **Recommendation for Evaluators**: Defaults to live Yahoo Finance and live RSS feeds (MARKET_PROVIDER/NEWS_PROVIDER unset). Set MARKET_PROVIDER=simulated and NEWS_PROVIDER=simulated if you'd prefer offline, rate-limit-free evaluation with deterministic demo data instead.
+   > **Configuration Note**: Defaults to live Yahoo Finance and live RSS feeds (`MARKET_PROVIDER` and `NEWS_PROVIDER` unset). Set `MARKET_PROVIDER=simulated` and `NEWS_PROVIDER=simulated` if you prefer offline, zero-network local development testing with deterministic demo data.
 
 3. Start PostgreSQL with Docker Compose:
    ```bash
@@ -352,4 +352,4 @@ Smart Market Watchlist/
 
 ## 10. License
 
-Built for **CODE 2026 Hackathon**. Open-source under the [MIT License](LICENSE).
+Open-source under the [MIT License](LICENSE).
