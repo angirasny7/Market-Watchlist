@@ -29,7 +29,7 @@ export const ProtectedRoute: React.FC<{ children?: React.ReactNode }> = ({ child
 
   // 3. Authentication check
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace state={{ from: location }} />;
+    return <Navigate to="/login" replace />;
   }
 
   // 4. Onboarding checks

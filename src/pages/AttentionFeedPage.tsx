@@ -56,13 +56,12 @@ export const AttentionFeedPage: React.FC = () => {
   // State: Real-time update pill
   const [newUpdatesAvailable, setNewUpdatesAvailable] = useState(0);
 
-  // State: Filter controls (Window is persisted in localStorage, defaults to toReview)
+  // State: Filter controls (Defaults to sinceLastVisit when navigating to feed)
   const [selectedWindow, setSelectedWindow] = useState<FeedTimeWindow>(() => {
-    const saved = localStorage.getItem('smw_feed_window');
-    if (saved === 'toReview' || saved === '24h' || saved === '7d' || saved === '30d' || saved === 'sinceLastVisit') {
-      return saved as FeedTimeWindow;
+    if (windowParam && ['toReview', '24h', '7d', '30d', 'sinceLastVisit'].includes(windowParam)) {
+      return windowParam as FeedTimeWindow;
     }
-    return 'toReview';
+    return 'sinceLastVisit';
   });
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -95,7 +94,9 @@ export const AttentionFeedPage: React.FC = () => {
   useEffect(() => {
     if (windowParam && ['toReview', '24h', '7d', '30d', 'sinceLastVisit'].includes(windowParam)) {
       setSelectedWindow(windowParam as FeedTimeWindow);
-      localStorage.setItem('smw_feed_window', windowParam);
+    } else if (!windowParam) {
+      // Always show 'sinceLastVisit' when returning from other pages without a window query param
+      setSelectedWindow('sinceLastVisit');
     }
   }, [windowParam]);
 
@@ -111,10 +112,9 @@ export const AttentionFeedPage: React.FC = () => {
     }
   }, [symbolParam]);
 
-  // Handle window change with persistence
+  // Handle window change
   const handleSelectWindow = (w: FeedTimeWindow) => {
     setSelectedWindow(w);
-    localStorage.setItem('smw_feed_window', w);
   };
 
   const handleDismissTip = () => {

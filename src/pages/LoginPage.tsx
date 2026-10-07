@@ -23,14 +23,12 @@ export const LoginPage: React.FC = () => {
   const [localError, setLocalError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // If already authenticated, redirect to destination or dashboard
+  // If already authenticated, always redirect to dashboard
   useEffect(() => {
     if (isAuthenticated) {
-      const from = (location.state as any)?.from?.pathname;
-      const destination = from && from !== '/login' && from !== '/register' ? from : '/';
-      navigate(destination, { replace: true });
+      navigate('/', { replace: true });
     }
-  }, [isAuthenticated, navigate, location]);
+  }, [isAuthenticated, navigate]);
 
   useEffect(() => {
     if ((location.state as any)?.demoFill) {
@@ -67,9 +65,7 @@ export const LoginPage: React.FC = () => {
 
     if (success) {
       fetchMarketData();
-      const from = (location.state as any)?.from?.pathname;
-      const destination = from && from !== '/login' && from !== '/register' ? from : '/';
-      navigate(destination, { replace: true });
+      navigate('/', { replace: true });
     }
   };
 
