@@ -39,6 +39,11 @@ export const AttentionFeedPage: React.FC = () => {
   const { userWatchlists, fetchUserWatchlists } = useMarketStore();
   const { addToast } = useToastStore();
 
+  // Read URL params (event deep link, symbol filter, or window override)
+  const eventParam = searchParams.get('event');
+  const symbolParam = searchParams.get('symbol');
+  const windowParam = searchParams.get('window');
+
   // State: Data
   const [items, setItems] = useState<FeedItem[]>([]);
   const [summary, setSummary] = useState<FeedSummary | null>(null);
@@ -85,11 +90,6 @@ export const AttentionFeedPage: React.FC = () => {
   const [ariaAnnouncement, setAriaAnnouncement] = useState('');
 
   const searchInputRef = useRef<HTMLInputElement>(null);
-
-  // Read URL params (event deep link, symbol filter, or window override)
-  const eventParam = searchParams.get('event');
-  const symbolParam = searchParams.get('symbol');
-  const windowParam = searchParams.get('window');
 
   useEffect(() => {
     if (windowParam && ['toReview', '24h', '7d', '30d', 'sinceLastVisit'].includes(windowParam)) {
