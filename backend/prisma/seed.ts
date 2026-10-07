@@ -649,7 +649,7 @@ async function main() {
   }
   console.log(`✓ Seeded ${newsData.length} news disclosures`);
 
-  // 4. Seed User, UserState & Watchlists (Alex N Profile)
+  // 4. Seed User, UserState & Watchlists (Alex Profile)
   const salt = await bcrypt.genSalt(10);
   const passwordHash = await bcrypt.hash('Alex@123', salt);
 
@@ -661,7 +661,7 @@ async function main() {
       id: 'usr_alex_001',
       email: 'alex@example.com',
       passwordHash,
-      name: 'Alex N',
+      name: 'Alex',
       role: UserRole.PRO,
       lastLoginAt: twoHoursAgo,
       previousLoginAt: fiveDaysAgo,
