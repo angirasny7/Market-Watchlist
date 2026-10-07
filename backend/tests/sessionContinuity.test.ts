@@ -14,7 +14,7 @@ describe('Session Continuity and Multi-Device State (Item 0.d, 0.e & Item 3)', (
   beforeAll(async () => {
     // Register user on Device A
     const reg = await authService.register({
-      name: 'Session Continuity Tester',
+      name: `Session Continuity Tester ${Date.now()}`,
       email: testEmail,
       password: testPassword,
       deviceInfo: { type: 'DESKTOP', name: 'MacBook Pro (Device A)' },

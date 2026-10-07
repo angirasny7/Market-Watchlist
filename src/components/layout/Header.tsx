@@ -175,7 +175,7 @@ export const Header: React.FC<HeaderProps> = () => {
             title="Refresh market data"
             className="p-1.5 rounded-lg border border-border bg-surface text-slate-300 hover:text-white hover:border-slate-600 disabled:opacity-50 transition-colors"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-indigo-400' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-emerald-400' : ''}`} />
           </button>
         </div>
 
@@ -191,7 +191,7 @@ export const Header: React.FC<HeaderProps> = () => {
             aria-label="User profile and session menu"
             className="flex items-center gap-1.5 p-1 sm:px-2.5 sm:py-1 rounded-lg border border-border bg-surface hover:bg-surface-hover hover:border-slate-600 transition-colors text-xs text-slate-200"
           >
-            <div className="w-6 h-6 rounded-full bg-indigo-500/20 border border-indigo-500/40 text-indigo-300 flex items-center justify-center font-semibold text-xs">
+            <div className="w-6 h-6 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center font-semibold text-xs">
               {userName.charAt(0).toUpperCase()}
             </div>
             <span className="hidden sm:inline font-medium max-w-[100px] truncate">{userName}</span>
@@ -204,7 +204,7 @@ export const Header: React.FC<HeaderProps> = () => {
               role="dialog"
               aria-modal="true"
               aria-label="Profile and session details"
-              className="absolute right-0 mt-2 w-72 sm:w-80 rounded-2xl bg-[#111622] border border-slate-700 shadow-2xl shadow-black/90 p-4 z-50 animate-fade-in space-y-3.5"
+              className="absolute right-0 mt-2 w-72 sm:w-80 rounded-2xl bg-[#0D1217] border border-[#1E293B] shadow-2xl shadow-black/90 p-4 z-50 animate-fade-in space-y-3.5"
             >
               {/* User Identity Header */}
               <div className="pb-3 border-b border-border/80">
@@ -226,7 +226,7 @@ export const Header: React.FC<HeaderProps> = () => {
                       <div>
                         <div className="font-medium text-slate-200 flex items-center gap-1">
                           <span>{detectedDevice.name}</span>
-                          <span className="text-[10px] text-indigo-400 font-mono">(This device)</span>
+                          <span className="text-[10px] text-emerald-400 font-mono">(This device)</span>
                         </div>
                         <div className="text-[11px] text-slate-400">Current Session</div>
                       </div>

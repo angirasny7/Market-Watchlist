@@ -24,7 +24,7 @@ describe('Public Endpoints & Provider Quota Protection (Item 3)', () => {
 
     const timestamp = Date.now();
     const reg = await authService.register({
-      name: 'Quota Test User',
+      name: `Quota Test User ${timestamp}`,
       email: `quota_${timestamp}@providerquota.test`,
       password: 'Password123!@#',
     });

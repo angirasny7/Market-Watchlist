@@ -8,18 +8,18 @@ export default {
   theme: {
     extend: {
       colors: {
-        background: '#0B0E14',
+        background: '#070B0E',
         surface: {
-          DEFAULT: '#111622',
-          subtle: '#0E121C',
-          hover: '#171E2E',
-          active: '#1E273B',
-          elevated: '#141A29',
+          DEFAULT: '#0D1217',
+          subtle: '#090D12',
+          hover: '#121820',
+          active: '#16202A',
+          elevated: '#0F151D',
         },
         border: {
-          DEFAULT: '#1E2638',
-          subtle: '#161B26',
-          strong: '#2A354C',
+          DEFAULT: '#1E293B',
+          subtle: '#141E28',
+          strong: '#2A3B4D',
         },
         fintech: {
           green: {

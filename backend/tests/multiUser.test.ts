@@ -22,7 +22,7 @@ describe('Multi-User Isolation & Ownership Verification Suite', () => {
 
     // 1. Register User A
     const regA = await authService.register({
-      name: 'User Alpha',
+      name: `User Alpha ${timestamp}`,
       email: `multi_a_${timestamp}@test.com`,
       password: 'Password123!@#',
     });
@@ -34,7 +34,7 @@ describe('Multi-User Isolation & Ownership Verification Suite', () => {
 
     // 2. Register User B
     const regB = await authService.register({
-      name: 'User Beta',
+      name: `User Beta ${timestamp}`,
       email: `multi_b_${timestamp}@test.com`,
       password: 'Password123!@#',
     });
@@ -378,7 +378,7 @@ describe('Multi-User Isolation & Ownership Verification Suite', () => {
 
     // User C registers and adds stock now
     const regC = await authService.register({
-      name: 'User Charlie',
+      name: `User Charlie ${Date.now()}`,
       email: `multi_c_${Date.now()}@test.com`,
       password: 'Password123!@#',
     });
@@ -427,7 +427,7 @@ describe('Multi-User Isolation & Ownership Verification Suite', () => {
     });
 
     const regD = await authService.register({
-      name: 'User David',
+      name: `User David ${Date.now()}`,
       email: `multi_d_${Date.now()}@test.com`,
       password: 'Password123!@#',
     });
@@ -491,7 +491,7 @@ describe('Multi-User Isolation & Ownership Verification Suite', () => {
     });
 
     const regE = await authService.register({
-      name: 'User Earliest',
+      name: `User Earliest ${Date.now()}`,
       email: `multi_e_${Date.now()}@test.com`,
       password: 'Password123!@#',
     });
@@ -548,7 +548,7 @@ describe('Multi-User Isolation & Ownership Verification Suite', () => {
     });
 
     const regF = await authService.register({
-      name: 'User Reset',
+      name: `User Reset ${Date.now()}`,
       email: `multi_f_${Date.now()}@test.com`,
       password: 'Password123!@#',
     });

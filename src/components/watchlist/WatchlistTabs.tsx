@@ -75,7 +75,7 @@ export const WatchlistTabs: React.FC<WatchlistTabsProps> = ({
                 key={wl.id}
                 className={`flex items-center gap-1.5 pl-3 pr-1 py-1 rounded-lg text-xs sm:text-sm font-medium transition-all ${
                   isActive
-                    ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 shadow-sm'
+                    ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shadow-sm'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-surface-hover border border-transparent'
                 }`}
               >
@@ -88,7 +88,7 @@ export const WatchlistTabs: React.FC<WatchlistTabsProps> = ({
                   <span
                     className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full font-semibold ${
                       isActive
-                        ? 'bg-indigo-500/20 text-indigo-200'
+                        ? 'bg-emerald-500/20 text-emerald-300'
                         : 'bg-zinc-800 text-zinc-400'
                     }`}
                   >

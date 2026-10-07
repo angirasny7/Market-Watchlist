@@ -25,7 +25,7 @@ describe('Heartbeat & Session Cursor Isolation (Item 5)', () => {
 
     const timestamp = Date.now();
     const reg = await authService.register({
-      name: 'Heartbeat Test User',
+      name: `Heartbeat Test User ${timestamp}`,
       email: `heartbeat_${timestamp}@session.test`,
       password: 'Password123!@#',
     });

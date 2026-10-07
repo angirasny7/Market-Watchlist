@@ -174,7 +174,7 @@ export const OnboardingPage: React.FC = () => {
             <span
               className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold ${
                 step === 1
-                  ? 'bg-indigo-600 text-white'
+                  ? 'bg-emerald-500 text-slate-950 font-bold'
                   : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
               }`}
             >
@@ -195,7 +195,7 @@ export const OnboardingPage: React.FC = () => {
             <span
               className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold ${
                 step === 2
-                  ? 'bg-indigo-600 text-white'
+                  ? 'bg-emerald-500 text-slate-950 font-bold'
                   : 'bg-surface-subtle text-slate-500 border border-border'
               }`}
             >
@@ -225,7 +225,7 @@ export const OnboardingPage: React.FC = () => {
           {/* Starter Packs */}
           <div className="space-y-2.5">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+              <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
               <span>Quick Starter Packs</span>
             </h3>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
@@ -237,7 +237,7 @@ export const OnboardingPage: React.FC = () => {
                     onClick={() => handleToggleTemplate(tmpl)}
                     className={`p-3 rounded-xl border text-left transition-all ${
                       isSelected
-                        ? 'bg-indigo-600/15 border-indigo-500 text-slate-100 shadow-sm'
+                        ? 'bg-emerald-500/15 border-emerald-500/40 text-slate-100 shadow-sm'
                         : 'bg-surface border-border hover:border-slate-700 text-slate-300'
                     }`}
                   >
@@ -272,7 +272,7 @@ export const OnboardingPage: React.FC = () => {
 
             {loadingStocks ? (
               <div className="p-8 text-center text-xs text-slate-400">
-                <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-indigo-400" />
+                <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-emerald-400" />
                 Loading stocks...
               </div>
             ) : (
@@ -285,7 +285,7 @@ export const OnboardingPage: React.FC = () => {
                       onClick={() => handleToggleStock(stock.symbol)}
                       className={`p-2.5 rounded-xl border flex items-center justify-between cursor-pointer transition-colors ${
                         isChecked
-                          ? 'bg-indigo-600/10 border-indigo-500/50 text-slate-100'
+                          ? 'bg-emerald-500/10 border-emerald-500/40 text-slate-100'
                           : 'bg-surface border-border hover:border-slate-700 text-slate-300'
                       }`}
                     >
@@ -302,7 +302,7 @@ export const OnboardingPage: React.FC = () => {
                         <div
                           className={`w-5 h-5 rounded-md flex items-center justify-center border transition-colors ${
                             isChecked
-                              ? 'bg-indigo-600 border-indigo-500 text-white'
+                              ? 'bg-emerald-500 border-emerald-400 text-slate-950 font-bold'
                               : 'bg-surface-subtle border-border text-transparent'
                           }`}
                         >
@@ -330,7 +330,7 @@ export const OnboardingPage: React.FC = () => {
               value={watchlistName}
               onChange={(e) => setWatchlistName(e.target.value)}
               placeholder="e.g. Primary Watchlist"
-              className="w-full max-w-md px-3.5 py-2.5 bg-surface border border-border rounded-xl text-sm font-semibold text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
+              className="w-full max-w-md px-3.5 py-2.5 bg-surface border border-border rounded-xl text-sm font-semibold text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
             />
           </div>
 
@@ -341,7 +341,7 @@ export const OnboardingPage: React.FC = () => {
               </span>
               <button
                 onClick={() => setStep(1)}
-                className="text-xs text-indigo-400 hover:text-indigo-300 font-medium"
+                className="text-xs text-emerald-400 hover:text-emerald-300 font-medium"
               >
                 + Add or remove stocks
               </button>
@@ -393,7 +393,7 @@ export const OnboardingPage: React.FC = () => {
               setStep(2);
             }}
             disabled={selectedSymbols.size === 0}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-semibold transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs sm:text-sm font-bold transition-colors shadow-md shadow-emerald-500/20 disabled:opacity-50"
           >
             <span>Continue ({selectedSymbols.size} selected)</span>
             <ArrowRight className="w-4 h-4" />
@@ -402,7 +402,7 @@ export const OnboardingPage: React.FC = () => {
           <button
             onClick={handleCompleteSetup}
             disabled={isSubmitting || selectedSymbols.size === 0}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-semibold transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs sm:text-sm font-bold transition-colors shadow-md shadow-emerald-500/20 disabled:opacity-50"
           >
             {isSubmitting ? (
               <>

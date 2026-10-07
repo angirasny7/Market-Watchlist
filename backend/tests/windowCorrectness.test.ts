@@ -14,7 +14,7 @@ describe('Publish Time and Window Correctness (Part 2)', () => {
   beforeAll(async () => {
     // Register test user
     const reg = await authService.register({
-      name: 'Window Tester',
+      name: `Window Tester ${Date.now()}`,
       email: testEmail,
       password: testPassword,
     });

@@ -37,12 +37,16 @@ export const AppLayout: React.FC = () => {
   const digestEvents = activeDigest && typeof getDigestEvents === 'function' ? getDigestEvents(activeDigest.id) : [];
 
   return (
-    <div className="min-h-screen bg-background text-slate-100 flex overflow-hidden">
+    <div className="min-h-screen bg-background text-slate-100 flex overflow-hidden relative selection:bg-emerald-500/30">
+      {/* Ambient background glows matching brand aesthetic */}
+      <div className="absolute -top-32 right-1/4 w-[36rem] h-[36rem] bg-emerald-600/5 rounded-full blur-[160px] pointer-events-none" />
+      <div className="absolute -bottom-32 -left-20 w-[40rem] h-[40rem] bg-teal-600/5 rounded-full blur-[170px] pointer-events-none" />
+
       {/* Desktop Sidebar (>= lg) */}
-      <Sidebar className="hidden lg:flex" />
+      <Sidebar className="hidden lg:flex z-20" />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden z-10">
         <Header />
 
         <main className="flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-5 space-y-5 pb-20 lg:pb-8">

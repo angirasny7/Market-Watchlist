@@ -35,7 +35,7 @@ describe('Complete Route Ownership & Resource Isolation Test Matrix (Item 5)', (
 
     // 1. Register User A
     const regA = await authService.register({
-      name: 'Owner User A',
+      name: `Owner User A ${timestamp}`,
       email: `owner_a_${timestamp}@ownership.test`,
       password: 'Password123!@#',
     });
@@ -48,7 +48,7 @@ describe('Complete Route Ownership & Resource Isolation Test Matrix (Item 5)', (
 
     // 2. Register User B
     const regB = await authService.register({
-      name: 'Attacker User B',
+      name: `Attacker User B ${timestamp}`,
       email: `attacker_b_${timestamp}@ownership.test`,
       password: 'Password123!@#',
     });

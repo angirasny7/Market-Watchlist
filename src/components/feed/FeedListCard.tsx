@@ -83,9 +83,9 @@ export const FeedListCard: React.FC<FeedListCardProps> = ({
         }
       }}
       className={cn(
-        'group relative p-4 rounded-xl bg-surface border transition-all duration-150 cursor-pointer text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500',
+        'group relative p-4 rounded-xl bg-surface border transition-all duration-150 cursor-pointer text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500',
         isSelected
-          ? 'border-indigo-500 ring-2 ring-indigo-500/30 bg-surface-subtle shadow-lg'
+          ? 'border-emerald-500/80 ring-2 ring-emerald-500/20 bg-surface-subtle shadow-lg'
           : item.isUnread
           ? 'border-slate-700/90 hover:border-slate-600 bg-surface/95 hover:bg-surface-hover/90 shadow-sm'
           : 'border-border/60 hover:border-border bg-surface/60 hover:bg-surface/90 opacity-90 hover:opacity-100'
@@ -100,7 +100,7 @@ export const FeedListCard: React.FC<FeedListCardProps> = ({
             {item.isUnread ? (
               <span
                 title="Unread item"
-                className="w-2 h-2 rounded-full bg-indigo-500 ring-2 ring-indigo-500/30 shrink-0"
+                className="w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-emerald-400/30 shrink-0"
               />
             ) : (
               <span className="w-2 h-2 rounded-full bg-transparent shrink-0" />
@@ -251,7 +251,7 @@ export const FeedListCard: React.FC<FeedListCardProps> = ({
               title="Open supporting news or market source website"
               aria-label="Open supporting news or market source website in new tab"
               onClick={(e) => e.stopPropagation()}
-              className="p-1.5 rounded-lg border border-border/60 bg-surface-subtle/60 text-slate-400 hover:text-indigo-300 hover:bg-surface-hover hover:border-border transition-all"
+              className="p-1.5 rounded-lg border border-border/60 bg-surface-subtle/60 text-slate-400 hover:text-emerald-300 hover:bg-surface-hover hover:border-border transition-all"
             >
               <ExternalLink className="w-3.5 h-3.5" />
             </a>
@@ -287,7 +287,7 @@ export const FeedListCard: React.FC<FeedListCardProps> = ({
               className={cn(
                 'p-1.5 rounded-lg border transition-all',
                 !item.isUnread
-                  ? 'bg-indigo-500/15 border-indigo-500/30 text-indigo-400 shadow-sm'
+                  ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400 shadow-sm'
                   : 'bg-surface-subtle/60 border-border/60 text-slate-400 hover:text-slate-200 hover:bg-surface-hover hover:border-border'
               )}
             >
@@ -312,7 +312,7 @@ export const FeedListCard: React.FC<FeedListCardProps> = ({
           </div>
 
           {/* View Details Link */}
-          <div className="flex items-center gap-0.5 text-xs text-indigo-400 group-hover:text-indigo-300 font-semibold transition-colors mt-0.5">
+          <div className="flex items-center gap-0.5 text-xs text-emerald-400 group-hover:text-emerald-300 font-semibold transition-colors mt-0.5">
             <span>View details</span>
             <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
           </div>

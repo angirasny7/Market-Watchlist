@@ -170,10 +170,10 @@ export const FeedHeaderBar: React.FC<FeedHeaderBarProps> = ({
 
             {/* Session Visit Popover */}
             {isSessionPopoverOpen && (
-              <div className="absolute left-0 top-full mt-2 w-80 p-4 rounded-2xl bg-[#111622] border border-slate-700/90 shadow-2xl shadow-black/95 z-50 space-y-3 animate-fade-in text-left">
+              <div className="absolute left-0 top-full mt-2 w-80 p-4 rounded-2xl bg-[#0D1217] border border-[#1E293B] shadow-2xl shadow-black/95 z-50 space-y-3 animate-fade-in text-left">
                 <div className="flex items-center justify-between border-b border-border/80 pb-2.5">
                   <span className="text-xs font-bold text-slate-100 flex items-center gap-1.5">
-                    <Calendar className="w-3.5 h-3.5 text-indigo-400" />
+                    <Calendar className="w-3.5 h-3.5 text-emerald-400" />
                     Previous Session Details
                   </span>
                   <button
@@ -214,11 +214,11 @@ export const FeedHeaderBar: React.FC<FeedHeaderBarProps> = ({
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-400">Time Zone:</span>
-                    <span className="font-mono text-indigo-300">
+                    <span className="font-mono text-emerald-400">
                       {userTz} ({tzAbbr})
                     </span>
                   </div>
-                  <div className="pt-2 text-[11px] text-indigo-300 font-medium border-t border-border/60">
+                  <div className="pt-2 text-[11px] text-emerald-400 font-medium border-t border-border/60">
                     Everything after this time appears under 'Since last visit'.
                   </div>
                 </div>
@@ -259,7 +259,7 @@ export const FeedHeaderBar: React.FC<FeedHeaderBarProps> = ({
 
           {/* Status Popover */}
           {isStatusPopoverOpen && (
-            <div className="absolute right-0 top-full mt-2 w-80 p-4 rounded-2xl bg-[#111622] border border-slate-700/90 shadow-2xl shadow-black/95 z-50 space-y-3 animate-fade-in text-left">
+            <div className="absolute right-0 top-full mt-2 w-80 p-4 rounded-2xl bg-[#0D1217] border border-[#1E293B] shadow-2xl shadow-black/95 z-50 space-y-3 animate-fade-in text-left">
               <div className="flex items-center justify-between border-b border-border/80 pb-2.5">
                 <span className="text-xs font-bold text-slate-100 flex items-center gap-1.5">
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
@@ -318,7 +318,7 @@ export const FeedHeaderBar: React.FC<FeedHeaderBarProps> = ({
             {renderSummarySentence()}
           </p>
           {summary && summary.unreadClusters > 0 && (
-            <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-mono">
+            <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-mono">
               {summary.unreadClusters} unread
             </span>
           )}
@@ -334,14 +334,14 @@ export const FeedHeaderBar: React.FC<FeedHeaderBarProps> = ({
             title="Refresh feed"
             className="p-2 rounded-xl bg-surface border border-border hover:border-slate-600 text-slate-300 hover:text-white transition-all disabled:opacity-50"
           >
-            <RefreshCw className={cn('w-4 h-4', isRefreshing && 'animate-spin text-indigo-400')} />
+            <RefreshCw className={cn('w-4 h-4', isRefreshing && 'animate-spin text-emerald-400')} />
           </button>
 
           <button
             type="button"
             onClick={onMarkCaughtUp}
             disabled={isMarkingCaughtUp || summary?.unreadClusters === 0}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition-all shadow-md shadow-indigo-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition-all shadow-md shadow-emerald-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <CheckCheck className={cn('w-3.5 h-3.5', isMarkingCaughtUp && 'animate-bounce')} />
             <span>{isMarkingCaughtUp ? 'Marking read...' : "I'm caught up"}</span>
@@ -359,7 +359,7 @@ export const FeedHeaderBar: React.FC<FeedHeaderBarProps> = ({
             className={cn(
               'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors',
               selectedWindow === w.id
-                ? 'bg-indigo-600 text-white shadow-sm'
+                ? 'bg-emerald-500 text-slate-950 font-bold shadow-sm shadow-emerald-500/20'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-surface-hover'
             )}
           >
@@ -369,7 +369,7 @@ export const FeedHeaderBar: React.FC<FeedHeaderBarProps> = ({
                 className={cn(
                   'px-1.5 py-0.2 rounded-full text-[10px] font-mono',
                   selectedWindow === w.id
-                    ? 'bg-indigo-700/80 text-indigo-100'
+                    ? 'bg-emerald-600/60 text-slate-950 font-bold'
                     : 'bg-surface-subtle text-slate-400 border border-border/60'
                 )}
               >

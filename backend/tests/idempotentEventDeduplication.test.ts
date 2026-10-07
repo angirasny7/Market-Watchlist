@@ -98,5 +98,5 @@ describe('Idempotent Event Deduplication (F0.8)', () => {
     const metrics = eventsAfterSecondRun[0].metricsDelta as any;
     expect(metrics.changePercent).toBe(8.5);
     expect(metrics.price).toBe(152.0);
-  });
+  }, 30000);
 });

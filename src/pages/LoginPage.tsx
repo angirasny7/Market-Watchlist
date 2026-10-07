@@ -3,18 +3,12 @@ import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
 import { useMarketStore } from '../store/useMarketStore';
 import {
-  Activity,
   Lock,
   Mail,
   ArrowRight,
   AlertCircle,
   RefreshCw,
-  Zap,
-  FileText,
-  Bell,
-  BrainCircuit,
   ShieldCheck,
-  CheckCircle2,
   Sparkles,
 } from 'lucide-react';
 
@@ -38,8 +32,16 @@ export const LoginPage: React.FC = () => {
     }
   }, [isAuthenticated, navigate, location]);
 
+  useEffect(() => {
+    if ((location.state as any)?.demoFill) {
+      setEmail('alex@example.com');
+      setPassword('Alex1@123');
+      setLocalError(null);
+    }
+  }, [location.state]);
+
   const handleDemoFill = () => {
-    setEmail('alex1@example.com');
+    setEmail('alex@example.com');
     setPassword('Alex1@123');
     setLocalError(null);
   };
@@ -72,240 +74,326 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#0B0F17] text-slate-100 flex items-center justify-center p-4 sm:p-6 lg:p-12 relative overflow-hidden">
-      {/* Subtle Background Glow Accents */}
-      <div className="absolute -top-40 -left-40 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-sky-600/10 rounded-full blur-3xl pointer-events-none" />
+    <div className="min-h-screen bg-[#070B0E] text-slate-100 flex items-center justify-center p-4 sm:p-6 lg:p-12 relative overflow-hidden selection:bg-emerald-500/30 font-sans">
+      {/* ========================================================= */}
+      {/* AMBIENT BACKGROUND GLOWS & CURVED EMERALD WAVE LINES      */}
+      {/* ========================================================= */}
+      {/* Ambient background glows */}
+      <div className="absolute -top-24 right-1/4 w-[36rem] h-[36rem] bg-emerald-600/10 rounded-full blur-[140px] pointer-events-none" />
+      <div className="absolute -bottom-24 -left-20 w-[40rem] h-[40rem] bg-teal-600/10 rounded-full blur-[150px] pointer-events-none" />
 
-      <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center z-10">
-        {/* ========================================================= */}
-        {/* LEFT PART: MAJOR WEBSITE INFORMATION & CAPABILITIES SHOWCASE */}
-        {/* ========================================================= */}
-        <div className="lg:col-span-7 space-y-6">
-          {/* Brand Header */}
-          <div className="space-y-3">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 text-xs font-semibold uppercase tracking-wider shadow-sm">
-              <Activity className="w-4 h-4 text-indigo-400 animate-pulse" />
-              <span>Smart Market Intelligence</span>
+      {/* Background Curved Wave Vectors */}
+      <svg
+        className="absolute inset-0 w-full h-full pointer-events-none opacity-40 sm:opacity-60"
+        xmlns="http://www.w3.org/2000/svg"
+        fill="none"
+        preserveAspectRatio="none"
+        viewBox="0 0 1440 900"
+      >
+        <defs>
+          <linearGradient id="waveGradLeft" x1="0%" y1="100%" x2="60%" y2="0%">
+            <stop offset="0%" stopColor="#10B981" stopOpacity="0.8" />
+            <stop offset="60%" stopColor="#2DD4BF" stopOpacity="0.4" />
+            <stop offset="100%" stopColor="#070B0E" stopOpacity="0" />
+          </linearGradient>
+          <linearGradient id="waveGradRight" x1="100%" y1="0%" x2="50%" y2="80%">
+            <stop offset="0%" stopColor="#10B981" stopOpacity="0.6" />
+            <stop offset="100%" stopColor="#070B0E" stopOpacity="0" />
+          </linearGradient>
+          <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="4" result="blur" />
+            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+          </filter>
+        </defs>
+
+        {/* Top-Right Ambient Arc */}
+        <path
+          d="M 900, -50 C 1100, 80 1300, 120 1500, 30"
+          stroke="url(#waveGradRight)"
+          strokeWidth="1.5"
+          filter="url(#glow)"
+        />
+        <path
+          d="M 800, -80 C 1050, 140 1280, 200 1500, 100"
+          stroke="url(#waveGradRight)"
+          strokeWidth="1"
+          opacity="0.5"
+        />
+
+        {/* Bottom-Left Flowing Signal Waves */}
+        <path
+          d="M -100, 750 C 150, 500 280, 680 420, 850 C 520, 960 700, 880 850, 860"
+          stroke="url(#waveGradLeft)"
+          strokeWidth="1.5"
+          filter="url(#glow)"
+        />
+        <path
+          d="M -80, 840 C 180, 600 320, 750 480, 900"
+          stroke="url(#waveGradLeft)"
+          strokeWidth="1"
+          opacity="0.6"
+        />
+
+        {/* Constellation Signal Dots along the wave */}
+        <circle cx="70" cy="710" r="4" fill="#34D399" filter="url(#glow)" />
+        <circle cx="410" cy="840" r="3.5" fill="#34D399" filter="url(#glow)" />
+        <circle cx="780" cy="865" r="3" fill="#34D399" filter="url(#glow)" />
+      </svg>
+
+      <div className="w-full max-w-6xl z-10 py-6">
+        {/* Top Logo / Brand */}
+        <div className="mb-8 sm:mb-12 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            {/* 3-bar mint equalizer icon */}
+            <div className="flex items-end gap-1 h-5">
+              <span className="w-1.5 h-3 bg-emerald-400 rounded-xs" />
+              <span className="w-1.5 h-5 bg-emerald-400 rounded-xs" />
+              <span className="w-1.5 h-4 bg-emerald-400 rounded-xs" />
             </div>
-
-            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-white leading-tight">
-              SignalLens <span className="text-indigo-400">Watchlist</span>
-            </h1>
-
-            <p className="text-base sm:text-lg text-slate-300 font-medium leading-relaxed">
-              A watchlist that tells you <span className="text-white font-semibold">what changed</span>,{' '}
-              <span className="text-white font-semibold">why it changed</span>, and{' '}
-              <span className="text-white font-semibold">whether it matters</span> — not just the latest price.
-            </p>
-          </div>
-
-          {/* Core Feature Pillars */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-2">
-            {/* Pillar 1 */}
-            <div className="p-4 rounded-xl bg-[#131926]/90 border border-slate-800/80 hover:border-slate-700 transition-all space-y-1.5 shadow-sm">
-              <div className="flex items-center gap-2 text-indigo-400 font-semibold text-sm">
-                <div className="p-1.5 rounded-lg bg-indigo-500/15 border border-indigo-500/30">
-                  <Zap className="w-4 h-4 text-indigo-400" />
-                </div>
-                <span>Anomaly Detection</span>
-              </div>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Flags price surges (≥5%), volume spikes (2× 20D average), 52-week extremes, and abnormal volatility.
-              </p>
+            <div>
+              <div className="text-xl font-extrabold tracking-tight text-white leading-none">SignalLens</div>
+              <div className="text-[11px] font-medium text-slate-400 mt-0.5 tracking-wide">Market Change Intelligence</div>
             </div>
-
-            {/* Pillar 2 */}
-            <div className="p-4 rounded-xl bg-[#131926]/90 border border-slate-800/80 hover:border-slate-700 transition-all space-y-1.5 shadow-sm">
-              <div className="flex items-center gap-2 text-sky-400 font-semibold text-sm">
-                <div className="p-1.5 rounded-lg bg-sky-500/15 border border-sky-500/30">
-                  <FileText className="w-4 h-4 text-sky-400" />
-                </div>
-                <span>Context & Evidence</span>
-              </div>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Corroborates movements with live regulatory filings, verified financial news, and confidence scores.
-              </p>
-            </div>
-
-            {/* Pillar 3 */}
-            <div className="p-4 rounded-xl bg-[#131926]/90 border border-slate-800/80 hover:border-slate-700 transition-all space-y-1.5 shadow-sm">
-              <div className="flex items-center gap-2 text-amber-400 font-semibold text-sm">
-                <div className="p-1.5 rounded-lg bg-amber-500/15 border border-amber-500/30">
-                  <Bell className="w-4 h-4 text-amber-400" />
-                </div>
-                <span>Real-Time Alerts</span>
-              </div>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Instant SSE push notifications for crossing targets, percentage moves, and upcoming corporate events.
-              </p>
-            </div>
-
-            {/* Pillar 4 */}
-            <div className="p-4 rounded-xl bg-[#131926]/90 border border-slate-800/80 hover:border-slate-700 transition-all space-y-1.5 shadow-sm">
-              <div className="flex items-center gap-2 text-emerald-400 font-semibold text-sm">
-                <div className="p-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30">
-                  <BrainCircuit className="w-4 h-4 text-emerald-400" />
-                </div>
-                <span>Market Memory</span>
-              </div>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Catch up seamlessly with "since last visit" gap tracking and long-term intelligence history.
-              </p>
-            </div>
-          </div>
-
-          {/* Trust & Provenance Badges */}
-          <div className="flex items-center gap-2 flex-wrap pt-1 text-[11px] text-slate-400 font-mono">
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-300">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Real-time NSE & US Data
-            </span>
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-300">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Zero Fabricated Stats
-            </span>
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-300">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Isolated User Watchlists
-            </span>
           </div>
         </div>
 
-        {/* ========================================================= */}
-        {/* RIGHT PART: SIGN IN FORM & USER GUIDANCE DIRECTIONS */}
-        {/* ========================================================= */}
-        <div className="lg:col-span-5">
-          <div className="w-full bg-[#111622] border border-slate-700/80 rounded-2xl shadow-2xl p-6 sm:p-8 space-y-6">
-            {/* Header & Guidance Instructions */}
-            <div className="space-y-2">
-              <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
-                Sign in to your account
-              </h2>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Enter your credentials below to access your live feed, watchlists, and alerts.
+        {/* Main 2-Column Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14 items-center">
+          {/* ========================================================= */}
+          {/* LEFT PART: HEADLINE & TIMELINE MARKET SIGNALS             */}
+          {/* ========================================================= */}
+          <div className="lg:col-span-7 space-y-7">
+            {/* Main Headline */}
+            <div className="space-y-3">
+              <h1 className="text-4xl sm:text-5xl lg:text-[52px] font-extrabold tracking-tight text-white leading-[1.08]">
+                What happened <br />
+                <span className="text-[#34D399]">since you left?</span>
+              </h1>
+              <p className="text-sm sm:text-base text-slate-400 max-w-lg leading-relaxed font-normal">
+                SignalLens tracks meaningful changes in your watchlist and explains why they happened.
               </p>
             </div>
 
-            {/* Direction / Quick-Start Instruction Card */}
-            <div className="p-3.5 rounded-xl bg-indigo-950/40 border border-indigo-500/25 space-y-2 text-xs">
-              <div className="flex items-center justify-between">
-                <span className="font-semibold text-indigo-300 flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-                  Quick Directions:
-                </span>
+            {/* Timeline Feed Container */}
+            <div className="relative pl-2 sm:pl-4 space-y-4 pt-1">
+              {/* Vertical connecting line */}
+              <div className="absolute left-[62px] sm:left-[70px] top-6 bottom-6 w-px bg-slate-800" />
+
+              {/* Node 1: TATAMOTORS */}
+              <div className="flex items-start gap-4 sm:gap-5 relative group">
+                <div className="w-12 sm:w-14 pt-3.5 text-right text-xs text-slate-400 font-medium shrink-0">
+                  9:12 AM
+                </div>
+                {/* Timeline Dot */}
+                <div className="relative z-10 mt-4 -ml-1.5 shrink-0 flex items-center justify-center">
+                  <div className="w-2.5 h-2.5 rounded-full bg-[#34D399] shadow-[0_0_8px_#34D399]" />
+                </div>
+                {/* Card */}
+                <div className="flex-1 bg-[#0D131A]/90 hover:bg-[#101721] border border-slate-800/90 rounded-2xl p-4 transition-all duration-200 shadow-md">
+                  <div className="flex items-center gap-3">
+                    {/* Tata blue emblem */}
+                    <div className="w-9 h-9 rounded-full bg-[#0055A5] flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-inner">
+                      <span className="font-extrabold tracking-tighter">T</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-bold text-white tracking-wide">TATAMOTORS</span>
+                        <span className="text-sm font-bold text-[#34D399]">+10.2%</span>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">
+                        Government approves new EV subsidy scheme boosting demand outlook.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Node 2: INFY */}
+              <div className="flex items-start gap-4 sm:gap-5 relative group">
+                <div className="w-12 sm:w-14 pt-3.5 text-right text-xs text-slate-400 font-medium shrink-0">
+                  10:44 AM
+                </div>
+                {/* Timeline Dot */}
+                <div className="relative z-10 mt-4 -ml-1.5 shrink-0 flex items-center justify-center">
+                  <div className="w-2.5 h-2.5 rounded-full bg-[#F43F5E] shadow-[0_0_8px_#F43F5E]" />
+                </div>
+                {/* Card */}
+                <div className="flex-1 bg-[#0D131A]/90 hover:bg-[#101721] border border-slate-800/90 rounded-2xl p-4 transition-all duration-200 shadow-md">
+                  <div className="flex items-center gap-3">
+                    {/* Infosys emblem */}
+                    <div className="w-9 h-9 rounded-full bg-[#007CC3] flex items-center justify-center text-white font-bold text-[9px] shrink-0 shadow-inner px-1 text-center">
+                      <span className="font-semibold tracking-tighter">Infosys</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-bold text-white tracking-wide">INFY</span>
+                        <span className="text-sm font-bold text-[#F43F5E]">-4.8%</span>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">
+                        US tech spending forecast lowered by analysts.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Node 3: RELIANCE */}
+              <div className="flex items-start gap-4 sm:gap-5 relative group">
+                <div className="w-12 sm:w-14 pt-3.5 text-right text-xs text-slate-400 font-medium shrink-0">
+                  12:31 PM
+                </div>
+                {/* Timeline Dot */}
+                <div className="relative z-10 mt-4 -ml-1.5 shrink-0 flex items-center justify-center">
+                  <div className="w-2.5 h-2.5 rounded-full bg-[#34D399] shadow-[0_0_8px_#34D399]" />
+                </div>
+                {/* Card */}
+                <div className="flex-1 bg-[#0D131A]/90 hover:bg-[#101721] border border-slate-800/90 rounded-2xl p-4 transition-all duration-200 shadow-md">
+                  <div className="flex items-center gap-3">
+                    {/* Reliance gold emblem */}
+                    <div className="w-9 h-9 rounded-full bg-[#9A7036] flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-inner">
+                      <span className="font-extrabold tracking-tighter">R</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-bold text-white tracking-wide">RELIANCE</span>
+                        <span className="text-sm font-bold text-[#34D399]">+3.1%</span>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">
+                        New strategic partnership in renewable energy announced.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ========================================================= */}
+          {/* RIGHT PART: SIGN IN CARD                                  */}
+          {/* ========================================================= */}
+          <div className="lg:col-span-5">
+            <div className="w-full bg-[#0D1217]/95 backdrop-blur-2xl border border-slate-800 rounded-3xl p-7 sm:p-9 space-y-6 shadow-2xl relative">
+              {/* Header */}
+              <div className="space-y-1.5">
+                <h2 className="text-2xl font-bold text-white tracking-tight">
+                  Welcome back
+                </h2>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Sign in to access your monitored stocks, custom watchlists, and live alerts.
+                </p>
+              </div>
+
+              {/* Want to explore instantly? Box */}
+              <div className="flex items-center justify-between p-3 sm:p-3.5 rounded-2xl bg-[#0F1622]/90 border border-slate-700/70 gap-3 shadow-inner">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <Sparkles className="w-4 h-4 text-indigo-400 shrink-0" />
+                  <span className="text-xs sm:text-sm font-medium text-slate-200 truncate">
+                    Want to explore instantly?
+                  </span>
+                </div>
                 <button
                   type="button"
                   onClick={handleDemoFill}
-                  className="px-2 py-0.5 rounded bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-200 border border-indigo-500/30 text-[11px] font-medium transition-colors cursor-pointer"
+                  className="px-3.5 py-1.5 rounded-xl bg-[#1E293B] hover:bg-[#2A374D] active:scale-95 text-slate-100 border border-slate-600/70 text-xs font-semibold shrink-0 transition-all cursor-pointer shadow-sm"
                 >
-                  Fill Demo Account
+                  Fill Demo (Alex)
                 </button>
               </div>
-              <ul className="text-slate-300 space-y-1 list-disc list-inside text-[11px] leading-relaxed">
-                <li>
-                  <strong className="text-white">Existing user?</strong> Sign in with your registered email and password.
-                </li>
-                <li>
-                  <strong className="text-white">First time here?</strong> Click{' '}
-                  <Link to="/register" className="text-indigo-400 underline font-medium hover:text-indigo-300">
-                    Create an account
-                  </Link>{' '}
-                  to start tracking stocks.
-                </li>
-              </ul>
-            </div>
 
-            {/* Error Alert */}
-            {(localError || error) && (
-              <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-start gap-3">
-                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-                <div className="text-xs sm:text-sm text-rose-300 font-medium">
-                  {localError || error}
-                </div>
-              </div>
-            )}
-
-            {/* Form */}
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Email */}
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
-                  Email Address
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
-                    <Mail className="w-4 h-4" />
+              {/* Error Alert */}
+              {(localError || error) && (
+                <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/25 flex items-start gap-2.5 animate-in fade-in duration-200">
+                  <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                  <div className="text-xs sm:text-sm text-rose-300 font-medium leading-snug">
+                    {localError || error}
                   </div>
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => {
-                      setEmail(e.target.value);
-                      if (localError) setLocalError(null);
-                    }}
-                    placeholder="trader@marketwatch.pro"
-                    className="w-full pl-10 pr-4 py-2.5 bg-[#0B0F17] border border-slate-700/90 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 text-sm transition-all"
-                  />
                 </div>
-              </div>
+              )}
 
-              {/* Password */}
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
-                  Password
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
-                    <Lock className="w-4 h-4" />
+              {/* Form */}
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {/* Email Address */}
+                <div className="space-y-1.5">
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                    Email Address
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+                      <Mail className="w-4 h-4" />
+                    </div>
+                    <input
+                      type="email"
+                      required
+                      value={email}
+                      onChange={(e) => {
+                        setEmail(e.target.value);
+                        if (localError) setLocalError(null);
+                      }}
+                      placeholder="name@example.com"
+                      className="w-full pl-10 pr-4 py-3 bg-[#080C10] border border-slate-800 rounded-xl text-slate-100 placeholder-slate-600 focus:outline-none focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/40 text-sm transition-all shadow-inner"
+                    />
                   </div>
-                  <input
-                    type="password"
-                    required
-                    value={password}
-                    onChange={(e) => {
-                      setPassword(e.target.value);
-                      if (localError) setLocalError(null);
-                    }}
-                    placeholder="••••••••••••"
-                    className="w-full pl-10 pr-4 py-2.5 bg-[#0B0F17] border border-slate-700/90 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 text-sm transition-all"
-                  />
                 </div>
+
+                {/* Password */}
+                <div className="space-y-1.5">
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                    Password
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+                      <Lock className="w-4 h-4" />
+                    </div>
+                    <input
+                      type="password"
+                      required
+                      value={password}
+                      onChange={(e) => {
+                        setPassword(e.target.value);
+                        if (localError) setLocalError(null);
+                      }}
+                      placeholder="••••••••••••"
+                      className="w-full pl-10 pr-4 py-3 bg-[#080C10] border border-slate-800 rounded-xl text-slate-100 placeholder-slate-600 focus:outline-none focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/40 text-sm transition-all shadow-inner"
+                    />
+                  </div>
+                </div>
+
+                {/* Primary CTA Button */}
+                <button
+                  type="submit"
+                  disabled={isSubmitting || isLoading}
+                  className="w-full mt-2 py-3.5 px-4 rounded-xl bg-gradient-to-r from-[#10B981] via-[#2DD4BF] to-[#34D399] hover:opacity-95 active:scale-[0.99] text-[#031E14] font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-[0_0_25px_rgba(16,185,129,0.3)] hover:shadow-[0_0_35px_rgba(16,185,129,0.45)] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin text-[#031E14]" />
+                      <span>Signing in...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Sign In to Watchlist</span>
+                      <ArrowRight className="w-4 h-4 text-[#031E14]" />
+                    </>
+                  )}
+                </button>
+              </form>
+
+              {/* Bottom Switch to Register */}
+              <div className="pt-2 border-t border-slate-800/80 text-center text-xs text-slate-400">
+                Don't have an account?{' '}
+                <Link
+                  to="/register"
+                  className="font-bold text-[#34D399] hover:underline underline-offset-2 transition-colors ml-1"
+                >
+                  Create a free account
+                </Link>
               </div>
 
-              {/* Submit Button */}
-              <button
-                type="submit"
-                disabled={isSubmitting || isLoading}
-                className="w-full mt-2 py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-semibold text-sm transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/25 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-              >
-                {isSubmitting ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Signing in...</span>
-                  </>
-                ) : (
-                  <>
-                    <span>Sign In</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </>
-                )}
-              </button>
-            </form>
-
-            {/* Toggle to Register */}
-            <div className="pt-2 border-t border-slate-800 text-center text-xs text-slate-400">
-              Don't have an account?{' '}
-              <Link
-                to="/register"
-                className="font-semibold text-indigo-400 hover:text-indigo-300 transition-colors"
-              >
-                Create an account
-              </Link>
-            </div>
-
-            {/* Security Notice */}
-            <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-500">
-              <ShieldCheck className="w-3.5 h-3.5 text-slate-400" />
-              <span>256-bit encrypted JWT sessions · Protected user data</span>
+              {/* Security Badge */}
+              <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-500">
+                <ShieldCheck className="w-3.5 h-3.5 text-slate-400" />
+                <span>Encrypted JWT Sessions · Private & Isolated</span>
+              </div>
             </div>
           </div>
         </div>
@@ -315,4 +403,3 @@ export const LoginPage: React.FC = () => {
 };
 
 export default LoginPage;
-

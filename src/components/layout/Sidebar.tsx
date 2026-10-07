@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Radio, GripVertical } from 'lucide-react';
+import { GripVertical } from 'lucide-react';
 import { useMarketStore } from '../../store/useMarketStore';
 import { cn } from '../../lib/utils';
 import { MAIN_NAV_ITEMS } from '../../config/navigation';
@@ -155,11 +155,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ className, onItemClick }) => {
       {/* Brand Header */}
       <div>
         <div className="h-16 px-5 flex items-center gap-3 border-b border-border overflow-hidden">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 via-sky-500 to-emerald-400 flex items-center justify-center shadow-lg shadow-indigo-500/20 shrink-0">
-            <Radio className="w-4 h-4 text-white animate-pulse" />
+          <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center shadow-inner shrink-0">
+            <div className="flex items-end gap-0.5 h-4">
+              <span className="w-1 h-2.5 bg-emerald-400 rounded-xs" />
+              <span className="w-1 h-4 bg-emerald-400 rounded-xs" />
+              <span className="w-1 h-3 bg-emerald-400 rounded-xs" />
+            </div>
           </div>
           <div className="min-w-0">
-            <span className="font-bold text-sm tracking-tight text-slate-100 truncate block">
+            <span className="font-extrabold text-sm tracking-tight text-white truncate block">
               SignalLens
             </span>
             <p className="text-[10px] text-slate-400 tracking-tight font-medium truncate">
@@ -185,10 +189,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ className, onItemClick }) => {
                 onClick={onItemClick}
                 className={({ isActive }) =>
                   cn(
-                    'flex items-center justify-between px-3 py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all group relative',
+                    'flex items-center justify-between px-3 py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all group relative',
                     isActive
-                      ? 'bg-surface-active text-slate-100 shadow-sm border border-border-strong'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-surface-hover'
+                      ? 'bg-[#101721] text-emerald-300 font-semibold shadow-sm border border-emerald-500/25'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-[#0D131A]'
                   )
                 }
               >

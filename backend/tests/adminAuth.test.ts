@@ -31,7 +31,7 @@ describe('Admin Routes & Provider Status Authorization Suite (Item 1)', () => {
 
     // 1. Create normal user (role: USER)
     const regNormal = await authService.register({
-      name: 'Normal User',
+      name: `Normal User ${timestamp}`,
       email: `normal_${timestamp}@adminauth.test`,
       password: 'Password123!@#',
     });

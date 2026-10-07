@@ -15,7 +15,7 @@ describe('Mark-Read & Save Visibility Validation (Item 4)', () => {
 
     // Register User A
     const regA = await authService.register({
-      name: 'User A Visibility',
+      name: `User A Visibility ${timestamp}`,
       email: `user_a_${timestamp}@visibility.test`,
       password: 'Password123!@#',
     });
@@ -23,7 +23,7 @@ describe('Mark-Read & Save Visibility Validation (Item 4)', () => {
 
     // Register User B
     const regB = await authService.register({
-      name: 'User B Visibility',
+      name: `User B Visibility ${timestamp}`,
       email: `user_b_${timestamp}@visibility.test`,
       password: 'Password123!@#',
     });

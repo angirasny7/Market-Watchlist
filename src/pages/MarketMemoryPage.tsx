@@ -375,7 +375,7 @@ export const MarketMemoryPage: React.FC = () => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-100 flex items-center gap-2.5">
-              <Inbox className="w-6 h-6 text-indigo-400" />
+              <Inbox className="w-6 h-6 text-emerald-400" />
               <span>Market Memory</span>
             </h2>
             <p className="text-xs sm:text-sm text-slate-400 mt-1">
@@ -391,7 +391,7 @@ export const MarketMemoryPage: React.FC = () => {
               className={cn(
                 'flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all',
                 activeTab === 'SAVED'
-                  ? 'bg-indigo-600 text-white shadow-sm'
+                  ? 'bg-emerald-500 text-slate-950 font-bold shadow-sm shadow-emerald-500/20'
                   : 'text-slate-400 hover:text-slate-200'
               )}
             >
@@ -405,7 +405,7 @@ export const MarketMemoryPage: React.FC = () => {
               className={cn(
                 'flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all',
                 activeTab === 'READ'
-                  ? 'bg-indigo-600 text-white shadow-sm'
+                  ? 'bg-emerald-500 text-slate-950 font-bold shadow-sm shadow-emerald-500/20'
                   : 'text-slate-400 hover:text-slate-200'
               )}
             >
@@ -419,7 +419,7 @@ export const MarketMemoryPage: React.FC = () => {
               className={cn(
                 'flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all',
                 activeTab === 'DELETED'
-                  ? 'bg-indigo-600 text-white shadow-sm'
+                  ? 'bg-emerald-500 text-slate-950 font-bold shadow-sm shadow-emerald-500/20'
                   : 'text-slate-400 hover:text-slate-200'
               )}
             >

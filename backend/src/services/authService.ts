@@ -61,6 +61,22 @@ export class AuthService {
       throw error;
     }
 
+    // Duplicate username / name check (case-insensitive)
+    const existingName = await prisma.user.findFirst({
+      where: {
+        name: {
+          equals: name,
+          mode: 'insensitive',
+        },
+      },
+    });
+
+    if (existingName) {
+      const error: any = new Error('A user with this name already exists. Please choose a different name.');
+      error.statusCode = 409;
+      throw error;
+    }
+
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 

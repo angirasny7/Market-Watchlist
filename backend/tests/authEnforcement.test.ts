@@ -61,4 +61,62 @@ describe('Auth Enforcement & Bypass Prevention Test Suite (Item 1)', () => {
       expect(json.success).toBe(false);
     });
   }
+
+  describe('Duplicate Username / Name Prevention', () => {
+    const timestamp = Date.now();
+    const originalName = `Unique Trader ${timestamp}`;
+    const email1 = `trader1_${timestamp}@unique.test`;
+    const email2 = `trader2_${timestamp}@unique.test`;
+
+    it('successfully registers first user with original name', async () => {
+      const res = await fetch(`${baseUrl}/api/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: originalName,
+          email: email1,
+          password: 'Password123!@#',
+        }),
+      });
+
+      expect(res.status).toBe(201);
+      const json: any = await res.json();
+      expect(json.success).toBe(true);
+      expect(json.data.user.name).toBe(originalName);
+    });
+
+    it('rejects second user registration with exact duplicate name with 409', async () => {
+      const res = await fetch(`${baseUrl}/api/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: originalName,
+          email: email2,
+          password: 'Password123!@#',
+        }),
+      });
+
+      expect(res.status).toBe(409);
+      const json: any = await res.json();
+      expect(json.success).toBe(false);
+      expect(json.error).toContain('already exists');
+    });
+
+    it('rejects second user registration with case-insensitive duplicate name with 409', async () => {
+      const res = await fetch(`${baseUrl}/api/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: originalName.toLowerCase(),
+          email: `trader3_${timestamp}@unique.test`,
+          password: 'Password123!@#',
+        }),
+      });
+
+      expect(res.status).toBe(409);
+      const json: any = await res.json();
+      expect(json.success).toBe(false);
+      expect(json.error).toContain('already exists');
+    });
+  });
 });

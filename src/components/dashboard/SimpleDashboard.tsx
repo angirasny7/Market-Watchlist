@@ -322,7 +322,7 @@ export const SimpleDashboard: React.FC = () => {
         <section className="relative overflow-hidden rounded-2xl bg-surface/85 backdrop-blur-md border border-border/80 py-2.5 px-3 shadow-md">
           <div className="flex items-center gap-3">
             {/* Left Fixed Badge */}
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 text-xs font-semibold shrink-0 select-none shadow-sm">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-xs font-semibold shrink-0 select-none shadow-sm">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
@@ -344,7 +344,7 @@ export const SimpleDashboard: React.FC = () => {
                       to={item.link}
                       className="flex items-center gap-2 px-3 py-1 rounded-xl bg-surface-subtle hover:bg-surface-hover border border-border/60 hover:border-slate-600 transition-colors shrink-0 text-xs group"
                     >
-                      <span className="font-bold text-slate-200 font-mono group-hover:text-indigo-300 transition-colors">
+                      <span className="font-bold text-slate-200 font-mono group-hover:text-emerald-400 transition-colors">
                         {item.label}
                       </span>
                       <span className="font-semibold text-slate-100 font-mono">
@@ -378,8 +378,8 @@ export const SimpleDashboard: React.FC = () => {
 
       {/* 1. HERO HEADER & STATUS BAR */}
       <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-surface via-surface/90 to-surface-subtle border border-border/80 p-5 sm:p-6 shadow-lg shadow-black/20">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/5 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
-        <div className="absolute bottom-0 left-1/3 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
+        <div className="absolute bottom-0 left-1/3 w-64 h-64 bg-teal-500/5 rounded-full blur-3xl pointer-events-none" />
 
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-1.5">
@@ -393,7 +393,7 @@ export const SimpleDashboard: React.FC = () => {
               </span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-bold text-slate-100 tracking-tight">
-              {getGreeting()}, <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 via-sky-200 to-emerald-300">{authenticatedName}</span>
+              {getGreeting()}, <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-emerald-200">{authenticatedName}</span>
             </h1>
             <p className="text-xs sm:text-sm text-slate-300 font-medium">
               {unreadCount > 0
@@ -424,10 +424,10 @@ export const SimpleDashboard: React.FC = () => {
             <button
               onClick={handleRefresh}
               disabled={isRefreshing || isWatchlistLoading}
-              className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 font-medium text-xs transition-all shadow-sm disabled:opacity-50"
+              className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-medium text-xs transition-all shadow-sm disabled:opacity-50"
               title="Refresh all market and feed data"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-indigo-400' : ''}`} />
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-emerald-400' : ''}`} />
               <span>{isRefreshing ? 'Syncing...' : 'Refresh All'}</span>
             </button>
           </div>
@@ -436,7 +436,7 @@ export const SimpleDashboard: React.FC = () => {
         {/* Status Sub-bar */}
         <div className="mt-4 pt-3 border-t border-border/60 flex items-center justify-between text-xs text-slate-400">
           <div className="flex items-center gap-2">
-            <Clock className="w-3.5 h-3.5 text-indigo-400" />
+            <Clock className="w-3.5 h-3.5 text-emerald-400" />
             <span>{freshness}</span>
             <span className="text-slate-600">·</span>
             <span>{delayNotice}</span>
@@ -452,17 +452,17 @@ export const SimpleDashboard: React.FC = () => {
         {/* Pillar 1: Attention Feed */}
         <Link
           to="/feed?window=toReview"
-          className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-500/10 via-surface to-surface border border-indigo-500/20 hover:border-indigo-500/50 p-4 transition-all duration-200 hover:-translate-y-0.5 shadow-sm hover:shadow-indigo-500/10"
+          className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-500/10 via-surface to-surface border border-emerald-500/20 hover:border-emerald-500/40 p-4 transition-all duration-200 hover:-translate-y-0.5 shadow-sm hover:shadow-emerald-500/10"
         >
           <div className="flex items-center justify-between mb-3">
-            <div className="w-9 h-9 rounded-xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 group-hover:scale-105 transition-transform">
+            <div className="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center text-emerald-400 group-hover:scale-105 transition-transform">
               <Radio className="w-4.5 h-4.5" />
             </div>
-            <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-mono font-medium border border-indigo-500/30">
+            <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 font-mono font-medium border border-emerald-500/25">
               {unreadCount} Unhandled
             </span>
           </div>
-          <h3 className="text-sm font-semibold text-slate-200 group-hover:text-indigo-300 transition-colors">
+          <h3 className="text-sm font-semibold text-slate-200 group-hover:text-emerald-300 transition-colors">
             Attention Feed
           </h3>
           <div className="text-xl font-bold text-slate-100 font-mono mt-1">
@@ -471,7 +471,7 @@ export const SimpleDashboard: React.FC = () => {
           <p className="text-xs text-slate-400 mt-1 line-clamp-2">
             Causal AI detection explaining why your tracked stocks moved and what matters now.
           </p>
-          <div className="mt-3 pt-2 border-t border-border/50 flex items-center justify-between text-xs text-indigo-400 group-hover:text-indigo-300 font-medium">
+          <div className="mt-3 pt-2 border-t border-border/50 flex items-center justify-between text-xs text-emerald-400 group-hover:text-emerald-300 font-medium">
             <span>Review Pending Feed</span>
             <ArrowUpRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
           </div>
@@ -480,10 +480,10 @@ export const SimpleDashboard: React.FC = () => {
         {/* Pillar 2: Smart Watchlists */}
         <Link
           to="/watchlist"
-          className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-500/10 via-surface to-surface border border-emerald-500/20 hover:border-emerald-500/50 p-4 transition-all duration-200 hover:-translate-y-0.5 shadow-sm hover:shadow-emerald-500/10"
+          className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-teal-500/10 via-surface to-surface border border-teal-500/20 hover:border-teal-500/40 p-4 transition-all duration-200 hover:-translate-y-0.5 shadow-sm hover:shadow-teal-500/10"
         >
           <div className="flex items-center justify-between mb-3">
-            <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 group-hover:scale-105 transition-transform">
+            <div className="w-9 h-9 rounded-xl bg-teal-500/15 border border-teal-500/25 flex items-center justify-center text-teal-400 group-hover:scale-105 transition-transform">
               <TrendingUp className="w-4.5 h-4.5" />
             </div>
             <span
@@ -496,7 +496,7 @@ export const SimpleDashboard: React.FC = () => {
               {avgChange >= 0 ? '+' : ''}{avgChange.toFixed(1)}% Avg
             </span>
           </div>
-          <h3 className="text-sm font-semibold text-slate-200 group-hover:text-emerald-300 transition-colors">
+          <h3 className="text-sm font-semibold text-slate-200 group-hover:text-teal-300 transition-colors">
             Smart Watchlists
           </h3>
           <div className="text-xl font-bold text-slate-100 font-mono mt-1">
@@ -505,7 +505,7 @@ export const SimpleDashboard: React.FC = () => {
           <p className="text-xs text-slate-400 mt-1 line-clamp-2">
             Multi-watchlist tracking with 52W ranges, real-time quotes, sparklines and corporate events.
           </p>
-          <div className="mt-3 pt-2 border-t border-border/50 flex items-center justify-between text-xs text-emerald-400 group-hover:text-emerald-300 font-medium">
+          <div className="mt-3 pt-2 border-t border-border/50 flex items-center justify-between text-xs text-teal-400 group-hover:text-teal-300 font-medium">
             <span>Manage Watchlists</span>
             <ArrowUpRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
           </div>
@@ -573,10 +573,10 @@ export const SimpleDashboard: React.FC = () => {
         <section className="space-y-2">
           <div className="flex items-center justify-between">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-              <Activity className="w-3.5 h-3.5 text-indigo-400" />
+              <Activity className="w-3.5 h-3.5 text-emerald-400" />
               <span>Major Market Benchmarks</span>
             </h2>
-            <Link to="/highlights" className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-0.5">
+            <Link to="/highlights" className="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-0.5 font-medium">
               <span>All 12 Benchmarks & Global Cues</span>
               <ChevronRight className="w-3 h-3" />
             </Link>
@@ -653,7 +653,7 @@ export const SimpleDashboard: React.FC = () => {
               </div>
               <Link
                 to="/feed?window=toReview"
-                className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-medium transition-colors"
+                className="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1 font-medium transition-colors"
               >
                 <span>View Full Feed</span>
                 <ChevronRight className="w-3.5 h-3.5" />
@@ -733,7 +733,7 @@ export const SimpleDashboard: React.FC = () => {
                           </button>
                           <Link
                             to="/feed?window=toReview"
-                            className="text-xs text-indigo-400 hover:text-indigo-300 px-2.5 py-1 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 transition-colors flex items-center gap-0.5 font-medium"
+                            className="text-xs text-emerald-400 hover:text-emerald-300 px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 transition-colors flex items-center gap-0.5 font-medium"
                           >
                             <span>Analyze</span>
                             <ArrowUpRight className="w-3 h-3" />
@@ -756,7 +756,7 @@ export const SimpleDashboard: React.FC = () => {
                 <div className="pt-1">
                   <Link
                     to="/feed?window=toReview"
-                    className="inline-flex items-center gap-1 text-xs font-medium text-indigo-400 hover:text-indigo-300"
+                    className="inline-flex items-center gap-1 text-xs font-medium text-emerald-400 hover:text-emerald-300"
                   >
                     <span>Browse complete feed timeline</span>
                     <ChevronRight className="w-3.5 h-3.5" />
@@ -779,7 +779,7 @@ export const SimpleDashboard: React.FC = () => {
               </div>
               <Link
                 to="/watchlist"
-                className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-medium transition-colors"
+                className="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1 font-medium transition-colors"
               >
                 <span>Manage Watchlists ({watchlist.length})</span>
                 <ChevronRight className="w-3.5 h-3.5" />
@@ -806,7 +806,7 @@ export const SimpleDashboard: React.FC = () => {
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-1.5">
-                            <span className="font-bold text-xs text-slate-100 font-mono group-hover:text-indigo-300 transition-colors">
+                            <span className="font-bold text-xs text-slate-100 font-mono group-hover:text-emerald-400 transition-colors">
                               {stock.symbol}
                             </span>
                             <span className="text-[10px] text-slate-400 truncate max-w-[110px]">{stock.name}</span>
@@ -837,7 +837,7 @@ export const SimpleDashboard: React.FC = () => {
                           </div>
                           <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden relative">
                             <div
-                              className="h-full bg-gradient-to-r from-emerald-500 to-sky-400 rounded-full transition-all"
+                              className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all"
                               style={{ width: `${positionPct}%` }}
                             />
                           </div>
@@ -851,7 +851,7 @@ export const SimpleDashboard: React.FC = () => {
                   <div className="text-center pt-2 border-t border-border/50">
                     <Link
                       to="/watchlist"
-                      className="text-xs text-slate-400 hover:text-indigo-300 transition-colors font-medium"
+                      className="text-xs text-slate-400 hover:text-emerald-300 transition-colors font-medium"
                     >
                       +{watchlist.length - 6} more stocks in your watchlist →
                     </Link>
@@ -865,7 +865,7 @@ export const SimpleDashboard: React.FC = () => {
                 <p className="text-xs text-slate-400">Add companies to unlock real-time tracking, anomaly alerts, and price catalysts.</p>
                 <Link
                   to="/watchlist"
-                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-400 hover:text-indigo-300 transition-colors pt-1"
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-400 hover:text-emerald-300 transition-colors pt-1"
                 >
                   <span>Add stocks to track</span>
                   <ChevronRight className="w-3.5 h-3.5" />
@@ -888,7 +888,7 @@ export const SimpleDashboard: React.FC = () => {
                   Market Memory & Research
                 </h2>
               </div>
-              <Link to="/memory" className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-medium">
+              <Link to="/memory" className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1 font-medium">
                 <span>View Memory</span>
                 <ChevronRight className="w-3.5 h-3.5" />
               </Link>
@@ -910,7 +910,7 @@ export const SimpleDashboard: React.FC = () => {
                 </div>
                 <div className="p-2 rounded-xl bg-surface-subtle border border-border/60">
                   <div className="text-xs text-slate-400">Total Arch</div>
-                  <div className="text-sm font-bold text-indigo-300 font-mono mt-0.5">
+                  <div className="text-sm font-bold text-emerald-400 font-mono mt-0.5">
                     {memoryCounts ? memoryCounts.savedCount + memoryCounts.readCount : 0}
                   </div>
                 </div>
@@ -961,7 +961,7 @@ export const SimpleDashboard: React.FC = () => {
                   Market Breadth & Macro
                 </h2>
               </div>
-              <Link to="/highlights" className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-medium">
+              <Link to="/highlights" className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center gap-1 font-medium">
                 <span>All Highlights</span>
                 <ChevronRight className="w-3.5 h-3.5" />
               </Link>
@@ -1044,13 +1044,13 @@ export const SimpleDashboard: React.FC = () => {
 
               {/* Upcoming Catalyst */}
               {upcomingCatalyst && (
-                <div className="p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/20 space-y-1">
+                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 space-y-1">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="flex items-center gap-1 font-semibold text-indigo-300">
-                      <Calendar className="w-3.5 h-3.5" />
+                    <span className="flex items-center gap-1 font-semibold text-emerald-300">
+                      <Calendar className="w-3.5 h-3.5 text-emerald-400" />
                       <span>Upcoming Catalyst</span>
                     </span>
-                    <span className="text-[10px] font-mono text-indigo-400 font-medium">
+                    <span className="text-[10px] font-mono text-emerald-400 font-medium">
                       {new Date(upcomingCatalyst.eventDate).toLocaleDateString('en-US', {
                         month: 'short',
                         day: 'numeric',
@@ -1066,7 +1066,7 @@ export const SimpleDashboard: React.FC = () => {
           {/* SECTION E: PROJECT ARCHITECTURE & FEATURE HUB */}
           <section className="p-4 rounded-2xl bg-gradient-to-br from-surface via-surface-subtle to-surface border border-border/80 space-y-3 shadow-sm">
             <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-indigo-400" />
+              <Sparkles className="w-4 h-4 text-emerald-400" />
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300">
                 Platform Navigation Hub
               </h3>
@@ -1074,18 +1074,18 @@ export const SimpleDashboard: React.FC = () => {
             <div className="grid grid-cols-2 gap-2 text-xs">
               <Link
                 to="/feed?window=toReview"
-                className="p-2.5 rounded-xl bg-surface/80 hover:bg-indigo-500/10 border border-border hover:border-indigo-500/30 transition-all block group"
+                className="p-2.5 rounded-xl bg-surface/80 hover:bg-emerald-500/10 border border-border hover:border-emerald-500/30 transition-all block group"
               >
-                <div className="font-semibold text-slate-200 group-hover:text-indigo-300">
+                <div className="font-semibold text-slate-200 group-hover:text-emerald-300">
                   📡 Attention Feed
                 </div>
                 <div className="text-[11px] text-slate-400 mt-0.5">Causal AI reasoning</div>
               </Link>
               <Link
                 to="/watchlist"
-                className="p-2.5 rounded-xl bg-surface/80 hover:bg-emerald-500/10 border border-border hover:border-emerald-500/30 transition-all block group"
+                className="p-2.5 rounded-xl bg-surface/80 hover:bg-teal-500/10 border border-border hover:border-teal-500/30 transition-all block group"
               >
-                <div className="font-semibold text-slate-200 group-hover:text-emerald-300">
+                <div className="font-semibold text-slate-200 group-hover:text-teal-300">
                   📊 Watchlists
                 </div>
                 <div className="text-[11px] text-slate-400 mt-0.5">Multi-list manager</div>
