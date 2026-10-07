@@ -651,7 +651,7 @@ async function main() {
 
   // 4. Seed User, UserState & Watchlists (Alex N Profile)
   const salt = await bcrypt.genSalt(10);
-  const passwordHash = await bcrypt.hash('Alex1@123', salt);
+  const passwordHash = await bcrypt.hash('Alex@123', salt);
 
   const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
   const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);

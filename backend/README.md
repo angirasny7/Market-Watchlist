@@ -111,8 +111,8 @@ npm run check:data
 - `POST /api/auth/login` — Authenticate and receive JWT token.
   ```json
   {
-    "email": "alex1@example.com",
-    "password": "Alex1@123"
+    "email": "alex@example.com",
+    "password": "Alex@123"
   }
   ```
 - `GET /api/auth/me` — Retrieve authenticated user profile and userState. (Requires `Authorization: Bearer <token>`)

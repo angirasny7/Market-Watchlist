@@ -35,14 +35,14 @@ export const LoginPage: React.FC = () => {
   useEffect(() => {
     if ((location.state as any)?.demoFill) {
       setEmail('alex@example.com');
-      setPassword('Alex1@123');
+      setPassword('Alex@123');
       setLocalError(null);
     }
   }, [location.state]);
 
   const handleDemoFill = () => {
     setEmail('alex@example.com');
-    setPassword('Alex1@123');
+    setPassword('Alex@123');
     setLocalError(null);
   };
 
