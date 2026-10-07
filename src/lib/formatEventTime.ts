@@ -107,12 +107,16 @@ export function formatTimeWithTz(d: Date, tz: string, includeWeekday: boolean = 
 export function formatEventTime(item: EventTimeContext, now: Date = new Date()): string {
   const tz = getExchangeTimeZone(item.exchange);
 
-  // 1. Cumulative session move (since last visit spanning multiple trading sessions)
+  // 1. Cumulative session move (only when spanning distinct trading session dates)
   if (item.isCumulative && item.periodStart && item.occurredOn) {
     const start = parseDate(item.periodStart);
     const end = parseDate(item.occurredOn);
     if (start && end) {
-      return `${formatDayMonth(start, true)} close -> ${formatDayMonth(end, true)} close`;
+      const startStr = formatDayMonth(start, true);
+      const endStr = formatDayMonth(end, true);
+      if (startStr !== endStr) {
+        return `${startStr} close -> ${endStr} close`;
+      }
     }
   }
 

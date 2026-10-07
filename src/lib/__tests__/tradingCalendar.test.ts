@@ -49,7 +49,7 @@ describe('Trading Calendar & Exchange Holidays 2026 (Part C & B)', () => {
     expect(isExchangeTradingDay('NSE', memorialDay)).toBe(true);
   });
 
-  it('4. Cumulative "since last visit" formats baseline and end close dates', () => {
+  it('4. Cumulative "since last visit" formats baseline and end close dates only across different days', () => {
     const baseline = new Date('2026-10-01T10:00:00.000Z'); // Thu 1 Oct
     const end = new Date('2026-10-02T10:00:00.000Z');      // Fri 2 Oct
 
@@ -61,6 +61,21 @@ describe('Trading Calendar & Exchange Holidays 2026 (Part C & B)', () => {
     });
 
     expect(result).toBe('Thu 1 Oct close -> Fri 2 Oct close');
+
+    // Same day should NOT output "Wed 7 Oct close -> Wed 7 Oct close"
+    const sameDayStart = new Date('2026-10-07T04:00:00.000Z');
+    const sameDayEnd = new Date('2026-10-07T05:00:00.000Z');
+    const sameDayResult = formatEventTime(
+      {
+        periodStart: sameDayStart,
+        occurredOn: sameDayEnd,
+        isCumulative: true,
+        exchange: 'NSE',
+      },
+      new Date('2026-10-07T05:30:00.000Z')
+    );
+    expect(sameDayResult).not.toContain('->');
+    expect(sameDayResult).toBe('30 min ago');
   });
 
   it('5. Single-session move on weekend shows actual last completed trading date, NEVER "Today close"', () => {
