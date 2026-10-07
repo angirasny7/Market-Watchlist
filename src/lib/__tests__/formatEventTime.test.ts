@@ -15,50 +15,48 @@ describe('formatEventTime (A6 Truth Formatting)', () => {
     expect(result).not.toContain('Today close');
   });
 
-  it('formats intraday market signals with detection time and delayed notice', () => {
+  it('formats recent market signals with clean relative time', () => {
     const item = {
-      detectedAt: '2026-10-06T06:12:00Z', // 11:42 AM IST
+      detectedAt: '2026-10-06T11:30:00Z', // 30 min before fixedNow
       isIntraday: true,
       eventType: 'PRICE_SURGE',
       exchange: 'NSE',
     };
     const result = formatEventTime(item, fixedNow);
-    expect(result).toContain('Detected');
-    expect(result).toContain('11:42 AM IST');
-    expect(result).toContain('NSE data (~15 min delayed)');
+    expect(result).toBe('30 min ago');
   });
 
-  it('formats regulatory filings with source and announcement time', () => {
+  it('formats regulatory filings older than 12 hours with source and announcement time', () => {
     const item = {
-      publishedAt: '2026-10-06T03:32:00Z', // 9:02 AM IST
+      publishedAt: '2026-10-05T03:32:00Z', // > 12h before fixedNow
       eventType: 'FILING',
       source: 'NSE filing',
       exchange: 'NSE',
     };
     const result = formatEventTime(item, fixedNow);
-    expect(result).toBe('NSE filing · Announced Tue 6 Oct, 9:02 AM IST');
+    expect(result).toBe('NSE filing · Announced Mon 5 Oct, 9:02 AM IST');
   });
 
-  it('formats news items with publisher and publication time', () => {
+  it('formats news items older than 12 hours with publisher and publication time', () => {
     const item = {
-      publishedAt: '2026-10-06T03:44:00Z', // 9:14 AM IST
+      publishedAt: '2026-10-05T03:44:00Z', // > 12h before fixedNow
       eventType: 'NEWS',
       source: 'Reuters',
       exchange: 'NSE',
     };
     const result = formatEventTime(item, fixedNow);
-    expect(result).toBe('Reuters · Published Tue 6 Oct, 9:14 AM IST');
+    expect(result).toBe('Reuters · Published Mon 5 Oct, 9:14 AM IST');
   });
 
-  it('formats alert-triggered events with full date and time in exchange timezone', () => {
+  it('formats alert-triggered events older than 12 hours with date and time in exchange timezone', () => {
     const alertNSE = {
       isAlertTriggered: true,
-      detectedAt: '2026-10-06T05:01:00Z', // 10:31 AM IST
+      detectedAt: '2026-10-05T05:01:00Z', // > 12h before fixedNow
       exchange: 'NSE',
       eventType: 'PRICE_SURGE',
     };
     const formatted = formatEventTime(alertNSE, fixedNow);
-    expect(formatted).toBe('Your alert · Triggered Tue 6 Oct, 10:31 AM IST');
+    expect(formatted).toBe('Your alert · Triggered Mon 5 Oct, 10:31 AM IST');
   });
 
   it('never outputs the phrase "Today close" or bare clock time', () => {

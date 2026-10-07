@@ -107,7 +107,7 @@ export function formatTimeWithTz(d: Date, tz: string, includeWeekday: boolean = 
 export function formatEventTime(item: EventTimeContext, now: Date = new Date()): string {
   const tz = getExchangeTimeZone(item.exchange);
 
-  // 1. Cumulative session move (since last visit)
+  // 1. Cumulative session move (since last visit spanning multiple trading sessions)
   if (item.isCumulative && item.periodStart && item.occurredOn) {
     const start = parseDate(item.periodStart);
     const end = parseDate(item.occurredOn);
@@ -116,44 +116,12 @@ export function formatEventTime(item: EventTimeContext, now: Date = new Date()):
     }
   }
 
-  // 2. Alert triggered
-  if (item.isAlertTriggered) {
-    const triggerDate = parseDate(item.detectedAt) || parseDate(item.occurredAt) || parseDate(item.timestamp) || now;
-    return `Your alert · Triggered ${formatTimeWithTz(triggerDate, tz, true)}`;
-  }
-
-  // 3. Regulatory filing
-  if (item.eventType === 'FILING') {
-    const pubDate = parseDate(item.publishedAt) || parseDate(item.occurredAt) || now;
-    const src = item.source || `${item.exchange || 'NSE'} filing`;
-    return `${src} · Announced ${formatTimeWithTz(pubDate, tz, true)}`;
-  }
-
-  // 4. News publication
-  if (item.eventType === 'NEWS') {
-    const pubDate = parseDate(item.publishedAt) || parseDate(item.occurredAt) || now;
-    const src = item.source || 'News';
-    return `${src} · Published ${formatTimeWithTz(pubDate, tz, true)}`;
-  }
-
-  // 5. Intraday detection with delay notice
-  if (item.isIntraday && item.detectedAt) {
-    const detDate = parseDate(item.detectedAt) || now;
-    return `Detected ${formatTimeWithTz(detDate, tz, false).replace(/^[^\d]+/, '')} · ${item.exchange || 'NSE'} data (~15 min delayed)`;
-  }
-
-  // 6. Occurred on completed market session
-  if ((item.occurredOn || item.occurredAt || item.timestamp) && !item.isIntraday && !item.publishedAt && !item.detectedAt) {
-    const occDate = parseDate(item.occurredOn) || parseDate(item.occurredAt) || parseDate(item.timestamp) || now;
-    return `${formatDayMonth(occDate, true)} session · ${item.exchange || 'NSE'} data`;
-  }
-
-  // 7. General relative or formatted timestamp
+  // Resolve the most representative event timestamp
   const eventDate =
+    parseDate(item.detectedAt) ||
     parseDate(item.publishedAt) ||
     parseDate(item.occurredAt) ||
     parseDate(item.occurredOn) ||
-    parseDate(item.detectedAt) ||
     parseDate(item.timestamp) ||
     parseDate(item.date) ||
     now;
@@ -161,6 +129,7 @@ export function formatEventTime(item: EventTimeContext, now: Date = new Date()):
   const diffMs = Math.max(0, now.getTime() - eventDate.getTime());
   const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
 
+  // 2. Recent events (< 12 hours ago): Always display clean relative time
   if (diffMs < TWELVE_HOURS_MS) {
     if (diffMs < 60 * 1000) {
       return 'Just now';
@@ -173,7 +142,32 @@ export function formatEventTime(item: EventTimeContext, now: Date = new Date()):
     return `${hrs} hr ago`;
   }
 
-  // >= 12 hours ago -> Format date + time
+  // 3. Older events (>= 12 hours ago):
+  // Regulatory filing
+  if (item.eventType === 'FILING') {
+    const pubDate = parseDate(item.publishedAt) || parseDate(item.occurredAt) || eventDate;
+    const src = item.source || `${item.exchange || 'NSE'} filing`;
+    return `${src} · Announced ${formatTimeWithTz(pubDate, tz, true)}`;
+  }
+
+  // News publication
+  if (item.eventType === 'NEWS') {
+    const pubDate = parseDate(item.publishedAt) || parseDate(item.occurredAt) || eventDate;
+    const src = item.source || 'News';
+    return `${src} · Published ${formatTimeWithTz(pubDate, tz, true)}`;
+  }
+
+  // Alert triggered
+  if (item.isAlertTriggered) {
+    return `Your alert · Triggered ${formatTimeWithTz(eventDate, tz, true)}`;
+  }
+
+  // Occurred on completed market session
+  if ((item.occurredOn || item.occurredAt || item.timestamp) && !item.isIntraday && !item.publishedAt && !item.detectedAt) {
+    return `${formatDayMonth(eventDate, true)} session · ${item.exchange || 'NSE'} data`;
+  }
+
+  // Default formatted date + time for older events
   return formatTimeWithTz(eventDate, tz, false);
 }
 
