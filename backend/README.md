@@ -1,6 +1,6 @@
-# Smart Market Watchlist — Backend Service
+# SignalLens — Backend Service
 
-High-performance, production-ready backend engine for **Smart Market Watchlist** built with **Node.js, Express.js, TypeScript, Prisma ORM, and PostgreSQL**.
+High-performance, production-ready backend engine for **SignalLens — Market Change Intelligence** built with **Node.js, Express.js, TypeScript, Prisma ORM, and PostgreSQL**.
 
 ---
 

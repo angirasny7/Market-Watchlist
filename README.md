@@ -1,4 +1,4 @@
-# Smart Market Watchlist
+# SignalLens — Market Change Intelligence
 
 > **A personal market intelligence workspace that tells you what changed, why it changed, and whether it matters — not just the latest price.**
 
@@ -10,9 +10,9 @@ Traditional stock market watchlists are passive tabular data feeds that display 
 
 ---
 
-## 2. What This Project Does
+## 2. What SignalLens Does
 
-Smart Market Watchlist transforms raw market volatility into actionable, evidence-grounded intelligence structured around a three-question cognitive framework:
+SignalLens transforms raw market volatility into actionable, evidence-grounded intelligence structured around a three-question cognitive framework:
 
 ```
 ┌─────────────────┐       ┌───────────────────────┐       ┌──────────────────────┐
@@ -63,7 +63,7 @@ To guarantee both live production viability and zero-dependency local developmen
 | **Benchmark Indices in Digests** | Live Yahoo Finance quotes for `^NSEI` (Nifty 50), `^BSESN` (Sensex), `^INDIAVIX` (India VIX) | Returns null for any benchmark index that fails to fetch (verified via forced-failure testing), rather than caching a stale value or fabricating one. | Real index values and percentage changes embedded in synthesized digests. |
 | **Forward Return Calculations** | `historicalPatternService.ts`<br>Empirically computes forward returns and win rates from `StockPriceHistory` table rows | Returns `null` when empirical sample size is $< 5$ (zero fabrication) | Run `npm run prisma:seed-historical-demo` to populate historical sample bars for backtesting. |
 | **Database & Persistence** | PostgreSQL via Prisma ORM (`Stock`, `Event`, `Insight`, `Digest`, `User`, `UserState`) | None | 100% live database persistence for all user watchlists, events, and insights. |
-| **Top-Level Highlights Banner** | None | `src/data/mockMarket.ts`<br>(Macro alerts, sector performance heatmap, broad index tiles) | The top Highlights banner uses static mock data on the frontend; individual stock data, the Attention Feed, Insights, and Digests are 100% backend-driven. |
+| **Market Highlights Hub** | `marketUniverseService.ts`<br>(Live benchmark quotes, sector breadths, volatility, and top movers) | Built-in fallback cache | Live backend API (`/api/market/highlights`) backed by PostgreSQL universe constituents with auto-refresh every 60s. |
 
 ---
 
@@ -181,7 +181,7 @@ cd "Smart Market Watchlist"
    ```
 
    **Environment Variable Reference (`backend/.env`):**
-   | Variable | Description | Recommended Demo Value |
+   | Variable | Description | Recommended Value |
    | :--- | :--- | :--- |
    | `PORT` | Backend HTTP port | `5000` |
    | `NODE_ENV` | Runtime environment | `development` |
@@ -189,8 +189,8 @@ cd "Smart Market Watchlist"
    | `JWT_SECRET` | Secret key for signing auth tokens | Pre-populated secure random string |
    | `JWT_EXPIRES_IN` | JWT token validity lifespan | `180d` |
    | `CORS_ORIGIN` | Allowed frontend origins | `http://localhost:3000,http://localhost:5173` |
-   | `MARKET_PROVIDER` | Market quote provider (`simulated` or `yahoo`) | Leave unset (defaults to live Yahoo Finance); optional override: `simulated` for offline evaluation |
-   | `NEWS_PROVIDER` | News feed provider (`simulated` or `rss`) | Leave unset (defaults to live RSS feeds); optional override: `simulated` for offline evaluation |
+   | `MARKET_PROVIDER` | Market quote provider (`simulated` or `yahoo`) | Leave unset (defaults to live Yahoo Finance); optional: `simulated` for offline development |
+   | `NEWS_PROVIDER` | News feed provider (`simulated` or `rss`) | Leave unset (defaults to live RSS feeds); optional: `simulated` for offline development |
    | `NEWS_API_KEY` | Optional API key for NewsAPI | Leave blank when using default live RSS or `simulated` |
 
    > **Configuration Note**: Defaults to live Yahoo Finance and live RSS feeds (`MARKET_PROVIDER` and `NEWS_PROVIDER` unset). Set `MARKET_PROVIDER=simulated` and `NEWS_PROVIDER=simulated` if you prefer offline, zero-network local development testing with deterministic demo data.
@@ -214,13 +214,13 @@ cd "Smart Market Watchlist"
    ```bash
    npm run prisma:seed
    ```
-   *What this does*: Populates 10 master stocks (Tata Motors, Infosys, TCS, Reliance, HDFC Bank, Apple, Suzlon, Zomato, Larsen & Toubro, ITC), news items, initial anomaly events, evidence-grounded insights, historical market memory digests, and the pre-configured demo user.
+   *What this does*: Populates 27 master stocks across Indian and US exchanges (Tata Motors, Infosys, TCS, Reliance, HDFC Bank, Apple, Suzlon, Zomato, L&T, ITC, Tesla, Google, Netflix, etc.), news items, initial anomaly events, evidence-grounded insights, historical market memory digests, 5 pre-configured custom watchlists, and the demo user Alex.
 
 7. Seed historical backtesting data:
    ```bash
    npm run prisma:seed-historical-demo
    ```
-   *What this does*: Backfills historical event samples (7–10 days old) and corresponding price history checkpoints so that `historicalPatternService` has $\ge 5$ empirical samples to compute genuine forward probabilities during demo evaluation.
+   *What this does*: Backfills historical event samples (7–10 days old) and corresponding price history checkpoints so that `historicalPatternService` has $\ge 5$ empirical samples to compute genuine forward probabilities.
 
 8. Start the backend development server:
    ```bash
@@ -270,56 +270,60 @@ cd "Smart Market Watchlist"
    - **Email**: `alex@example.com`
    - **Password**: `Alex@123`
 
-   > **Tip**: You can also click **Create Account** to register your own account and test the application with your own credentials if you prefer not to use the shared demo account.
+   > **Tip**: You can also click **Create Account** to register your own account with your own credentials.
 
 5. **Verify Core Features**:
-   - **Since-Last-Visit Banner**: Displays "Away for 5 days" with calculated event deltas.
-   - **Watchlist**: View 6 pre-loaded stocks with pinned items (`TATAMOTORS`, `INFY`). Toggle between Grid and Table views.
-   - **Attention Feed**: Examine generated events with priority badges, multi-factor confidence scores (e.g. `78%`, `88%`), and factual causal drivers.
-   - **Verify Button**: Click "Verify" on any event card to confirm that external links open official regulatory or exchange announcements in a new tab without altering internal state.
-   - **Market Memory**: Click the "Memory" tab to view historical intelligence dossiers and forward return patterns.
+   - **Since-Last-Visit Banner**: Displays session baseline timestamp with calculated event deltas.
+   - **Watchlist**: View pre-loaded stocks with pinned items (`TATAMOTORS`, `INFY`, `TCS`). Toggle between Grid and Table views, filter by sector, and switch between custom watchlists.
+   - **Attention Feed**: Examine generated events with priority badges, clean relative timestamps (`30 min ago`, `1 hr ago`), multi-factor confidence scores, and factual causal drivers. Filter across `Since last visit`, `To review`, `Last 24h`, `Last 7d`, and `Last 30d`.
+   - **External Verification**: Click the external link on any card to confirm official regulatory or exchange announcements in a new tab without altering internal state.
+   - **Market Memory**: Click the "Market Memory" tab to view saved events, search notes, and historical intelligence dossiers.
+   - **Market Highlights**: Live macro breadth meter, sector heatmap, India VIX, top movers, and benchmark indices.
 
 ---
 
 ## 7. Project Structure
 
 ```
-Smart Market Watchlist/
+SignalLens/
 ├── backend/                         # Backend Express + TypeScript service
 │   ├── docker-compose.yml           # PostgreSQL 16 container definition
 │   ├── package.json                 # Backend dependencies and execution scripts
 │   ├── prisma/
 │   │   ├── schema.prisma            # Relational database schema definition
-│   │   ├── seed.ts                  # Master catalog and demo user seeder
+│   │   ├── seed.ts                  # Master catalog (27 stocks, 5 watchlists, Alex user)
 │   │   └── seedHistoricalDemoData.ts# Historical pattern sample seeder
 │   ├── scripts/                     # Operational build and maintenance scripts
 │   └── src/
 │       ├── config/                  # Environment and Prisma client singletons
 │       ├── controllers/             # Express route controllers
 │       ├── data/                    # Master stock catalog definitions
-│       ├── jobs/                    # Scheduled cron pipelines (sync, detection, digest)
+│       ├── jobs/                    # Scheduled cron pipelines (sync, detection, digest, news)
 │       ├── middleware/              # JWT auth and activity tracker middleware
-│       ├── providers/               # Market & News provider abstraction layer
+│       ├── providers/               # Market (Yahoo) & News (RSS) provider abstraction layer
 │       ├── routes/                  # API endpoint route definitions
-│       ├── services/                # Core business logic & scoring engines
-│       └── utils/                   # Device parsers and JSON formatters
+│       ├── services/                # Core business logic, scoring engines & universe service
+│       └── utils/                   # Device parsers, market hours & exchange calendars
 ├── src/                             # Frontend React + TypeScript application
 │   ├── components/
-│   │   ├── auth/                    # Login, registration, and session modal
-│   │   ├── feed/                    # Attention Feed, Triad cards, filter bar
-│   │   ├── highlights/              # Market overview and macro indicators
-│   │   ├── layout/                  # Navigation header, since-last-visit banner
-│   │   ├── memory/                  # Market Memory archive and digest drawer
-│   │   └── watchlist/               # Watchlist table, grid, stock search modal
-│   ├── data/                        # Frontend fallback data and starter templates
-│   ├── lib/                         # Device detection and UI utility helpers
-│   ├── pages/                       # Root views (Watchlist, Feed, Memory, Highlights)
-│   ├── services/                    # Frontend HTTP client and data adapters
-│   ├── store/                       # Zustand state stores (Market, Auth, Toast)
-│   └── types/                       # Shared TypeScript interfaces (Stock, Event, Digest)
+│   │   ├── auth/                    # Login, registration, and ProtectedRoute guards
+│   │   ├── common/                  # SearchInput, ErrorBoundary, KpiCard, Skeleton loaders
+│   │   ├── dashboard/               # SimpleDashboard, AttentionFeedPreview, MemoryPreview
+│   │   ├── feed/                    # TriadEventCard, FeedListCard, FeedHeaderBar, Drawer
+│   │   ├── highlights/              # SectorHeatmap, MarketBreadthCard, VolatilityCard
+│   │   ├── layout/                  # Navigation Header, Sidebar, AppLayout
+│   │   ├── memory/                  # MemoryEventCard, archive drawers & filters
+│   │   └── watchlist/               # WatchlistTable, WatchlistGrid, Modals & Filters
+│   ├── config/                      # Navigation definitions and app config
+│   ├── data/                        # Starter templates and 2026 trading calendar
+│   ├── lib/                         # Date utilities, formatting, market hours & helpers
+│   ├── pages/                       # DashboardPage, AttentionFeedPage, WatchlistPage, Memory, Highlights
+│   ├── services/                    # Frontend HTTP client, feedApiService, and SSE stream client
+│   ├── store/                       # Zustand state stores (useMarketStore, useAuthStore, useToastStore)
+│   └── types/                       # Shared TypeScript interfaces (Stock, Event, Feed, Memory)
 ├── index.html                       # HTML application entrypoint
 ├── package.json                     # Frontend dependencies and Vite scripts
-├── tailwind.config.js               # Tailwind CSS theme configuration
+├── tailwind.config.js               # Obsidian & Emerald theme styling configuration
 ├── tsconfig.json                    # Frontend TypeScript configuration
 └── vite.config.ts                   # Vite build and server configuration (Port 3000)
 ```
@@ -333,20 +337,19 @@ Smart Market Watchlist/
 2. **Attributed Evidence over Generative Summaries**:
    - *Rationale*: Rather than prompting an LLM to guess why a stock moved, the context enrichment engine matches real exchange filings, regulatory disclosures, and verified financial news articles. If no source exists, it enforces a strict safety fallback: `"Supporting evidence currently unavailable."`
 3. **Periodic Snapshot Cadence over Tick-by-Tick Storage**:
-   - *Rationale*: Storing high-frequency tick data produces massive database write amplification without adding cognitive value for swing traders or retail investors. A 5-minute snapshot pipeline coupled with 20-day moving averages provides high-fidelity swing and intraday context while maintaining low database overhead.
+   - *Rationale*: Storing high-frequency tick data produces massive database write amplification without adding cognitive value for swing traders or retail investors. A 2-minute market-hours polling cycle coupled with 20-day moving averages provides high-fidelity swing and intraday context while maintaining low database overhead.
 4. **Honest Nulls over Fabricated Statistics**:
    - *Rationale*: When querying historical patterns for rare event types with fewer than 5 historical samples in the database, the engine strictly outputs `null` for `historicalPattern` and `forwardProbability`, rather than synthesizing fictitious statistics.
 5. **Decoupled Provider Architecture**:
-   - *Rationale*: Wrapping all market data and news ingestion behind clean interfaces (`IMarketDataProvider`, `INewsProvider`) allows instant switching between live external APIs (Yahoo Finance, NewsAPI/RSS) and deterministic simulated providers for demo environments.
+   - *Rationale*: Wrapping all market data and news ingestion behind clean interfaces (`IMarketDataProvider`, `INewsProvider`) allows instant switching between live external APIs (Yahoo Finance, NewsAPI/RSS) and deterministic simulated providers for offline development environments.
 
 ---
 
-## 9. Known Limitations & What's Next
+## 9. Future Enhancements
 
-- **Flat vs. Volatility-Adjusted Thresholds**: Current anomaly detection uses fixed percentage rules ($\pm 5.0\%$ price change). A high-beta growth stock may frequently cross 5%, while a low-volatility utility stock rarely moves 2%. *Next*: Implement per-stock dynamic thresholds based on 30-day Average True Range (ATR) and Beta.
-- **Top-Level Macro Highlights Data**: While individual stocks, the Attention Feed, Insights, and Memory Digests are live and PostgreSQL-backed, the top-level macro indicators (India VIX cards, sector performance heatmaps) on the Highlights page currently draw from static frontend configurations. *Next*: Connect the Highlights page to a dedicated macro-economic aggregator route.
-- **Stock Halts & Delisting Resilience**: The current engine assumes tracked tickers remain continuously listed and actively traded. *Next*: Add explicit status flags for trading halts, circuit breakers, and corporate delisting transitions.
-- **Degraded Network Indicator**: When external providers (e.g. Yahoo Finance) experience rate limits or network degradation, the backend logs the warning and serves cached data. *Next*: Expose a subtle "Operating in cached mode" UI banner in the frontend header.
+- **Volatility-Adjusted Dynamic Thresholds**: Expand fixed percentage anomaly detection ($\pm 5.0\%$) to per-stock dynamic thresholds based on 30-day Average True Range (ATR) and Beta.
+- **Trading Halts & Circuit Breakers**: Add explicit status flags and alerts for circuit breaker hits, trading halts, and corporate delisting transitions.
+- **Custom User Webhooks**: Allow users to push high-priority catalysts and alerts to Slack, Discord, or Telegram channels.
 
 ---
 
